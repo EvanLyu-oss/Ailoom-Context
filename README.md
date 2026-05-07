@@ -118,6 +118,15 @@ PYTHONPATH="$PWD" python3 -m cli context compress \
   --json
 ```
 
+Validate one edited incremental surface:
+
+```bash
+PYTHONPATH="$PWD" python3 -m cli context apply-check \
+  --package-file /absolute/path/to/context-incremental-bundle/context_manifest.json \
+  --input-dir /absolute/path/to/edited-incremental-surface \
+  --json
+```
+
 ## Benchmarking
 
 Quick benchmark:

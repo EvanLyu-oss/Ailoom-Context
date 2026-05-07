@@ -6,6 +6,7 @@
 - switched the standalone repository license to MIT
 - preserved the context-specific commit history from the original private parent repository
 - included full and incremental compression flows, dry-run replay previews, policy-aware replay gates, merge-aware replay checks, and scale benchmark tooling
+- promoted incremental `context apply-check` into the public surface, including top-level incremental metadata, summary fields, and dedicated smoke coverage
 
 ## Selected history carried into this repo
 

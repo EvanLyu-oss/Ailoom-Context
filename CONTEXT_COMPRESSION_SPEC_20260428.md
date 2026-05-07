@@ -109,6 +109,8 @@ This means incremental restore reconstructs:
 
 It does not pretend to reconstruct the full repository tree unless the full tree was part of the incremental surface.
 
+Incremental bundles can also be validated with `context apply-check`. In that mode the candidate directory is interpreted as the edited incremental surface, and the top-level result now carries the incremental scope together with the effective changed, added, and removed path counts.
+
 For now, `context bundle --incremental` supports:
 
 - incremental compression

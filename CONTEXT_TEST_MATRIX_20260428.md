@@ -118,6 +118,19 @@ Expected:
 
 ### T4. Apply-check drifting text
 
+### T5. Apply-check incremental directory surface
+
+```bash
+python3 -m cli context apply-check --package-file /absolute/path/to/context-incremental-bundle/context_manifest.json --input-dir /absolute/path/to/edited-incremental-surface --json
+```
+
+Expected:
+
+- `status = ok | warning`
+- `incremental_mode = true`
+- `incremental_changed_paths` and `incremental_added_paths` are present
+- `summary_text` includes `incremental_changed_count`, `incremental_added_count`, and `incremental_removed_count`
+
 ```bash
 python3 -m cli context apply-check --package-file /absolute/path/to/context-bundle/context_manifest.json --text-file /absolute/path/to/drifting-text.md --emit-summary
 ```

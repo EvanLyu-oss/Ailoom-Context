@@ -24,6 +24,7 @@ ok_context_restore_incremental_json=false
 ok_context_bundle_json=false
 ok_context_bundle_incremental_json=false
 ok_context_apply_check_text_json=false
+ok_context_apply_check_incremental_json=false
 ok_context_patch_text_json=false
 ok_context_patch_incremental_json=false
 ok_context_patch_directory_mixed_json=false
@@ -248,6 +249,24 @@ TXT
 cat > "$incremental_candidate/docs/notes.md" <<'TXT'
 Recovered note.
 TXT
+
+apply_check_incremental_json="$TMP_ROOT/apply_check_incremental.json"
+python3 -m cli context apply-check --package-file "$incremental_bundle/context_manifest.json" --input-dir "$incremental_candidate" --json > "$apply_check_incremental_json"
+python3 - "$apply_check_incremental_json" <<'PY'
+import json, sys
+p = json.loads(open(sys.argv[1], encoding='utf-8').read())
+assert p['status'] == 'ok'
+assert p['apply_check_passed'] is True
+assert p['incremental_mode'] is True
+assert p['incremental_changed_paths'] == ['src/app.py']
+assert p['incremental_added_paths'] == ['src/new.py']
+assert p['incremental_removed_paths'] == []
+assert p['incremental_path_count'] == 2
+assert 'incremental_changed_count: 1' in p['summary_text']
+assert 'incremental_removed_count: 0' in p['summary_text']
+PY
+ok_context_apply_check_incremental_json=true
+
 patch_incremental_json="$TMP_ROOT/patch_incremental.json"
 python3 -m cli context patch --package-file "$incremental_bundle/context_manifest.json" --input-dir "$incremental_candidate" --output-dir "$TMP_ROOT/patch_incremental" --json > "$patch_incremental_json"
 python3 - "$patch_incremental_json" <<'PY'
@@ -433,6 +452,7 @@ export CLI_SMOKE_OK_CONTEXT_RESTORE_INCREMENTAL_JSON="$ok_context_restore_increm
 export CLI_SMOKE_OK_CONTEXT_BUNDLE_JSON="$ok_context_bundle_json"
 export CLI_SMOKE_OK_CONTEXT_BUNDLE_INCREMENTAL_JSON="$ok_context_bundle_incremental_json"
 export CLI_SMOKE_OK_CONTEXT_APPLY_CHECK_TEXT_JSON="$ok_context_apply_check_text_json"
+export CLI_SMOKE_OK_CONTEXT_APPLY_CHECK_INCREMENTAL_JSON="$ok_context_apply_check_incremental_json"
 export CLI_SMOKE_OK_CONTEXT_PATCH_TEXT_JSON="$ok_context_patch_text_json"
 export CLI_SMOKE_OK_CONTEXT_PATCH_INCREMENTAL_JSON="$ok_context_patch_incremental_json"
 export CLI_SMOKE_OK_CONTEXT_PATCH_DIRECTORY_MIXED_JSON="$ok_context_patch_directory_mixed_json"
@@ -457,6 +477,7 @@ checks = {
     'context_bundle_json_ok': os.environ['CLI_SMOKE_OK_CONTEXT_BUNDLE_JSON'] == 'true',
     'context_bundle_incremental_json_ok': os.environ['CLI_SMOKE_OK_CONTEXT_BUNDLE_INCREMENTAL_JSON'] == 'true',
     'context_apply_check_text_json_ok': os.environ['CLI_SMOKE_OK_CONTEXT_APPLY_CHECK_TEXT_JSON'] == 'true',
+    'context_apply_check_incremental_json_ok': os.environ['CLI_SMOKE_OK_CONTEXT_APPLY_CHECK_INCREMENTAL_JSON'] == 'true',
     'context_patch_text_json_ok': os.environ['CLI_SMOKE_OK_CONTEXT_PATCH_TEXT_JSON'] == 'true',
     'context_patch_incremental_json_ok': os.environ['CLI_SMOKE_OK_CONTEXT_PATCH_INCREMENTAL_JSON'] == 'true',
     'context_patch_directory_mixed_json_ok': os.environ['CLI_SMOKE_OK_CONTEXT_PATCH_DIRECTORY_MIXED_JSON'] == 'true',

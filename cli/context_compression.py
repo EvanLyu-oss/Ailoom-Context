@@ -876,6 +876,25 @@ def build_context_apply_check_payload(
     original_summary = package_payload.get("source_summary") or {}
     candidate_mode = str(candidate.get("compression_mode") or "")
     candidate_summary = candidate.get("source_summary") or {}
+    incremental_mode = bool(package_payload.get("incremental_mode"))
+    effective_incremental_removed_paths = (
+        list(candidate.get("incremental_removed_paths") or [])
+        if incremental_mode and candidate.get("incremental_removed_paths") is not None
+        else list(package_payload.get("incremental_removed_paths") or [])
+    )
+    incremental_details = {
+        "incremental_mode": incremental_mode,
+        "incremental_scope": package_payload.get("incremental_scope", ""),
+        "incremental_base_commit": package_payload.get("incremental_base_commit", ""),
+        "incremental_changed_paths": list(package_payload.get("incremental_changed_paths") or []),
+        "incremental_added_paths": list(package_payload.get("incremental_added_paths") or []),
+        "incremental_removed_paths": effective_incremental_removed_paths,
+        "incremental_path_count": int(
+            len(package_payload.get("incremental_changed_paths") or [])
+            + len(package_payload.get("incremental_added_paths") or [])
+            + len(effective_incremental_removed_paths)
+        ),
+    }
 
     if original_mode != candidate_mode:
         payload = {
@@ -903,6 +922,7 @@ def build_context_apply_check_payload(
                 "re-run context inspect if you need a quick reminder of the original bundle shape",
             ],
         }
+        payload.update(incremental_details)
         payload["summary_text"] = _build_context_apply_check_summary_text(payload)
         return payload
 
@@ -948,6 +968,7 @@ def build_context_apply_check_payload(
             ]
         ),
     }
+    payload.update(incremental_details)
     payload["summary_text"] = _build_context_apply_check_summary_text(payload)
     return payload
 
@@ -1801,6 +1822,14 @@ def _build_context_apply_check_summary_text(payload: dict[str, Any]) -> str:
         f"drift_count: {len(payload.get('drift_findings') or [])}",
         f"revision_target_count: {len(payload.get('revision_targets') or [])}",
     ]
+    if payload.get("incremental_mode"):
+        lines.append("incremental_mode: True")
+        lines.append(f"incremental_scope: {payload.get('incremental_scope', '')}")
+        if payload.get("incremental_base_commit"):
+            lines.append(f"incremental_base_commit: {payload.get('incremental_base_commit', '')}")
+        lines.append(f"incremental_changed_count: {len(payload.get('incremental_changed_paths') or [])}")
+        lines.append(f"incremental_added_count: {len(payload.get('incremental_added_paths') or [])}")
+        lines.append(f"incremental_removed_count: {len(payload.get('incremental_removed_paths') or [])}")
     if payload.get("revision_targets"):
         lines.append(f"first_revision_target: {(payload.get('revision_targets') or [''])[0]}")
     elif payload.get("drift_findings"):

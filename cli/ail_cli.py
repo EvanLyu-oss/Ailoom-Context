@@ -263,9 +263,10 @@ def cmd_context(args: argparse.Namespace) -> int:
         exit_code = EXIT_OK if payload.get("apply_check_passed") else EXIT_VALIDATION
         if getattr(args, "emit_summary", False):
             return _emit_summary_text(args, payload, exit_code=exit_code)
-        return _emit_simple_result(args, payload, exit_code=exit_code, text=_render_simple_summary(payload, [
-            "apply_check_passed", "alignment_score", "alignment_band"
-        ]))
+        summary_keys = ["apply_check_passed", "alignment_score", "alignment_band"]
+        if payload.get("incremental_mode"):
+            summary_keys.extend(["incremental_mode", "incremental_scope", "incremental_path_count"])
+        return _emit_simple_result(args, payload, exit_code=exit_code, text=_render_simple_summary(payload, summary_keys))
 
     if command == "patch":
         payload = build_context_patch_payload(

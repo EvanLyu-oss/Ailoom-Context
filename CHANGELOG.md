@@ -8,6 +8,7 @@
 - included full and incremental compression flows, dry-run replay previews, policy-aware replay gates, merge-aware replay checks, and scale benchmark tooling
 - promoted incremental `context apply-check` into the public surface, including top-level incremental metadata, summary fields, and dedicated smoke coverage
 - enabled incremental `context patch-apply`, including incremental replay manifest updates and standalone smoke coverage
+- enriched incremental patch dry-run reports with scope, per-lane counts, and first-path summary fields
 
 ## Selected history carried into this repo
 

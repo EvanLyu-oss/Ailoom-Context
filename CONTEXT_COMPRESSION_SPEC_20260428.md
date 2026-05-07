@@ -173,6 +173,7 @@ Use `--dry-run` when you want a preview of the replay target and affected paths 
 Use `--write-dry-run-report` when you want the preview manifest exported as one structured JSON artifact.
 That report now includes both `change_counts` and `first_*` helper fields so operators can inspect the replay surface without post-processing the manifest arrays.
 It also includes `surface_size` and `risk_band` so smaller previews can be separated from broader replay surfaces at a glance.
+When the patch bundle is incremental, the dry-run report also includes the incremental scope, base commit, per-lane incremental counts, and first incremental paths so operators can understand the git-scoped replay surface without opening the full manifest.
 Directory restore and replay now also validate every relative path before writing, so absolute paths, drive-qualified paths, and `..` traversal are rejected before any file materialization happens.
 
 For now it is intentionally conservative:

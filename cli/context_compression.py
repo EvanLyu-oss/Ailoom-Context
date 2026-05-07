@@ -1972,6 +1972,12 @@ def _build_context_patch_apply_summary_text(payload: dict[str, Any]) -> str:
         lines.append(f"incremental_changed_count: {len(payload.get('incremental_changed_paths') or [])}")
         lines.append(f"incremental_added_count: {len(payload.get('incremental_added_paths') or [])}")
         lines.append(f"incremental_removed_count: {len(payload.get('incremental_removed_paths') or [])}")
+        if payload.get("incremental_changed_paths"):
+            lines.append(f"first_incremental_changed_path: {(payload.get('incremental_changed_paths') or [''])[0]}")
+        if payload.get("incremental_added_paths"):
+            lines.append(f"first_incremental_added_path: {(payload.get('incremental_added_paths') or [''])[0]}")
+        if payload.get("incremental_removed_paths"):
+            lines.append(f"first_incremental_removed_path: {(payload.get('incremental_removed_paths') or [''])[0]}")
     applied_paths = payload.get("applied_paths") or []
     if applied_paths:
         lines.append(f"first_applied_path: {applied_paths[0]}")
@@ -3009,7 +3015,7 @@ def build_context_patch_dry_run_report_payload(payload: dict[str, Any]) -> dict[
     write_targets = list(preview_manifest.get("write_targets") or [])
     remove_targets = list(preview_manifest.get("remove_targets") or [])
     surface_size = _context_patch_preview_surface_size(preview_manifest)
-    return {
+    report = {
         "status": payload.get("status", ""),
         "entrypoint": "context-patch-apply-dry-run-report",
         "apply_mode": payload.get("apply_mode", ""),
@@ -3036,6 +3042,30 @@ def build_context_patch_dry_run_report_payload(payload: dict[str, Any]) -> dict[
         "first_remove_target": remove_targets[0] if remove_targets else "",
         "preview_manifest": preview_manifest,
     }
+    if payload.get("incremental_mode"):
+        incremental_changed_paths = list(payload.get("incremental_changed_paths") or [])
+        incremental_added_paths = list(payload.get("incremental_added_paths") or [])
+        incremental_removed_paths = list(payload.get("incremental_removed_paths") or [])
+        report.update(
+            {
+                "incremental_mode": True,
+                "incremental_scope": payload.get("incremental_scope", ""),
+                "incremental_base_commit": payload.get("incremental_base_commit", ""),
+                "incremental_path_count": int(payload.get("incremental_path_count") or 0),
+                "incremental_change_counts": {
+                    "changed_paths": len(incremental_changed_paths),
+                    "added_paths": len(incremental_added_paths),
+                    "removed_paths": len(incremental_removed_paths),
+                },
+                "incremental_changed_paths": incremental_changed_paths,
+                "incremental_added_paths": incremental_added_paths,
+                "incremental_removed_paths": incremental_removed_paths,
+                "first_incremental_changed_path": incremental_changed_paths[0] if incremental_changed_paths else "",
+                "first_incremental_added_path": incremental_added_paths[0] if incremental_added_paths else "",
+                "first_incremental_removed_path": incremental_removed_paths[0] if incremental_removed_paths else "",
+            }
+        )
+    return report
 
 
 def _context_patch_preview_surface_size(preview_manifest: dict[str, Any]) -> int:

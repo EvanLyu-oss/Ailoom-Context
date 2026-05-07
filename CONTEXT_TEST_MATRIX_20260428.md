@@ -491,6 +491,21 @@ Expected:
 - revived removed paths are restored when present in the candidate snapshot
 - `.ail_incremental_manifest.json` reflects the effective `removed_paths` after replay
 
+### D8d. Incremental patch dry-run report
+
+```bash
+python3 -m cli context patch-apply --patch-file /absolute/path/to/context-incremental-patch/patch_manifest.json --source-package-file /absolute/path/to/context-incremental-bundle/context_manifest.json --dry-run --write-dry-run-report /absolute/path/to/incremental-dry-run-report.json --output-dir /absolute/path/to/replayed-project --json
+```
+
+Expected:
+
+- `dry_run = true`
+- `incremental_mode = true`
+- report includes `incremental_scope`
+- report includes `incremental_change_counts`
+- report includes `first_incremental_changed_path` and `first_incremental_added_path`
+- dry-run target is not materialized
+
 ### D9. Policy-aware directory patch replay
 
 ```bash

@@ -108,6 +108,18 @@ PYTHONPATH="$PWD" python3 -m cli context patch-apply \
   --json
 ```
 
+Preview one incremental replay with incremental metadata in the dry-run report:
+
+```bash
+PYTHONPATH="$PWD" python3 -m cli context patch-apply \
+  --patch-file /absolute/path/to/context-incremental-patch/patch_manifest.json \
+  --source-package-file /absolute/path/to/context-incremental-bundle/context_manifest.json \
+  --dry-run \
+  --write-dry-run-report /absolute/path/to/incremental-dry-run-report.json \
+  --output-dir /absolute/path/to/replayed-incremental-surface \
+  --json
+```
+
 Compress only the git change surface:
 
 ```bash

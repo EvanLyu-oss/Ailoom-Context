@@ -33,6 +33,7 @@ ok_context_patch_apply_directory_json=false
 ok_context_patch_apply_dry_run_report_json=false
 ok_context_patch_apply_policy_template_json=false
 ok_context_patch_apply_incremental_json=false
+ok_context_patch_apply_incremental_dry_run_report_json=false
 ok_context_restore_invalid_relpath_json=false
 ok_context_scale_benchmark_json=false
 
@@ -403,6 +404,31 @@ assert manifest['removed_paths'] == []
 PY
 ok_context_patch_apply_incremental_json=true
 
+patch_apply_incremental_dry_json="$TMP_ROOT/patch_apply_incremental_dry.json"
+incremental_dry_report="$TMP_ROOT/incremental_dry_run_report.json"
+python3 -m cli context patch-apply --patch-file "$TMP_ROOT/patch_incremental/patch_manifest.json" --source-package-file "$incremental_bundle/context_manifest.json" --dry-run --write-dry-run-report "$incremental_dry_report" --output-dir "$TMP_ROOT/incremental_dry_output" --json > "$patch_apply_incremental_dry_json"
+python3 - "$patch_apply_incremental_dry_json" "$incremental_dry_report" "$TMP_ROOT/incremental_dry_output" <<'PY'
+import json, sys
+from pathlib import Path
+p = json.loads(open(sys.argv[1], encoding='utf-8').read())
+report = json.loads(open(sys.argv[2], encoding='utf-8').read())
+outdir = Path(sys.argv[3])
+assert p['dry_run'] is True
+assert p['incremental_mode'] is True
+assert 'first_incremental_changed_path: src/app.py' in p['summary_text']
+assert report['dry_run'] is True
+assert report['incremental_mode'] is True
+assert report['incremental_scope'] == 'working_tree'
+assert report['incremental_change_counts']['changed_paths'] == 1
+assert report['incremental_change_counts']['added_paths'] == 1
+assert report['incremental_change_counts']['removed_paths'] == 0
+assert report['first_incremental_changed_path'] == 'src/app.py'
+assert report['first_incremental_added_path'] == 'src/new.py'
+assert report['first_incremental_removed_path'] == ''
+assert not outdir.exists()
+PY
+ok_context_patch_apply_incremental_dry_run_report_json=true
+
 # invalid relpath restore blocked
 invalid_manifest="$TMP_ROOT/invalid_manifest.json"
 python3 - "$dir_bundle/context_manifest.json" "$invalid_manifest" <<'PY'
@@ -467,6 +493,7 @@ export CLI_SMOKE_OK_CONTEXT_PATCH_APPLY_DIRECTORY_JSON="$ok_context_patch_apply_
 export CLI_SMOKE_OK_CONTEXT_PATCH_APPLY_DRY_RUN_REPORT_JSON="$ok_context_patch_apply_dry_run_report_json"
 export CLI_SMOKE_OK_CONTEXT_PATCH_APPLY_POLICY_TEMPLATE_JSON="$ok_context_patch_apply_policy_template_json"
 export CLI_SMOKE_OK_CONTEXT_PATCH_APPLY_INCREMENTAL_JSON="$ok_context_patch_apply_incremental_json"
+export CLI_SMOKE_OK_CONTEXT_PATCH_APPLY_INCREMENTAL_DRY_RUN_REPORT_JSON="$ok_context_patch_apply_incremental_dry_run_report_json"
 export CLI_SMOKE_OK_CONTEXT_RESTORE_INVALID_RELPATH_JSON="$ok_context_restore_invalid_relpath_json"
 export CLI_SMOKE_OK_CONTEXT_SCALE_BENCHMARK_JSON="$ok_context_scale_benchmark_json"
 
@@ -492,6 +519,7 @@ checks = {
     'context_patch_apply_dry_run_report_json_ok': os.environ['CLI_SMOKE_OK_CONTEXT_PATCH_APPLY_DRY_RUN_REPORT_JSON'] == 'true',
     'context_patch_apply_policy_template_json_ok': os.environ['CLI_SMOKE_OK_CONTEXT_PATCH_APPLY_POLICY_TEMPLATE_JSON'] == 'true',
     'context_patch_apply_incremental_json_ok': os.environ['CLI_SMOKE_OK_CONTEXT_PATCH_APPLY_INCREMENTAL_JSON'] == 'true',
+    'context_patch_apply_incremental_dry_run_report_json_ok': os.environ['CLI_SMOKE_OK_CONTEXT_PATCH_APPLY_INCREMENTAL_DRY_RUN_REPORT_JSON'] == 'true',
     'context_restore_invalid_relpath_json_ok': os.environ['CLI_SMOKE_OK_CONTEXT_RESTORE_INVALID_RELPATH_JSON'] == 'true',
     'context_scale_benchmark_json_ok': os.environ['CLI_SMOKE_OK_CONTEXT_SCALE_BENCHMARK_JSON'] == 'true',
 }

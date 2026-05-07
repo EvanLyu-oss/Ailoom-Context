@@ -20,6 +20,7 @@ This changelog is intentionally lightweight for now. The repository already has 
 - added `context bundle --incremental`, so that same git-scoped change surface can now be exported with inspect artifacts and an exact incremental restore package in one bundle directory
 - added incremental benchmark summaries so `/Users/carwynmac/ai-cl/testing/context_scale_benchmark.py` now reports full-directory cases, incremental directory cases, and one full-vs-incremental comparison block per tokenizer backend
 - added `/Users/carwynmac/ai-cl/CONTEXT_COMPRESSION_PRINCIPLES_20260507.md` to explain the two-layer skeleton-plus-restore design, token-scaling logic, incremental compression model, and replay safety principles behind the `context` surface
+- added incremental patch export for git-scoped context bundles, so one edited incremental directory surface can now be reviewed and handed off as a patch bundle without re-sending the whole repo
 
 ### Changed
 
@@ -33,6 +34,7 @@ This changelog is intentionally lightweight for now. The repository already has 
 - added one quick benchmark smoke check so the scale-harness output format and restore verification stay covered by the local CLI regression path
 - made the repo-scale benchmark's directory restore verification compare restored trees against the captured restore package snapshot instead of a live source-directory hash, which avoids cross-platform false negatives from runtime artifacts such as Python cache files
 - added incremental context smoke coverage for changed, added, and removed git paths plus one exact `.ail_incremental_manifest.json` restore check
+- added incremental patch smoke coverage, including one explicit guard that blocks `context patch-apply` for incremental patch bundles until replay semantics for incremental manifests are finished
 - documented ecommerce, CMS, blog-publishing, routing, localization, managed-drift, and local-preview limitations more explicitly
 - improved managed-file drift messaging so CLI output explains it as a sync safety guard, not necessarily a website generation failure
 - changed the repository licensing posture from MIT to PolyForm Noncommercial 1.0.0 and updated public docs to describe the repo as source-available rather than OSI open source

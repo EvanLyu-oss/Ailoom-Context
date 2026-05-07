@@ -74,10 +74,12 @@ ok_context_bundle_zip_json=false
 ok_context_bundle_apply_check_json=false
 ok_context_bundle_emit_summary_txt=false
 ok_context_patch_text_json=false
+ok_context_patch_incremental_json=false
 ok_context_patch_directory_json=false
 ok_context_patch_directory_mixed_json=false
 ok_context_patch_emit_summary_txt=false
 ok_context_patch_apply_text_json=false
+ok_context_patch_apply_incremental_block_json=false
 ok_context_patch_apply_directory_json=false
 ok_context_patch_apply_emit_summary_txt=false
 ok_context_patch_apply_dry_run_text_json=false
@@ -2318,6 +2320,56 @@ for key in ['manifest_file', 'skeleton_file', 'restore_file', 'readme_file', 'in
     assert os.path.exists(payload['files'][key]), (key, payload)
 PY
 ok_context_bundle_incremental_json=true
+
+context_patch_incremental_candidate_dir="$TMP_ROOT/context_patch_incremental_candidate"
+cp -R "$context_incremental_restore/context_incremental_repo" "$context_patch_incremental_candidate_dir"
+cat > "$context_patch_incremental_candidate_dir/app.py" <<'PY'
+def app():
+    return "changed again for incremental patch"
+PY
+cat > "$context_patch_incremental_candidate_dir/notes.md" <<'MD'
+# Notes
+
+This file was revived inside the incremental patch candidate surface.
+MD
+context_patch_incremental_dir="$TMP_ROOT/context_patch_incremental_dir"
+context_patch_incremental_json="$TMP_ROOT/context_patch_incremental.json"
+PYTHONPATH="$ROOT" python3 -m cli context patch --package-file "$context_incremental_pkg/context_manifest.json" --input-dir "$context_patch_incremental_candidate_dir" --output-dir "$context_patch_incremental_dir" --json > "$context_patch_incremental_json"
+python3 - "$context_patch_incremental_json" <<'PY'
+import json, sys
+payload = json.load(open(sys.argv[1], 'r', encoding='utf-8'))
+assert payload['entrypoint'] == 'context-patch', payload
+assert payload['compression_mode'] == 'directory_incremental', payload
+assert payload['incremental_mode'] is True, payload
+assert payload['incremental_changed_paths'] == ['app.py'], payload
+assert payload['incremental_added_paths'] == ['new.py'], payload
+assert payload['incremental_removed_paths'] == [], payload
+assert payload['changed_paths'] == ['app.py'], payload
+assert payload['added_paths'] == ['notes.md'], payload
+assert payload['removed_paths'] == [], payload
+assert payload['change_counts']['changed_paths'] == 1, payload
+assert payload['change_counts']['added_paths'] == 1, payload
+assert payload['change_counts']['removed_paths'] == 0, payload
+assert payload['apply_check']['apply_check_passed'] is True, payload
+assert 'incremental_removed_count: 0' in payload['summary_text'], payload
+PY
+ok_context_patch_incremental_json=true
+
+context_patch_apply_incremental_block_json="$TMP_ROOT/context_patch_apply_incremental_block.json"
+set +e
+PYTHONPATH="$ROOT" python3 -m cli context patch-apply --patch-file "$context_patch_incremental_dir/patch_manifest.json" --source-package-file "$context_incremental_pkg/context_manifest.json" --output-dir "$TMP_ROOT/context_patch_incremental_apply_block_root" --json > "$context_patch_apply_incremental_block_json"
+context_patch_apply_incremental_block_exit=$?
+set -e
+python3 - "$context_patch_apply_incremental_block_json" "$context_patch_apply_incremental_block_exit" <<'PY'
+import json, sys
+payload = json.load(open(sys.argv[1], 'r', encoding='utf-8'))
+exit_code = int(sys.argv[2])
+assert exit_code == 2, exit_code
+assert payload['status'] == 'error', payload
+assert payload['error']['code'] == 'invalid_usage', payload
+assert 'does not yet support replaying incremental patch bundles' in payload['error']['message'], payload
+PY
+ok_context_patch_apply_incremental_block_json=true
 
 context_bundle_zip_json="$TMP_ROOT/context_bundle_zip.json"
 context_bundle_zip_dir="$TMP_ROOT/context_bundle_zip_dir"
@@ -6819,10 +6871,12 @@ export CLI_SMOKE_OK_CONTEXT_BUNDLE_ZIP_JSON="$ok_context_bundle_zip_json"
 export CLI_SMOKE_OK_CONTEXT_BUNDLE_APPLY_CHECK_JSON="$ok_context_bundle_apply_check_json"
 export CLI_SMOKE_OK_CONTEXT_BUNDLE_EMIT_SUMMARY_TXT="$ok_context_bundle_emit_summary_txt"
 export CLI_SMOKE_OK_CONTEXT_PATCH_TEXT_JSON="$ok_context_patch_text_json"
+export CLI_SMOKE_OK_CONTEXT_PATCH_INCREMENTAL_JSON="$ok_context_patch_incremental_json"
 export CLI_SMOKE_OK_CONTEXT_PATCH_DIRECTORY_JSON="$ok_context_patch_directory_json"
 export CLI_SMOKE_OK_CONTEXT_PATCH_DIRECTORY_MIXED_JSON="$ok_context_patch_directory_mixed_json"
 export CLI_SMOKE_OK_CONTEXT_PATCH_EMIT_SUMMARY_TXT="$ok_context_patch_emit_summary_txt"
 export CLI_SMOKE_OK_CONTEXT_PATCH_APPLY_TEXT_JSON="$ok_context_patch_apply_text_json"
+export CLI_SMOKE_OK_CONTEXT_PATCH_APPLY_INCREMENTAL_BLOCK_JSON="$ok_context_patch_apply_incremental_block_json"
 export CLI_SMOKE_OK_CONTEXT_PATCH_APPLY_DIRECTORY_JSON="$ok_context_patch_apply_directory_json"
 export CLI_SMOKE_OK_CONTEXT_PATCH_APPLY_EMIT_SUMMARY_TXT="$ok_context_patch_apply_emit_summary_txt"
 export CLI_SMOKE_OK_CONTEXT_PATCH_APPLY_DRY_RUN_TEXT_JSON="$ok_context_patch_apply_dry_run_text_json"
@@ -7072,10 +7126,12 @@ payload = {
         'context_bundle_apply_check_json_ok': os.environ['CLI_SMOKE_OK_CONTEXT_BUNDLE_APPLY_CHECK_JSON'] == 'true',
         'context_bundle_emit_summary_txt_ok': os.environ['CLI_SMOKE_OK_CONTEXT_BUNDLE_EMIT_SUMMARY_TXT'] == 'true',
         'context_patch_text_json_ok': os.environ['CLI_SMOKE_OK_CONTEXT_PATCH_TEXT_JSON'] == 'true',
+        'context_patch_incremental_json_ok': os.environ['CLI_SMOKE_OK_CONTEXT_PATCH_INCREMENTAL_JSON'] == 'true',
         'context_patch_directory_json_ok': os.environ['CLI_SMOKE_OK_CONTEXT_PATCH_DIRECTORY_JSON'] == 'true',
         'context_patch_directory_mixed_json_ok': os.environ['CLI_SMOKE_OK_CONTEXT_PATCH_DIRECTORY_MIXED_JSON'] == 'true',
         'context_patch_emit_summary_txt_ok': os.environ['CLI_SMOKE_OK_CONTEXT_PATCH_EMIT_SUMMARY_TXT'] == 'true',
         'context_patch_apply_text_json_ok': os.environ['CLI_SMOKE_OK_CONTEXT_PATCH_APPLY_TEXT_JSON'] == 'true',
+        'context_patch_apply_incremental_block_json_ok': os.environ['CLI_SMOKE_OK_CONTEXT_PATCH_APPLY_INCREMENTAL_BLOCK_JSON'] == 'true',
         'context_patch_apply_directory_json_ok': os.environ['CLI_SMOKE_OK_CONTEXT_PATCH_APPLY_DIRECTORY_JSON'] == 'true',
         'context_patch_apply_emit_summary_txt_ok': os.environ['CLI_SMOKE_OK_CONTEXT_PATCH_APPLY_EMIT_SUMMARY_TXT'] == 'true',
         'context_patch_apply_dry_run_text_json_ok': os.environ['CLI_SMOKE_OK_CONTEXT_PATCH_APPLY_DRY_RUN_TEXT_JSON'] == 'true',

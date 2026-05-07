@@ -377,6 +377,14 @@ def cmd_context(args: argparse.Namespace) -> int:
             print(f"- source_label: {payload.get('source_label', '')}")
             print(f"- candidate_source_kind: {payload.get('candidate_source_kind', '')}")
             print(f"- candidate_source_label: {payload.get('candidate_source_label', '')}")
+            if payload.get("incremental_mode"):
+                print("- incremental_mode: true")
+                print(f"- incremental_scope: {payload.get('incremental_scope', '')}")
+                if payload.get("incremental_base_commit"):
+                    print(f"- incremental_base_commit: {payload.get('incremental_base_commit', '')}")
+                print(f"- incremental_changed_count: {len(payload.get('incremental_changed_paths') or [])}")
+                print(f"- incremental_added_count: {len(payload.get('incremental_added_paths') or [])}")
+                print(f"- incremental_removed_count: {len(payload.get('incremental_removed_paths') or [])}")
             print(f"- patch_root: {payload.get('patch_root', '')}")
             print(f"- zip_enabled: {payload.get('zip_enabled', False)}")
             print(f"- apply_check_passed: {payload.get('apply_check_passed', False)}")

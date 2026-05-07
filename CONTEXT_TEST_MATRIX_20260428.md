@@ -447,6 +447,35 @@ Expected:
 - `summaries.text_cases` is populated
 - all quick benchmark `restore_verified` fields are `true`
 
+### D8b. Incremental directory patch export
+
+```bash
+python3 -m cli context patch --package-file /absolute/path/to/context-incremental-bundle/context_manifest.json --input-dir /absolute/path/to/edited-incremental-surface --output-dir /absolute/path/to/context-incremental-patch --json
+```
+
+Expected:
+
+- `compression_mode = directory_incremental`
+- `incremental_mode = true`
+- `incremental_changed_paths` is populated
+- `incremental_added_paths` is populated
+- `incremental_removed_paths` reflects the effective removed-path surface after any revived files are accounted for
+- `patch_mode = directory_structural_patch`
+- `apply_check.apply_check_passed` is present
+
+### D8c. Incremental patch replay guard
+
+```bash
+python3 -m cli context patch-apply --patch-file /absolute/path/to/context-incremental-patch/patch_manifest.json --source-package-file /absolute/path/to/context-incremental-bundle/context_manifest.json --output-dir /absolute/path/to/replayed-project --json
+```
+
+Expected:
+
+- process exits with usage status
+- `status = error`
+- `error.code = invalid_usage`
+- message explains that incremental patch replay is not yet supported
+
 ### D9. Policy-aware directory patch replay
 
 ```bash

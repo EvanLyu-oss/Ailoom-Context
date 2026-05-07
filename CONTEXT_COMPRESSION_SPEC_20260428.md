@@ -22,6 +22,7 @@ PYTHONPATH="$PWD" python3 -m cli context compress --input-file /absolute/path/to
 PYTHONPATH="$PWD" python3 -m cli context compress --preset website --input-dir /absolute/path/to/project --output-dir /absolute/path/to/context-bundle --json
 PYTHONPATH="$PWD" python3 -m cli context compress --input-dir /absolute/path/to/project --incremental --base-commit HEAD~1 --output-dir /absolute/path/to/context-incremental-bundle --json
 PYTHONPATH="$PWD" python3 -m cli context bundle --input-dir /absolute/path/to/project --incremental --base-commit HEAD~1 --output-dir /absolute/path/to/context-incremental-bundle --json
+PYTHONPATH="$PWD" python3 -m cli context patch --package-file /absolute/path/to/context-incremental-bundle/context_manifest.json --input-dir /absolute/path/to/edited-incremental-surface --output-dir /absolute/path/to/context-incremental-patch --json
 ```
 
 ### Restore
@@ -115,6 +116,20 @@ For now, `context bundle --incremental` supports:
 - exact incremental restore package export
 
 It intentionally does not yet support candidate apply-check inputs in the same call, because that path still needs a dedicated incremental comparison contract.
+
+`context patch` now also supports one incremental bundle as the original package, as long as the candidate input is one edited directory surface derived from that incremental payload.
+
+Current incremental patch scope:
+
+- compare one edited incremental directory surface against the original incremental bundle
+- preserve changed and added file payloads
+- preserve one effective removed-path list
+- allow one previously removed path to be explicitly revived by placing it back inside the candidate surface
+
+Current intentional boundary:
+
+- `context patch-apply` does **not** yet replay incremental patch bundles
+- replay is blocked until the incremental manifest update contract is finalized
 
 ## Bundle Shape
 

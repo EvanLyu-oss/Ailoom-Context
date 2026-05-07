@@ -461,7 +461,8 @@ def build_context_patch_payload(
     output_dir: Path | None,
     make_zip: bool,
 ) -> dict[str, Any]:
-    candidate = _resolve_context_input_source(
+    candidate = _resolve_context_candidate_source_for_package(
+        package_payload=package_payload,
         inline_text=inline_text,
         text_file=text_file,
         input_file=input_file,
@@ -494,6 +495,19 @@ def build_context_patch_payload(
         candidate=candidate,
         patch_root=patch_root,
     )
+    if bool(package_payload.get("incremental_mode")):
+        candidate_incremental_removed_paths = candidate.get("incremental_removed_paths")
+        if candidate_incremental_removed_paths is None:
+            effective_incremental_removed_paths = list(package_payload.get("incremental_removed_paths") or [])
+        else:
+            effective_incremental_removed_paths = list(candidate_incremental_removed_paths)
+        patch_result["incremental_removed_paths"] = effective_incremental_removed_paths
+        patch_result["removed_paths"] = sorted(
+            set(patch_result.get("removed_paths") or []) | set(effective_incremental_removed_paths)
+        )
+        counts = dict(patch_result.get("change_counts") or {})
+        counts["removed_paths"] = len(patch_result["removed_paths"])
+        patch_result["change_counts"] = counts
 
     files: dict[str, Path] = {
         **patch_result["files"],
@@ -515,6 +529,25 @@ def build_context_patch_payload(
         "preset_label": package_payload.get("preset_label", CONTEXT_PRESETS["generic"]["label"]),
         "source_package_file": str(source_package_file.resolve()) if source_package_file is not None else "",
         "compression_mode": original_mode,
+        "incremental_mode": bool(package_payload.get("incremental_mode")),
+        "incremental_scope": package_payload.get("incremental_scope", ""),
+        "incremental_base_commit": package_payload.get("incremental_base_commit", ""),
+        "incremental_changed_paths": list(package_payload.get("incremental_changed_paths") or []),
+        "incremental_added_paths": list(package_payload.get("incremental_added_paths") or []),
+        "incremental_removed_paths": list(
+            patch_result["incremental_removed_paths"]
+            if "incremental_removed_paths" in patch_result
+            else list(package_payload.get("incremental_removed_paths") or [])
+        ),
+        "incremental_path_count": int(
+            len(package_payload.get("incremental_changed_paths") or [])
+            + len(package_payload.get("incremental_added_paths") or [])
+            + len(
+                patch_result["incremental_removed_paths"]
+                if "incremental_removed_paths" in patch_result
+                else list(package_payload.get("incremental_removed_paths") or [])
+            )
+        ),
         "source_kind": package_payload.get("source_kind", ""),
         "source_label": package_payload.get("source_label", ""),
         "candidate_source_kind": candidate.get("source_kind", ""),
@@ -570,6 +603,11 @@ def apply_context_patch_payload(
     files = patch_payload.get("files") or {}
     source_label = str(patch_payload.get("source_label") or "context")
     status = "ok"
+    if bool(patch_payload.get("incremental_mode")):
+        raise ValueError(
+            "context patch-apply does not yet support replaying incremental patch bundles; "
+            "export the incremental patch for review or re-run the workflow from one full directory bundle when you need replay"
+        )
     merge_mode = str(merge_mode or "overwrite").strip().lower() or "overwrite"
     if merge_mode not in PATCH_APPLY_MERGE_MODES:
         supported = ", ".join(sorted(PATCH_APPLY_MERGE_MODES))
@@ -825,7 +863,8 @@ def build_context_apply_check_payload(
     input_file: Path | None,
     input_dir: Path | None,
 ) -> dict[str, Any]:
-    candidate = _resolve_context_input_source(
+    candidate = _resolve_context_candidate_source_for_package(
+        package_payload=package_payload,
         inline_text=inline_text,
         text_file=text_file,
         input_file=input_file,
@@ -871,7 +910,7 @@ def build_context_apply_check_payload(
         review = _build_text_apply_check(original_summary, candidate_summary)
     elif original_mode == "file":
         review = _build_file_apply_check(original_summary, candidate_summary)
-    elif original_mode == "directory":
+    elif original_mode in {"directory", "directory_incremental"}:
         review = _build_directory_apply_check(original_summary, candidate_summary)
     else:
         raise ValueError(f"Unsupported context apply-check mode: {original_mode}")
@@ -1493,6 +1532,162 @@ def _build_incremental_directory_source(
     }
 
 
+def _read_incremental_removed_manifest(path: Path) -> list[str] | None:
+    manifest_path = path.expanduser().resolve() / ".ail_incremental_manifest.json"
+    if not manifest_path.exists():
+        return None
+    try:
+        payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"Invalid incremental manifest at {manifest_path}: {exc}") from exc
+    removed_paths = payload.get("removed_paths")
+    if removed_paths is None:
+        return []
+    if not isinstance(removed_paths, list):
+        raise ValueError(f"Invalid incremental manifest at {manifest_path}: removed_paths must be an array")
+    return [
+        _normalize_context_relpath(str(item or ""), field_name="removed_paths")
+        for item in removed_paths
+        if str(item or "").strip()
+    ]
+
+
+def _build_incremental_candidate_directory_source(
+    path: Path,
+    *,
+    package_payload: dict[str, Any],
+) -> dict[str, Any]:
+    source = _build_directory_source(path)
+    inherited_removed_paths = [
+        _normalize_context_relpath(str(item or ""), field_name="incremental_removed_paths")
+        for item in (package_payload.get("incremental_removed_paths") or [])
+        if str(item or "").strip()
+    ]
+    manifest_removed_paths = _read_incremental_removed_manifest(path)
+    control_removed_paths = list(manifest_removed_paths) if manifest_removed_paths is not None else list(inherited_removed_paths)
+
+    allowed_paths = {
+        _normalize_context_relpath(str(item or ""), field_name="incremental_changed_paths")
+        for item in (package_payload.get("incremental_changed_paths") or [])
+        if str(item or "").strip()
+    } | {
+        _normalize_context_relpath(str(item or ""), field_name="incremental_added_paths")
+        for item in (package_payload.get("incremental_added_paths") or [])
+        if str(item or "").strip()
+    } | set(inherited_removed_paths)
+
+    raw_entries = {
+        _normalize_context_relpath(str(item.get("relative_path") or ""), field_name="relative_path"): item
+        for item in (source.get("source_summary") or {}).get("entries", [])
+        if str(item.get("relative_path") or "").strip()
+    }
+    filtered_entries = [raw_entries[path] for path in sorted(raw_entries) if path in allowed_paths]
+    filtered_tree = [entry["relative_path"] for entry in filtered_entries]
+
+    raw_files = {
+        _normalize_context_relpath(str(item.get("relative_path") or ""), field_name="relative_path"): item
+        for item in (source.get("restore_blob") or {}).get("files", [])
+        if str(item.get("relative_path") or "").strip()
+    }
+    raw_symlinks = {
+        _normalize_context_relpath(str(item.get("relative_path") or ""), field_name="relative_path"): item
+        for item in (source.get("restore_blob") or {}).get("symlinks", [])
+        if str(item.get("relative_path") or "").strip()
+    }
+    filtered_files = [raw_files[path] for path in sorted(raw_files) if path in allowed_paths]
+    filtered_symlinks = [raw_symlinks[path] for path in sorted(raw_symlinks) if path in allowed_paths]
+    candidate_paths = {item["relative_path"] for item in filtered_entries}
+
+    revived_removed_paths = sorted(path for path in inherited_removed_paths if path in candidate_paths)
+    effective_removed_paths = sorted(
+        (set(control_removed_paths) - set(revived_removed_paths))
+    )
+
+    total_bytes = 0
+    total_chars = 0
+    text_files = 0
+    code_files = 0
+    binary_files = 0
+    for rel_path in sorted(raw_files):
+        if rel_path not in allowed_paths:
+            continue
+        entry = raw_entries.get(rel_path) or {}
+        kind = str(entry.get("kind") or "")
+        file_record = raw_files[rel_path]
+        data = base64.b64decode(str(file_record.get("content_b64") or "").encode("ascii"))
+        total_bytes += len(data)
+        total_chars += int(((entry.get("summary") or {}).get("total_chars", 0) or 0))
+        if kind == "code":
+            code_files += 1
+        elif kind == "text":
+            text_files += 1
+        elif kind == "binary":
+            binary_files += 1
+
+    incremental_changed_paths = [
+        _normalize_context_relpath(str(item or ""), field_name="incremental_changed_paths")
+        for item in (package_payload.get("incremental_changed_paths") or [])
+        if str(item or "").strip() and _normalize_context_relpath(str(item or ""), field_name="incremental_changed_paths") in candidate_paths
+    ]
+    original_added_paths = [
+        _normalize_context_relpath(str(item or ""), field_name="incremental_added_paths")
+        for item in (package_payload.get("incremental_added_paths") or [])
+        if str(item or "").strip() and _normalize_context_relpath(str(item or ""), field_name="incremental_added_paths") in candidate_paths
+    ]
+    revived_as_added_paths = [path for path in revived_removed_paths if path in candidate_paths]
+    incremental_added_paths = sorted(set(original_added_paths) | set(revived_as_added_paths))
+
+    return {
+        "compression_mode": "directory_incremental",
+        "source_kind": "mixed_project",
+        "source_label": source.get("source_label", path.name),
+        "source_path": source.get("source_path", str(path.expanduser().resolve())),
+        "source_summary": {
+            "source_kind": "directory",
+            "label": source.get("source_label", path.name),
+            "root_path": source.get("source_path", str(path.expanduser().resolve())),
+            "total_files": len(filtered_files) + len(filtered_symlinks),
+            "text_files": text_files,
+            "code_files": code_files,
+            "binary_files": binary_files,
+            "symlink_count": len(filtered_symlinks),
+            "empty_dir_count": 0,
+            "total_bytes": total_bytes,
+            "total_chars": total_chars,
+            "tree": filtered_tree,
+            "entries": filtered_entries,
+            "changed_file_count": len(incremental_changed_paths),
+            "added_file_count": len(incremental_added_paths),
+            "removed_path_count": len(effective_removed_paths),
+            "incremental_path_count": len(incremental_changed_paths) + len(incremental_added_paths) + len(effective_removed_paths),
+            "incremental_scope": package_payload.get("incremental_scope", ""),
+            "base_commit": package_payload.get("incremental_base_commit", ""),
+            "git_root": package_payload.get("incremental_git_root", ""),
+        },
+        "incremental_mode": True,
+        "incremental_scope": package_payload.get("incremental_scope", ""),
+        "incremental_base_commit": package_payload.get("incremental_base_commit", ""),
+        "incremental_git_root": package_payload.get("incremental_git_root", ""),
+        "incremental_changed_paths": incremental_changed_paths,
+        "incremental_added_paths": incremental_added_paths,
+        "incremental_removed_paths": effective_removed_paths,
+        "incremental_path_count": len(incremental_changed_paths) + len(incremental_added_paths) + len(effective_removed_paths),
+        "restore_blob": {
+            "mode": "directory_incremental",
+            "source_label": source.get("source_label", path.name),
+            "source_kind": "mixed_project",
+            "root_name": source.get("source_label", path.name),
+            "files": filtered_files,
+            "symlinks": filtered_symlinks,
+            "empty_dirs": [],
+            "removed_paths": effective_removed_paths,
+            "incremental_scope": package_payload.get("incremental_scope", ""),
+            "base_commit": package_payload.get("incremental_base_commit", ""),
+            "git_root": package_payload.get("incremental_git_root", ""),
+        },
+    }
+
+
 def _write_context_package(output_dir: Path, payload: dict[str, Any]) -> dict[str, Path]:
     output_dir = output_dir.expanduser().resolve()
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -1662,6 +1857,14 @@ def _build_context_patch_summary_text(payload: dict[str, Any]) -> str:
         f"apply_check_passed: {payload.get('apply_check_passed', False)}",
         f"file_count: {payload.get('file_count', 0)}",
     ]
+    if payload.get("incremental_mode"):
+        lines.append("incremental_mode: True")
+        lines.append(f"incremental_scope: {payload.get('incremental_scope', '')}")
+        if payload.get("incremental_base_commit"):
+            lines.append(f"incremental_base_commit: {payload.get('incremental_base_commit', '')}")
+        lines.append(f"incremental_changed_count: {len(payload.get('incremental_changed_paths') or [])}")
+        lines.append(f"incremental_added_count: {len(payload.get('incremental_added_paths') or [])}")
+        lines.append(f"incremental_removed_count: {len(payload.get('incremental_removed_paths') or [])}")
     for key in [
         "changed_paths",
         "added_paths",
@@ -1805,6 +2008,33 @@ def _resolve_context_input_source(
             tokenizer_model=tokenizer_model,
         )
     raise ValueError(f"{command_label} did not receive a usable input source")
+
+
+def _resolve_context_candidate_source_for_package(
+    *,
+    package_payload: dict[str, Any],
+    inline_text: str | None,
+    text_file: Path | None,
+    input_file: Path | None,
+    input_dir: Path | None,
+    command_label: str,
+) -> dict[str, Any]:
+    original_mode = str(package_payload.get("compression_mode") or "")
+    if (
+        original_mode == "directory_incremental"
+        and input_dir is not None
+        and not (inline_text and inline_text.strip())
+        and text_file is None
+        and input_file is None
+    ):
+        return _build_incremental_candidate_directory_source(input_dir, package_payload=package_payload)
+    return _resolve_context_input_source(
+        inline_text=inline_text,
+        text_file=text_file,
+        input_file=input_file,
+        input_dir=input_dir,
+        command_label=command_label,
+    )
 
 
 def resolve_context_preset(preset_id: str | None) -> dict[str, Any]:
@@ -2947,7 +3177,7 @@ def _build_context_patch_artifacts(
             patch_root=patch_root,
             source_label=str(package_payload.get("source_label") or "context-file"),
         )
-    if mode == "directory":
+    if mode in {"directory", "directory_incremental"}:
         return _build_directory_patch_artifacts(
             original_decoded=original_decoded,
             candidate_restore=candidate_restore,

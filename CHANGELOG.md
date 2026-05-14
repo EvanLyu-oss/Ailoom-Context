@@ -13,6 +13,15 @@
 - added `context` skeleton focus modes for full, tree, imports, symbols, and writing-outline views
 - extended the benchmark harness to compare focus-mode skeleton variants against the full baseline
 - added a formal focus-mode benchmark report for directory and long-text skeleton views
+- added adaptive and compact skeleton-density modes so large repos and long-form text can ship smaller AI-facing skeletons without changing restore fidelity
+- extended the benchmark harness to compare skeleton-density variants against the standard full skeleton baseline
+- added grouped directory and extension overviews so large directory skeletons can omit more per-file detail without losing top-level continuity
+- added hot-subtree expansion and cold-subtree folding so large directory skeletons spend entry budget where structural signal is densest
+- added chapter-fold outlines so long-form text can preserve chapter continuity while spending fewer skeleton tokens
+- extended the benchmark harness with realistic repo-directory and repo-document corpora so synthetic results can be checked against repeatable real samples
+- tightened directory apply-check drift detection for large added surfaces and added edge-case smoke coverage for missing files, kind changes, and bulk additions
+- documented the `0.1.x` stability contract, experimental boundaries, exit-code semantics, and repeatable benchmark signals in the README
+- added a `v0.1` release checklist covering scope, required validation commands, documentation review, artifact review, commit shape, and tag steps
 
 ## Selected history carried into this repo
 

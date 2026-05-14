@@ -28,6 +28,41 @@ That gives us a practical workflow for large repositories and long documents:
 - `context bundle --incremental`: export one incremental bundle instead of rebundling the full project
 - `context patch` and `context patch-apply` on incremental bundles: keep replay scoped to the git change surface
 - `context compress --focus-mode ...`: reshape the skeleton for symbols, imports, tree, or writing-outline views
+- `context compress --skeleton-density ...`: keep the restore package exact while making large repo and long-text skeletons more selective
+- large directory skeletons now include grouped directory and extension overviews so omitted file-entry detail still keeps structural continuity
+- large directory skeletons now prioritize hot subtrees for entry expansion and fold colder subtrees into compact overview blocks
+- long-form text skeletons now emit folded chapter outlines so very long drafts keep narrative shape with a lower token budget
+
+## v0.1 stability contract
+
+The current `0.1.x` line is intended to be usable for early public workflows where exact restore matters more than a polished product shell.
+
+Stable in `0.1.x`:
+
+- compressing text, one file, or one directory into `MCP-SKL.v1` plus an exact restore package
+- inspecting and restoring text, file, directory, and incremental directory bundles
+- `apply-check` structural drift gates for text, files, directories, and incremental directory surfaces
+- patch export and patch replay for text, files, directories, and incremental bundles
+- dry-run replay reports, policy-aware replay, and merge-aware replay checks
+- skeleton focus modes: `full`, `tree`, `imports`, `symbols`, `writing-outline`
+- skeleton density modes: `adaptive`, `standard`, `compact`
+- benchmark reports for synthetic and repeatable repo-derived samples
+
+Experimental in `0.1.x`:
+
+- exact wording and ordering of `skeleton_text`
+- scoring thresholds inside `apply-check`
+- the adaptive budgeting heuristics for hot subtrees, folded chapters, and omitted entries
+- benchmark timings across machines and tokenizer installations
+- non-UTF-8 edge cases beyond the current binary-preservation path
+
+Command exit behavior:
+
+- exit `0`: command completed and validation gates passed
+- exit `2`: invalid usage or invalid input contract
+- exit `3`: validation warning, such as `apply-check` drift, policy block, or merge conflict block
+
+When a command returns exit `3` with `--json`, the JSON payload is still the primary artifact to inspect.
 
 ## Why this is different from summarization
 
@@ -77,6 +112,16 @@ PYTHONPATH="$PWD" python3 -m cli context compress \
   --preset codebase \
   --focus-mode symbols \
   --input-dir ./cli \
+  --json
+```
+
+Compress a long book draft with a tighter skeleton budget:
+
+```bash
+PYTHONPATH="$PWD" python3 -m cli context compress \
+  --preset writing \
+  --skeleton-density compact \
+  --text-file /absolute/path/to/book-draft.md \
   --json
 ```
 
@@ -185,6 +230,15 @@ Repo-scale benchmark:
 python3 testing/context_scale_benchmark.py --directory ./cli --iterations 2
 ```
 
+Realistic repo benchmark:
+
+```bash
+python3 testing/context_scale_benchmark.py \
+  --directory ./cli \
+  --real-directory . \
+  --real-text-files README.md CONTEXT_COMPRESSION_PRINCIPLES_20260507.md CONTEXT_COMPRESSION_SPEC_20260428.md CHANGELOG.md
+```
+
 The benchmark compares:
 
 - heuristic metrics
@@ -192,7 +246,15 @@ The benchmark compares:
 - tokenizer-backed metrics when available
 - full directory bundles vs incremental bundles
 - focus-mode skeleton variants vs the default full skeleton
+- skeleton-density variants for the default full skeleton
+- synthetic fixtures vs realistic repo-scale directory/text corpora
 - restore verification for both text and directory cases
+
+Recent repeatable benchmark signals on this repository:
+
+- realistic directory corpus: about `661704` source chars to `30903` skeleton chars, with restore verification passing
+- realistic text corpus: about `39793` source chars to `3076` skeleton chars, with restore verification passing
+- long synthetic manuscript: adaptive and compact chapter-fold skeletons reduced the standard skeleton footprint to about `44.8%`
 
 ## Documentation
 
@@ -204,6 +266,7 @@ The benchmark compares:
 - `/Users/carwynmac/MCP-Skeleton/CONTEXT_TOKENIZER_REPO_SCALE_REPORT_20260429.md`
 - `/Users/carwynmac/MCP-Skeleton/CONTEXT_INCREMENTAL_BENCHMARK_REPORT_20260508.md`
 - `/Users/carwynmac/MCP-Skeleton/CONTEXT_FOCUS_BENCHMARK_REPORT_20260508.md`
+- `/Users/carwynmac/MCP-Skeleton/RELEASE_CHECKLIST_0_1.md`
 
 ## Scope
 

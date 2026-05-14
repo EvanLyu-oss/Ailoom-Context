@@ -35,6 +35,7 @@ STOPWORDS = {
 }
 TOKENIZER_BACKENDS = {"auto", "heuristic", "tiktoken"}
 CONTEXT_FOCUS_MODES = {"full", "tree", "imports", "symbols", "writing-outline"}
+SKELETON_DENSITY_MODES = {"adaptive", "standard", "compact"}
 PATCH_APPLY_MERGE_MODES = {"overwrite", "reject-conflicts"}
 PATCH_POLICY_MODES: dict[str, dict[str, Any]] = {
     "open": {
@@ -155,9 +156,11 @@ def build_context_compress_payload(
     incremental: bool = False,
     base_commit: str | None = None,
     focus_mode: str | None = None,
+    skeleton_density: str | None = None,
 ) -> dict[str, Any]:
     preset = resolve_context_preset(preset_id)
     resolved_focus_mode = _normalize_context_focus_mode(focus_mode)
+    resolved_skeleton_density = _normalize_skeleton_density(skeleton_density)
     if incremental:
         if any(item for item in [inline_text.strip() if inline_text else "", text_file, input_file]) or input_dir is None:
             raise ValueError("context compress --incremental currently requires exactly one directory input via --input-dir")
@@ -178,7 +181,12 @@ def build_context_compress_payload(
             tokenizer_model=tokenizer_model,
         )
 
-    skeleton_text = _render_skeleton_text(source, preset=preset, focus_mode=resolved_focus_mode)
+    skeleton_text = _render_skeleton_text(
+        source,
+        preset=preset,
+        focus_mode=resolved_focus_mode,
+        skeleton_density=resolved_skeleton_density,
+    )
     restore_blob = _encode_restore_blob(source["restore_blob"])
     metrics = _build_context_metrics(
         source["source_summary"],
@@ -199,6 +207,7 @@ def build_context_compress_payload(
         "preset_focus": list(preset["focus"]),
         "preset_best_for": list(preset["best_for"]),
         "focus_mode": resolved_focus_mode,
+        "skeleton_density": resolved_skeleton_density,
         "compression_mode": source["compression_mode"],
         "source_kind": source["source_kind"],
         "source_label": source["source_label"],
@@ -349,6 +358,7 @@ def build_context_bundle_payload(
     incremental: bool = False,
     base_commit: str | None = None,
     focus_mode: str | None = None,
+    skeleton_density: str | None = None,
 ) -> dict[str, Any]:
     compression_payload = build_context_compress_payload(
         inline_text=inline_text,
@@ -362,6 +372,7 @@ def build_context_bundle_payload(
         incremental=incremental,
         base_commit=base_commit,
         focus_mode=focus_mode,
+        skeleton_density=skeleton_density,
     )
     inspect_payload = inspect_context_package(
         compression_payload,
@@ -418,6 +429,7 @@ def build_context_bundle_payload(
         "preset_id": compression_payload.get("preset_id", "generic"),
         "preset_label": compression_payload.get("preset_label", CONTEXT_PRESETS["generic"]["label"]),
         "focus_mode": compression_payload.get("focus_mode", "full"),
+        "skeleton_density": compression_payload.get("skeleton_density", "adaptive"),
         "skeleton_language": compression_payload.get("skeleton_language", SKELETON_LANGUAGE),
         "compression_mode": compression_payload.get("compression_mode", ""),
         "source_kind": compression_payload.get("source_kind", ""),
@@ -1059,6 +1071,7 @@ def inspect_context_package(
         "preset_label": package_payload.get("preset_label", CONTEXT_PRESETS["generic"]["label"]),
         "preset_focus": list(package_payload.get("preset_focus") or CONTEXT_PRESETS["generic"]["focus"]),
         "focus_mode": package_payload.get("focus_mode", "full"),
+        "skeleton_density": package_payload.get("skeleton_density", "adaptive"),
         "compression_mode": package_payload.get("compression_mode", restore_mode),
         "source_kind": package_payload.get("source_kind", decoded.get("source_kind", "")),
         "source_label": package_payload.get("source_label", decoded.get("source_label", "")),
@@ -1237,6 +1250,7 @@ def _build_directory_source(
                 }
             skeleton_entries.append({"relative_path": rel_path, "kind": kind, "summary": summary})
 
+    directory_overview = _build_directory_overview(sorted(skeleton_entries, key=lambda item: item["relative_path"]))
     source_summary = {
         "source_kind": "directory",
         "label": path.name,
@@ -1251,6 +1265,7 @@ def _build_directory_source(
         "total_chars": total_chars,
         "tree": [entry["relative_path"] for entry in sorted(skeleton_entries, key=lambda item: item["relative_path"])],
         "entries": sorted(skeleton_entries, key=lambda item: item["relative_path"]),
+        **directory_overview,
     }
     source_token_hints = {
         "heuristic_token_count_source": _estimate_token_count(total_chars),
@@ -1534,6 +1549,7 @@ def _build_incremental_directory_source(
         else:
             changed_paths.append(rel_path)
 
+    directory_overview = _build_directory_overview(sorted(skeleton_entries, key=lambda item: item["relative_path"]))
     source_summary = {
         "source_kind": "directory",
         "label": path.name,
@@ -1548,6 +1564,7 @@ def _build_incremental_directory_source(
         "total_chars": total_chars,
         "tree": [entry["relative_path"] for entry in sorted(skeleton_entries, key=lambda item: item["relative_path"])],
         "entries": sorted(skeleton_entries, key=lambda item: item["relative_path"]),
+        **directory_overview,
         "changed_file_count": len(changed_paths),
         "added_file_count": len(added_paths),
         "removed_path_count": len(removed_paths),
@@ -1700,6 +1717,7 @@ def _build_incremental_candidate_directory_source(
     ]
     revived_as_added_paths = [path for path in revived_removed_paths if path in candidate_paths]
     incremental_added_paths = sorted(set(original_added_paths) | set(revived_as_added_paths))
+    directory_overview = _build_directory_overview(filtered_entries)
 
     return {
         "compression_mode": "directory_incremental",
@@ -1720,6 +1738,7 @@ def _build_incremental_candidate_directory_source(
             "total_chars": total_chars,
             "tree": filtered_tree,
             "entries": filtered_entries,
+            **directory_overview,
             "changed_file_count": len(incremental_changed_paths),
             "added_file_count": len(incremental_added_paths),
             "removed_path_count": len(effective_removed_paths),
@@ -1749,6 +1768,95 @@ def _build_incremental_candidate_directory_source(
             "base_commit": package_payload.get("incremental_base_commit", ""),
             "git_root": package_payload.get("incremental_git_root", ""),
         },
+    }
+
+
+def _build_directory_overview(
+    entries: list[dict[str, Any]],
+    *,
+    max_groups: int = 12,
+    max_extensions: int = 10,
+) -> dict[str, Any]:
+    directory_buckets: dict[str, dict[str, Any]] = {}
+    extension_counts: Counter[str] = Counter()
+    for entry in entries:
+        rel_path = str(entry.get("relative_path") or "")
+        if not rel_path:
+            continue
+        kind = str(entry.get("kind") or "")
+        summary = entry.get("summary") or {}
+        parts = PurePosixPath(rel_path).parts
+        group_name = parts[0] if len(parts) > 1 else "."
+        bucket = directory_buckets.setdefault(
+            group_name,
+            {
+                "group": group_name,
+                "file_count": 0,
+                "code_files": 0,
+                "text_files": 0,
+                "binary_files": 0,
+                "symlink_count": 0,
+                "total_chars": 0,
+                "top_terms": Counter(),
+                "sample_paths": [],
+                "subtree_roots": Counter(),
+            },
+        )
+        bucket["file_count"] += 1
+        bucket["total_chars"] += int(summary.get("total_chars", 0) or 0)
+        if kind == "code":
+            bucket["code_files"] += 1
+        elif kind == "text":
+            bucket["text_files"] += 1
+        elif kind == "binary":
+            bucket["binary_files"] += 1
+        elif kind == "symlink":
+            bucket["symlink_count"] += 1
+        bucket["top_terms"].update(str(term) for term in (summary.get("top_terms") or []) if str(term).strip())
+        if len(bucket["sample_paths"]) < 4:
+            bucket["sample_paths"].append(rel_path)
+        if len(parts) >= 2:
+            subtree_root = parts[1] if len(parts) > 2 else "[files]"
+            bucket["subtree_roots"][subtree_root] += 1
+        suffix = PurePosixPath(rel_path).suffix.lower()
+        extension_counts[suffix if suffix else "[no_ext]"] += 1
+
+    groups = sorted(
+        (
+            {
+                "group": bucket["group"],
+                "file_count": bucket["file_count"],
+                "code_files": bucket["code_files"],
+                "text_files": bucket["text_files"],
+                "binary_files": bucket["binary_files"],
+                "symlink_count": bucket["symlink_count"],
+                "total_chars": bucket["total_chars"],
+                "top_terms": [term for term, _count in bucket["top_terms"].most_common(4)],
+                "sample_paths": list(bucket["sample_paths"][:3]),
+                "subtree_roots": [
+                    root_name for root_name, _count in bucket["subtree_roots"].most_common(3)
+                ],
+                "priority_score": round(
+                    (bucket["code_files"] * 4.0)
+                    + (bucket["text_files"] * 2.0)
+                    + (bucket["file_count"] * 1.2)
+                    + min(bucket["total_chars"] / 4_000.0, 20.0),
+                    2,
+                ),
+            }
+            for bucket in directory_buckets.values()
+        ),
+        key=lambda item: (-float(item["priority_score"]), -int(item["file_count"]), item["group"]),
+    )
+    extension_mix = [
+        {"extension": extension, "file_count": count}
+        for extension, count in extension_counts.most_common(max_extensions)
+    ]
+    return {
+        "directory_groups": groups[:max_groups],
+        "directory_group_count": len(groups),
+        "extension_mix": extension_mix,
+        "extension_group_count": len(extension_counts),
     }
 
 
@@ -1805,6 +1913,7 @@ def _build_context_inspect_summary_text(payload: dict[str, Any]) -> str:
         f"status: {payload.get('status', '')}",
         f"preset_id: {payload.get('preset_id', '')}",
         f"focus_mode: {payload.get('focus_mode', 'full')}",
+        f"skeleton_density: {payload.get('skeleton_density', 'adaptive')}",
         f"compression_mode: {payload.get('compression_mode', '')}",
         f"source_kind: {payload.get('source_kind', '')}",
         f"source_label: {payload.get('source_label', '')}",
@@ -2040,12 +2149,24 @@ def _decode_restore_blob(payload: dict[str, Any]) -> dict[str, Any]:
     return decoded
 
 
-def _render_skeleton_text(source: dict[str, Any], *, preset: dict[str, Any], focus_mode: str) -> str:
+def _render_skeleton_text(
+    source: dict[str, Any],
+    *,
+    preset: dict[str, Any],
+    focus_mode: str,
+    skeleton_density: str,
+) -> str:
+    density_profile = _resolve_skeleton_density_profile(
+        source["source_summary"],
+        focus_mode=focus_mode,
+        skeleton_density=skeleton_density,
+    )
     lines = [
         SKELETON_LANGUAGE,
         f"PRESET: {preset['preset_id']}",
         f"PRESET_LABEL: {preset['label']}",
         f"FOCUS_MODE: {focus_mode}",
+        f"SKELETON_DENSITY: {skeleton_density}",
         f"MODE: {source['compression_mode']}",
         f"SOURCE_KIND: {source['source_kind']}",
         f"SOURCE_LABEL: {source['source_label']}",
@@ -2055,7 +2176,13 @@ def _render_skeleton_text(source: dict[str, Any], *, preset: dict[str, Any], foc
     lines.append("PRESET_FOCUS:")
     lines.extend([f"  - {item}" for item in preset["focus"]])
     lines.append("CORE:")
-    lines.extend(_render_core_summary_lines(source["source_summary"], indent="  "))
+    lines.extend(
+        _render_core_summary_lines(
+            source["source_summary"],
+            indent="  ",
+            top_terms_limit=density_profile["top_terms_limit"],
+        )
+    )
     if source.get("incremental_mode"):
         lines.append("INCREMENTAL:")
         lines.append(f"  - scope: {source.get('incremental_scope', '')}")
@@ -2068,7 +2195,14 @@ def _render_skeleton_text(source: dict[str, Any], *, preset: dict[str, Any], foc
             lines.append("  REMOVED_PATHS:")
             lines.extend([f"    - {item}" for item in source.get("incremental_removed_paths", [])])
     lines.append("SKELETON:")
-    lines.extend(_render_structural_lines(source["source_summary"], indent="  ", focus_mode=focus_mode))
+    lines.extend(
+        _render_structural_lines(
+            source["source_summary"],
+            indent="  ",
+            focus_mode=focus_mode,
+            density_profile=density_profile,
+        )
+    )
     return "\n".join(lines).rstrip() + "\n"
 
 
@@ -2149,33 +2283,446 @@ def _normalize_context_focus_mode(focus_mode: str | None) -> str:
     return normalized
 
 
-def _render_core_summary_lines(summary: dict[str, Any], *, indent: str) -> list[str]:
+def _normalize_skeleton_density(skeleton_density: str | None) -> str:
+    normalized = str(skeleton_density or "adaptive").strip().lower() or "adaptive"
+    if normalized not in SKELETON_DENSITY_MODES:
+        supported = ", ".join(sorted(SKELETON_DENSITY_MODES))
+        raise ValueError(f"Unsupported skeleton density `{normalized}`. Supported densities: {supported}")
+    return normalized
+
+
+def _resolve_skeleton_density_profile(
+    summary: dict[str, Any],
+    *,
+    focus_mode: str,
+    skeleton_density: str,
+) -> dict[str, Any]:
+    source_kind = str(summary.get("source_kind") or "")
+    total_files = int(summary.get("total_files", 0) or 0)
+    total_chars = int(summary.get("total_chars", 0) or summary.get("total_bytes", 0) or 0)
+    paragraph_count = int(summary.get("paragraph_count", 0) or 0)
+    heading_count = int(summary.get("heading_count", 0) or 0)
+    large_directory = source_kind == "directory" and (total_files >= 120 or total_chars >= 250_000)
+    huge_directory = source_kind == "directory" and (total_files >= 400 or total_chars >= 1_000_000)
+    large_text = source_kind in {"text", "markdown"} and (paragraph_count >= 80 or heading_count >= 40 or total_chars >= 60_000)
+    huge_text = source_kind in {"text", "markdown"} and (paragraph_count >= 240 or heading_count >= 120 or total_chars >= 250_000)
+
+    standard = {
+        "top_terms_limit": 8,
+        "imports_limit": 24,
+        "symbols_limit": 40,
+        "relationships_limit": 30,
+        "headings_limit": 24,
+        "sections_limit": 10,
+        "chapter_fold_limit": 18,
+        "chapter_fold_heading_limit": 3,
+        "tree_limit": 2_000,
+        "directory_entry_limit": 2_000,
+        "directory_group_limit": 12,
+        "extension_mix_limit": 10,
+        "hot_subtree_limit": 12,
+        "collapsed_subtree_limit": 0,
+        "hot_subtree_seed_limit": 999,
+        "hot_subtree_entry_limit": 999,
+        "directory_entry_core_fields": [
+            "source_kind", "lines", "paragraph_count", "heading_count", "total_chars", "sha256",
+        ],
+        "directory_entry_top_terms_limit": 8,
+    }
+    adaptive_medium = {
+        "top_terms_limit": 6,
+        "imports_limit": 12,
+        "symbols_limit": 20,
+        "relationships_limit": 10,
+        "headings_limit": 16,
+        "sections_limit": 8,
+        "chapter_fold_limit": 12,
+        "chapter_fold_heading_limit": 3,
+        "tree_limit": 240 if focus_mode in {"full", "tree"} else 0,
+        "directory_entry_limit": 120,
+        "directory_group_limit": 10,
+        "extension_mix_limit": 8,
+        "hot_subtree_limit": 4,
+        "collapsed_subtree_limit": 4,
+        "hot_subtree_seed_limit": 3,
+        "hot_subtree_entry_limit": 18,
+        "directory_entry_core_fields": [
+            "source_kind", "lines", "paragraph_count", "heading_count", "total_chars",
+        ],
+        "directory_entry_top_terms_limit": 0,
+    }
+    adaptive_large = {
+        "top_terms_limit": 5,
+        "imports_limit": 8,
+        "symbols_limit": 12,
+        "relationships_limit": 6,
+        "headings_limit": 12,
+        "sections_limit": 6,
+        "chapter_fold_limit": 8,
+        "chapter_fold_heading_limit": 2,
+        "tree_limit": 160 if focus_mode in {"full", "tree"} else 0,
+        "directory_entry_limit": 80,
+        "directory_group_limit": 8,
+        "extension_mix_limit": 6,
+        "hot_subtree_limit": 3,
+        "collapsed_subtree_limit": 4,
+        "hot_subtree_seed_limit": 3,
+        "hot_subtree_entry_limit": 14,
+        "directory_entry_core_fields": [
+            "source_kind", "lines", "heading_count", "total_chars",
+        ],
+        "directory_entry_top_terms_limit": 0,
+    }
+    compact = {
+        "top_terms_limit": 4,
+        "imports_limit": 6,
+        "symbols_limit": 8,
+        "relationships_limit": 4,
+        "headings_limit": 10,
+        "sections_limit": 5,
+        "chapter_fold_limit": 6,
+        "chapter_fold_heading_limit": 2,
+        "tree_limit": 80 if focus_mode in {"full", "tree"} else 0,
+        "directory_entry_limit": 40,
+        "directory_group_limit": 6,
+        "extension_mix_limit": 5,
+        "hot_subtree_limit": 2,
+        "collapsed_subtree_limit": 4,
+        "hot_subtree_seed_limit": 2,
+        "hot_subtree_entry_limit": 8,
+        "directory_entry_core_fields": [
+            "source_kind", "lines", "total_chars",
+        ],
+        "directory_entry_top_terms_limit": 0,
+    }
+
+    if skeleton_density == "standard":
+        return standard
+    if skeleton_density == "compact":
+        return compact
+    if huge_directory or huge_text:
+        return compact
+    if large_directory or large_text:
+        return adaptive_large
+    if source_kind == "directory" and (total_files >= 40 or total_chars >= 100_000):
+        return adaptive_medium
+    if source_kind in {"text", "markdown"} and (paragraph_count >= 30 or total_chars >= 20_000):
+        return adaptive_medium
+    return standard
+
+
+def _render_core_summary_lines(
+    summary: dict[str, Any],
+    *,
+    indent: str,
+    field_names: list[str] | None = None,
+    top_terms_limit: int = 8,
+) -> list[str]:
     lines = []
-    for key in [
+    for key in field_names or [
         "label", "root_path", "source_kind", "total_files", "text_files", "code_files", "binary_files", "symlink_count",
         "empty_dir_count", "bytes", "total_bytes", "lines", "paragraph_count", "bullet_count", "heading_count", "total_chars", "sha256",
-        "changed_file_count", "added_file_count", "removed_path_count", "incremental_path_count", "incremental_scope", "base_commit",
+        "chapter_group_count", "changed_file_count", "added_file_count", "removed_path_count", "incremental_path_count", "incremental_scope", "base_commit",
     ]:
         if key in summary and summary[key] not in (None, "", [], {}):
             lines.append(f"{indent}- {key}: {summary[key]}")
-    if summary.get("top_terms"):
-        lines.append(f"{indent}- top_terms: {', '.join(summary['top_terms'])}")
+    if top_terms_limit > 0 and summary.get("top_terms"):
+        top_terms = list(summary["top_terms"][:top_terms_limit])
+        rendered_terms = ", ".join(top_terms)
+        remaining = max(0, len(summary["top_terms"]) - len(top_terms))
+        if remaining:
+            rendered_terms = f"{rendered_terms} (+{remaining} more)"
+        lines.append(f"{indent}- top_terms: {rendered_terms}")
     return lines
 
 
-def _render_structural_lines(summary: dict[str, Any], *, indent: str, focus_mode: str = "full") -> list[str]:
+def _render_list_block(
+    lines: list[str],
+    *,
+    title: str,
+    items: list[str],
+    indent: str,
+    limit: int,
+) -> None:
+    if not items or limit == 0:
+        return
+    lines.append(f"{indent}{title}:")
+    visible_items = list(items[:limit])
+    lines.extend([f"{indent}  - {item}" for item in visible_items])
+    remaining = len(items) - len(visible_items)
+    if remaining > 0:
+        lines.append(f"{indent}  - ... (+{remaining} more)")
+
+
+def _render_directory_overview_lines(
+    summary: dict[str, Any],
+    *,
+    indent: str,
+    density_profile: dict[str, Any],
+) -> list[str]:
+    lines: list[str] = []
+    directory_groups = list(summary.get("directory_groups") or [])
+    hot_group_limit = int(density_profile.get("hot_subtree_limit", len(directory_groups)))
+    collapsed_group_limit = int(density_profile.get("collapsed_subtree_limit", 0))
+    hot_groups = directory_groups[:hot_group_limit]
+    collapsed_groups = directory_groups[hot_group_limit: hot_group_limit + collapsed_group_limit]
+    if directory_groups:
+        lines.append(f"{indent}DIRECTORY_GROUPS:")
+        visible_groups = directory_groups[: int(density_profile["directory_group_limit"])]
+        for group in visible_groups:
+            descriptor = (
+                f"group={group.get('group', '')} files={group.get('file_count', 0)} "
+                f"code={group.get('code_files', 0)} text={group.get('text_files', 0)} "
+                f"binary={group.get('binary_files', 0)} symlinks={group.get('symlink_count', 0)} "
+                f"chars={group.get('total_chars', 0)}"
+            )
+            top_terms = [str(term) for term in (group.get("top_terms") or []) if str(term).strip()]
+            if top_terms:
+                descriptor = f"{descriptor} top_terms={', '.join(top_terms)}"
+            subtree_roots = [str(root) for root in (group.get("subtree_roots") or []) if str(root).strip()]
+            if subtree_roots:
+                descriptor = f"{descriptor} roots={', '.join(subtree_roots)}"
+            lines.append(f"{indent}  - {descriptor}")
+        remaining_groups = int(summary.get("directory_group_count", len(directory_groups))) - len(visible_groups)
+        if remaining_groups > 0:
+            lines.append(f"{indent}  - ... (+{remaining_groups} more groups)")
+    if hot_groups and len(directory_groups) > hot_group_limit:
+        lines.append(f"{indent}HOT_SUBTREES:")
+        for group in hot_groups:
+            sample_paths = [str(path) for path in (group.get("sample_paths") or []) if str(path).strip()]
+            descriptor = (
+                f"group={group.get('group', '')} priority={group.get('priority_score', 0)} "
+                f"files={group.get('file_count', 0)}"
+            )
+            if sample_paths:
+                descriptor = f"{descriptor} sample_paths={', '.join(sample_paths)}"
+            lines.append(f"{indent}  - {descriptor}")
+    if collapsed_groups:
+        lines.append(f"{indent}COLLAPSED_SUBTREES:")
+        for group in collapsed_groups:
+            sample_paths = [str(path) for path in (group.get("sample_paths") or []) if str(path).strip()]
+            descriptor = (
+                f"group={group.get('group', '')} files={group.get('file_count', 0)} "
+                f"chars={group.get('total_chars', 0)}"
+            )
+            if sample_paths:
+                descriptor = f"{descriptor} sample_paths={', '.join(sample_paths)}"
+            lines.append(f"{indent}  - {descriptor}")
+        remaining_collapsed = len(directory_groups) - hot_group_limit - len(collapsed_groups)
+        if remaining_collapsed > 0:
+            lines.append(f"{indent}  - ... (+{remaining_collapsed} more folded subtrees)")
+    extension_mix = list(summary.get("extension_mix") or [])
+    if extension_mix:
+        lines.append(f"{indent}EXTENSION_MIX:")
+        visible_extensions = extension_mix[: int(density_profile["extension_mix_limit"])]
+        for item in visible_extensions:
+            lines.append(
+                f"{indent}  - extension={item.get('extension', '')} files={item.get('file_count', 0)}"
+            )
+        remaining_extensions = int(summary.get("extension_group_count", len(extension_mix))) - len(visible_extensions)
+        if remaining_extensions > 0:
+            lines.append(f"{indent}  - ... (+{remaining_extensions} more extension groups)")
+    return lines
+
+
+def _render_text_chapter_fold_lines(
+    summary: dict[str, Any],
+    *,
+    indent: str,
+    density_profile: dict[str, Any],
+) -> list[str]:
+    chapter_groups = list(summary.get("chapter_groups") or [])
+    if not chapter_groups:
+        return []
+    lines = [f"{indent}CHAPTER_FOLDS:"]
+    visible_groups = chapter_groups[: int(density_profile.get("chapter_fold_limit", len(chapter_groups)))]
+    sample_heading_limit = int(density_profile.get("chapter_fold_heading_limit", 2))
+    for idx, group in enumerate(visible_groups, start=1):
+        descriptor = (
+            f"chapter[{idx}] title={json.dumps(str(group.get('title') or ''), ensure_ascii=False)} "
+            f"level={group.get('level', 1)} headings={group.get('heading_count', 0)} "
+            f"paragraphs={group.get('paragraph_count', 0)}"
+        )
+        sample_headings = [
+            str(item) for item in (group.get("sample_headings") or [])[:sample_heading_limit]
+            if str(item).strip()
+        ]
+        if sample_headings:
+            descriptor = f"{descriptor} sample_headings={json.dumps(sample_headings, ensure_ascii=False)}"
+        first_sentence = str(group.get("first_sentence") or "").strip()
+        if first_sentence:
+            descriptor = f"{descriptor} first_sentence={json.dumps(first_sentence, ensure_ascii=False)}"
+        lines.append(f"{indent}  - {descriptor}")
+    remaining_groups = int(summary.get("chapter_group_count", len(chapter_groups))) - len(visible_groups)
+    if remaining_groups > 0:
+        lines.append(f"{indent}  - ... (+{remaining_groups} more folded chapters)")
+    return lines
+
+
+def _directory_entry_matches_focus(entry_kind: str, focus_mode: str) -> bool:
+    if focus_mode == "tree":
+        return False
+    if focus_mode == "imports":
+        return entry_kind == "code"
+    if focus_mode == "symbols":
+        return entry_kind == "code"
+    if focus_mode == "writing-outline":
+        return entry_kind in {"text", "markdown"}
+    return True
+
+
+def _select_directory_entries(
+    summary: dict[str, Any],
+    *,
+    density_profile: dict[str, Any],
+    focus_mode: str,
+) -> list[dict[str, Any]]:
+    entries = list(summary.get("entries") or [])
+    entry_limit = int(density_profile.get("directory_entry_limit", len(entries)))
+    if entry_limit <= 0 or not entries:
+        return []
+    if len(entries) <= entry_limit:
+        return entries
+
+    eligible_entries = [
+        entry for entry in entries
+        if _directory_entry_matches_focus(str(entry.get("kind") or ""), focus_mode)
+    ]
+    if focus_mode != "full":
+        tree_fill_entries = [entry for entry in entries if entry not in eligible_entries]
+    else:
+        tree_fill_entries = []
+    if not eligible_entries and focus_mode != "full":
+        eligible_entries = list(entries)
+        tree_fill_entries = []
+
+    group_priority = [
+        str(group.get("group") or "")
+        for group in (summary.get("directory_groups") or [])[: int(density_profile.get("hot_subtree_limit", 0))]
+        if str(group.get("group") or "").strip()
+    ]
+    group_to_entries: dict[str, list[dict[str, Any]]] = {}
+    for entry in eligible_entries:
+        rel_path = str(entry.get("relative_path") or "")
+        parts = PurePosixPath(rel_path).parts
+        group_name = parts[0] if len(parts) > 1 else "."
+        group_to_entries.setdefault(group_name, []).append(entry)
+
+    selected: list[dict[str, Any]] = []
+    selected_paths: set[str] = set()
+
+    def _append(entry: dict[str, Any]) -> bool:
+        rel_path = str(entry.get("relative_path") or "")
+        if not rel_path or rel_path in selected_paths or len(selected) >= entry_limit:
+            return False
+        selected.append(entry)
+        selected_paths.add(rel_path)
+        return True
+
+    seed_limit = int(density_profile.get("hot_subtree_seed_limit", entry_limit))
+    per_group_limit = int(density_profile.get("hot_subtree_entry_limit", entry_limit))
+    group_counts: Counter[str] = Counter()
+
+    for group_name in group_priority:
+        for entry in group_to_entries.get(group_name, [])[:seed_limit]:
+            if _append(entry):
+                group_counts[group_name] += 1
+
+    for group_name in group_priority:
+        for entry in group_to_entries.get(group_name, []):
+            if group_counts[group_name] >= per_group_limit or len(selected) >= entry_limit:
+                break
+            if _append(entry):
+                group_counts[group_name] += 1
+
+    for entry in eligible_entries:
+        if len(selected) >= entry_limit:
+            break
+        _append(entry)
+
+    for entry in tree_fill_entries:
+        if len(selected) >= entry_limit:
+            break
+        _append(entry)
+
+    return selected
+
+
+def _select_directory_tree_items(
+    summary: dict[str, Any],
+    *,
+    density_profile: dict[str, Any],
+    focus_mode: str,
+) -> list[str]:
+    tree_items = [str(item) for item in (summary.get("tree") or []) if str(item).strip()]
+    tree_limit = int(density_profile.get("tree_limit", len(tree_items)))
+    if tree_limit <= 0 or not tree_items:
+        return []
+    if len(tree_items) <= tree_limit:
+        return tree_items
+
+    ordered: list[str] = []
+    seen: set[str] = set()
+
+    def _append(path: str) -> None:
+        if path and path not in seen and len(ordered) < tree_limit:
+            ordered.append(path)
+            seen.add(path)
+
+    for entry in _select_directory_entries(summary, density_profile=density_profile, focus_mode=focus_mode):
+        _append(str(entry.get("relative_path") or ""))
+
+    for group in (summary.get("directory_groups") or [])[: int(density_profile.get("directory_group_limit", 0))]:
+        for sample_path in group.get("sample_paths") or []:
+            _append(str(sample_path))
+
+    for path in tree_items:
+        if len(ordered) >= tree_limit:
+            break
+        _append(path)
+
+    return ordered
+
+
+def _render_structural_lines(
+    summary: dict[str, Any],
+    *,
+    indent: str,
+    focus_mode: str = "full",
+    density_profile: dict[str, Any] | None = None,
+) -> list[str]:
+    density_profile = density_profile or _resolve_skeleton_density_profile(
+        summary,
+        focus_mode=focus_mode,
+        skeleton_density="adaptive",
+    )
     source_kind = str(summary.get("source_kind") or "")
     if source_kind == "code":
         lines = []
-        if focus_mode in {"full", "imports"} and summary.get("imports"):
-            lines.append(f"{indent}IMPORTS:")
-            lines.extend([f"{indent}  - {item}" for item in summary["imports"]])
-        if focus_mode in {"full", "symbols"} and summary.get("symbols"):
-            lines.append(f"{indent}SYMBOLS:")
-            lines.extend([f"{indent}  - {item}" for item in summary["symbols"]])
-        if focus_mode == "full" and summary.get("relationships"):
-            lines.append(f"{indent}RELATIONSHIPS:")
-            lines.extend([f"{indent}  - {item}" for item in summary["relationships"]])
+        if focus_mode in {"full", "imports"}:
+            _render_list_block(
+                lines,
+                title="IMPORTS",
+                items=list(summary.get("imports") or []),
+                indent=indent,
+                limit=int(density_profile["imports_limit"]),
+            )
+        if focus_mode in {"full", "symbols"}:
+            _render_list_block(
+                lines,
+                title="SYMBOLS",
+                items=list(summary.get("symbols") or []),
+                indent=indent,
+                limit=int(density_profile["symbols_limit"]),
+            )
+        if focus_mode == "full":
+            _render_list_block(
+                lines,
+                title="RELATIONSHIPS",
+                items=list(summary.get("relationships") or []),
+                indent=indent,
+                limit=int(density_profile["relationships_limit"]),
+            )
         if lines:
             return lines
         if focus_mode in {"imports", "symbols"}:
@@ -2183,12 +2730,28 @@ def _render_structural_lines(summary: dict[str, Any], *, indent: str, focus_mode
         return [f"{indent}- no structural code markers were extracted"]
     if source_kind in {"text", "markdown"}:
         lines = []
-        if focus_mode in {"full", "writing-outline"} and summary.get("headings"):
-            lines.append(f"{indent}HEADINGS:")
-            lines.extend([f"{indent}  - {item}" for item in summary["headings"]])
-        if focus_mode in {"full", "writing-outline"} and summary.get("sections"):
-            lines.append(f"{indent}SECTIONS:")
-            lines.extend([f"{indent}  - {item}" for item in summary["sections"]])
+        if focus_mode in {"full", "writing-outline"}:
+            lines.extend(
+                _render_text_chapter_fold_lines(
+                    summary,
+                    indent=indent,
+                    density_profile=density_profile,
+                )
+            )
+            _render_list_block(
+                lines,
+                title="HEADINGS",
+                items=list(summary.get("headings") or []),
+                indent=indent,
+                limit=int(density_profile["headings_limit"]),
+            )
+            _render_list_block(
+                lines,
+                title="SECTIONS",
+                items=list(summary.get("sections") or []),
+                indent=indent,
+                limit=int(density_profile["sections_limit"]),
+            )
         if lines:
             return lines
         if focus_mode == "writing-outline":
@@ -2196,11 +2759,32 @@ def _render_structural_lines(summary: dict[str, Any], *, indent: str, focus_mode
         return [f"{indent}- no section markers were extracted"]
     if source_kind == "directory":
         lines: list[str] = []
+        lines.extend(
+            _render_directory_overview_lines(
+                summary,
+                indent=indent,
+                density_profile=density_profile,
+            )
+        )
         if focus_mode in {"full", "tree"}:
-            lines.append(f"{indent}TREE:")
-            lines.extend([f"{indent}  - {item}" for item in summary.get("tree", [])])
+            _render_list_block(
+                lines,
+                title="TREE",
+                items=_select_directory_tree_items(
+                    summary,
+                    density_profile=density_profile,
+                    focus_mode=focus_mode,
+                ),
+                indent=indent,
+                limit=int(density_profile["tree_limit"]),
+            )
         entry_blocks = []
-        for entry in summary.get("entries", []):
+        visible_entries = _select_directory_entries(
+            summary,
+            density_profile=density_profile,
+            focus_mode=focus_mode,
+        )
+        for entry in visible_entries:
             entry_kind = entry.get("kind")
             if focus_mode == "tree":
                 continue
@@ -2212,15 +2796,30 @@ def _render_structural_lines(summary: dict[str, Any], *, indent: str, focus_mode
                 continue
             structural = []
             if entry_kind in {"code", "text", "markdown"}:
-                structural = _render_structural_lines(entry.get("summary") or {}, indent=f"{indent}  ", focus_mode=focus_mode)
+                structural = _render_structural_lines(
+                    entry.get("summary") or {},
+                    indent=f"{indent}  ",
+                    focus_mode=focus_mode,
+                    density_profile=density_profile,
+                )
             if focus_mode == "full":
                 entry_blocks.append(f"{indent}FILE[{entry_kind}]: {entry['relative_path']}")
-                entry_blocks.extend(_render_core_summary_lines(entry.get("summary") or {}, indent=f"{indent}  "))
+                entry_blocks.extend(
+                    _render_core_summary_lines(
+                        entry.get("summary") or {},
+                        indent=f"{indent}  ",
+                        field_names=list(density_profile["directory_entry_core_fields"]),
+                        top_terms_limit=int(density_profile["directory_entry_top_terms_limit"]),
+                    )
+                )
                 entry_blocks.extend(structural)
                 continue
             if structural and not (len(structural) == 1 and structural[0].strip().startswith("- no ")):
                 entry_blocks.append(f"{indent}FILE[{entry_kind}]: {entry['relative_path']}")
                 entry_blocks.extend(structural)
+        omitted_entries = len(summary.get("entries", [])) - len(visible_entries)
+        if omitted_entries > 0 and focus_mode != "tree":
+            entry_blocks.append(f"{indent}- ... (+{omitted_entries} more entries)")
         if lines or entry_blocks:
             return lines + entry_blocks
         if focus_mode == "tree":
@@ -2353,6 +2952,10 @@ def _build_directory_apply_check(original: dict[str, Any], candidate: dict[str, 
         drift_findings.append(f"Missing files: {', '.join(missing_paths[:6])}")
     if extra_paths:
         strengths.append("The candidate added files beyond the original tree, which may be acceptable if the core tree stayed intact.")
+        if len(extra_paths) > max(3, int(len(original_paths) * 0.5)):
+            drift_findings.append(f"The candidate added a large number of files beyond the original project surface: {len(extra_paths)} added paths.")
+            revision_targets.append("Review the added files and compress a narrower candidate if the additions are not intentional.")
+            score -= 10
 
     if int(candidate.get("code_files", 0) or 0) < max(0, int(original.get("code_files", 0) or 0) - 2):
         drift_findings.append("The candidate now exposes notably fewer code files than the original bundle.")
@@ -2392,19 +2995,33 @@ def _text_summary(text: str, *, label: str) -> dict[str, Any]:
     paragraphs = [segment.strip() for segment in re.split(r"\n\s*\n", text) if segment.strip()]
     lines = text.splitlines()
     headings = []
+    heading_records: list[dict[str, Any]] = []
     for line in lines:
         stripped = line.strip()
         if not stripped:
             continue
         if stripped.startswith("#"):
-            headings.append(stripped.lstrip("#").strip())
+            title = stripped.lstrip("#").strip()
+            headings.append(title)
+            heading_records.append(
+                {
+                    "title": title,
+                    "level": max(1, len(stripped) - len(stripped.lstrip("#"))),
+                }
+            )
         elif re.fullmatch(r"[A-Z][A-Z0-9 \-_/]{4,}", stripped):
             headings.append(stripped)
+            heading_records.append({"title": stripped, "level": 1})
     sections = []
     for idx, paragraph in enumerate(paragraphs[:10], start=1):
         first_sentence = _first_sentence(paragraph)
         sections.append(f"section[{idx}] paragraphs=1 first_sentence={json.dumps(first_sentence, ensure_ascii=False)}")
     source_kind = "markdown" if label.lower().endswith((".md", ".mdx", ".rst")) or any(line.strip().startswith("#") for line in lines) else "text"
+    chapter_groups = _build_text_chapter_groups(
+        text=text,
+        paragraphs=paragraphs,
+        heading_records=heading_records,
+    )
     return {
         "source_kind": source_kind,
         "label": label,
@@ -2412,8 +3029,10 @@ def _text_summary(text: str, *, label: str) -> dict[str, Any]:
         "paragraph_count": len(paragraphs),
         "bullet_count": sum(1 for line in lines if line.strip().startswith(("- ", "* ", "+ "))),
         "heading_count": len(headings),
+        "chapter_group_count": len(chapter_groups),
         "headings": headings[:24],
         "sections": sections,
+        "chapter_groups": chapter_groups[:32],
         "top_terms": _top_terms(text),
         "sha256": _sha256_text(text),
         "total_chars": len(text),
@@ -2446,6 +3065,74 @@ def _code_summary(text: str, label: str) -> dict[str, Any]:
         "sha256": _sha256_text(text),
         "total_chars": len(text),
     }
+
+
+def _build_text_chapter_groups(
+    *,
+    text: str,
+    paragraphs: list[str],
+    heading_records: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    if heading_records:
+        anchor_level = 1 if any(int(item.get("level", 1) or 1) == 1 for item in heading_records) else 2
+        groups: list[dict[str, Any]] = []
+        current_group: dict[str, Any] | None = None
+        for record in heading_records:
+            title = str(record.get("title") or "").strip()
+            level = int(record.get("level", 1) or 1)
+            if not title:
+                continue
+            if current_group is None or level <= anchor_level:
+                current_group = {
+                    "title": title,
+                    "level": level,
+                    "heading_count": 1,
+                    "sample_headings": [],
+                }
+                groups.append(current_group)
+                continue
+            current_group["heading_count"] = int(current_group.get("heading_count", 0) or 0) + 1
+            sample_headings = list(current_group.get("sample_headings") or [])
+            if len(sample_headings) < 3:
+                sample_headings.append(title)
+                current_group["sample_headings"] = sample_headings
+        if groups:
+            paragraph_budget = max(1, len(paragraphs))
+            avg_group_paragraphs = max(1, round(paragraph_budget / max(1, len(groups))))
+            paragraph_cursor = 0
+            for group in groups:
+                group_heading_count = max(1, int(group.get("heading_count", 1) or 1))
+                remaining_paragraphs = max(0, paragraph_budget - paragraph_cursor)
+                group_paragraphs = min(
+                    max(avg_group_paragraphs, group_heading_count),
+                    max(1, remaining_paragraphs) if remaining_paragraphs else 1,
+                )
+                paragraph_slice = paragraphs[paragraph_cursor: paragraph_cursor + group_paragraphs]
+                paragraph_cursor += len(paragraph_slice)
+                first_sentence = _first_sentence(" ".join(paragraph_slice[:2])) if paragraph_slice else ""
+                group["paragraph_count"] = len(paragraph_slice)
+                group["first_sentence"] = first_sentence
+            if paragraph_cursor < paragraph_budget and groups:
+                groups[-1]["paragraph_count"] = int(groups[-1].get("paragraph_count", 0) or 0) + (paragraph_budget - paragraph_cursor)
+            return groups
+
+    groups = []
+    chunk_size = 8 if len(paragraphs) >= 24 else 5
+    for idx in range(0, len(paragraphs), chunk_size):
+        chunk = paragraphs[idx: idx + chunk_size]
+        if not chunk:
+            continue
+        groups.append(
+            {
+                "title": f"chunk[{len(groups) + 1}]",
+                "level": 1,
+                "heading_count": 0,
+                "sample_headings": [],
+                "paragraph_count": len(chunk),
+                "first_sentence": _first_sentence(" ".join(chunk[:2])),
+            }
+        )
+    return groups
 
 
 def _looks_like_text(path: Path, data: bytes) -> bool:

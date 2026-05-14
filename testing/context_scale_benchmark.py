@@ -30,6 +30,13 @@ QUICK_TEXT_TARGETS = [12_000, 40_000]
 DEFAULT_TOKENIZER_MODEL = "cl100k_base"
 DEFAULT_DIRECTORY_FOCUS_MODES = ["full", "tree", "imports", "symbols"]
 DEFAULT_TEXT_FOCUS_MODES = ["full", "writing-outline"]
+DEFAULT_SKELETON_DENSITIES = ["adaptive", "standard", "compact"]
+DEFAULT_REAL_TEXT_FILES = [
+    REPO_ROOT / "README.md",
+    REPO_ROOT / "CONTEXT_COMPRESSION_PRINCIPLES_20260507.md",
+    REPO_ROOT / "CONTEXT_COMPRESSION_SPEC_20260428.md",
+    REPO_ROOT / "CHANGELOG.md",
+]
 
 
 @dataclass
@@ -243,6 +250,40 @@ def _build_long_text(target_chars: int) -> str:
     return "\n\n".join(parts)
 
 
+def _build_realistic_text_fixture(
+    output_path: Path,
+    *,
+    source_files: list[Path],
+) -> dict[str, Any]:
+    sections: list[str] = [
+        "# MCP-Skeleton Realistic Corpus",
+        "",
+        "This corpus is assembled from repository documents so the benchmark can measure behavior on a more realistic long-form handoff surface.",
+        "",
+    ]
+    included_sources: list[str] = []
+    for source in source_files:
+        source = source.expanduser().resolve()
+        if not source.exists():
+            continue
+        included_sources.append(str(source))
+        sections.extend(
+            [
+                f"## Source: {source.name}",
+                "",
+                source.read_text(encoding="utf-8"),
+                "",
+            ]
+        )
+    output_path.write_text("\n".join(sections).strip() + "\n", encoding="utf-8")
+    return {
+        "path": str(output_path),
+        "source_files": included_sources,
+        "source_file_count": len(included_sources),
+        "char_count": output_path.stat().st_size,
+    }
+
+
 def _ensure_parent(path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -271,7 +312,10 @@ def _summarize_case(case: dict[str, Any]) -> dict[str, Any]:
         "label": case["label"],
         "backend": case["backend"],
         "kind": case.get("kind", ""),
+        "sample_type": case.get("sample_type", "synthetic"),
+        "source_path": case.get("source_path", ""),
         "focus_mode": case.get("compress", {}).get("focus_mode", "full"),
+        "skeleton_density": case.get("compress", {}).get("skeleton_density", "adaptive"),
         "source_chars": metrics["source_char_count"],
         "skeleton_chars": metrics["skeleton_char_count"],
         "estimated_source_tokens": metrics["estimated_token_count_source"],
@@ -295,14 +339,16 @@ def _build_focus_comparison(
 ) -> list[dict[str, Any]]:
     summaries = [_summarize_case(case) for case in cases if case.get("kind") == expected_kind]
     baseline_by_backend = {
-        item["backend"]: item for item in summaries if item.get("focus_mode") == "full"
+        (item["backend"], item.get("source_path", ""), item.get("sample_type", "")): item
+        for item in summaries
+        if item.get("focus_mode") == "full"
     }
     comparisons: list[dict[str, Any]] = []
     for item in summaries:
         focus_mode = item.get("focus_mode", "full")
         if focus_mode == "full":
             continue
-        baseline = baseline_by_backend.get(item["backend"])
+        baseline = baseline_by_backend.get((item["backend"], item.get("source_path", ""), item.get("sample_type", "")))
         if baseline is None:
             continue
         full_skeleton_tokens = int(baseline["estimated_skeleton_tokens"])
@@ -314,6 +360,7 @@ def _build_focus_comparison(
                 "label": item["label"],
                 "backend": item["backend"],
                 "kind": expected_kind,
+                "sample_type": item.get("sample_type", ""),
                 "focus_mode": focus_mode,
                 "full_skeleton_chars": full_skeleton_chars,
                 "focused_skeleton_chars": focused_skeleton_chars,
@@ -327,6 +374,56 @@ def _build_focus_comparison(
                 ) if full_skeleton_tokens else 0.0,
                 "full_compress_ms_avg": baseline["compress_ms_avg"],
                 "focused_compress_ms_avg": item["compress_ms_avg"],
+                "compress_time_ratio": round(
+                    item["compress_ms_avg"] / baseline["compress_ms_avg"], 4
+                ) if baseline["compress_ms_avg"] else 0.0,
+            }
+        )
+    return comparisons
+
+
+def _build_density_comparison(
+    cases: list[dict[str, Any]],
+    *,
+    expected_kind: str,
+) -> list[dict[str, Any]]:
+    summaries = [_summarize_case(case) for case in cases if case.get("kind") == expected_kind]
+    baseline_by_backend = {
+        (item["backend"], item.get("source_path", ""), item.get("sample_type", "")): item
+        for item in summaries
+        if item.get("skeleton_density") == "standard"
+    }
+    comparisons: list[dict[str, Any]] = []
+    for item in summaries:
+        density = item.get("skeleton_density", "adaptive")
+        if density == "standard":
+            continue
+        baseline = baseline_by_backend.get((item["backend"], item.get("source_path", ""), item.get("sample_type", "")))
+        if baseline is None:
+            continue
+        baseline_skeleton_tokens = int(baseline["estimated_skeleton_tokens"])
+        density_skeleton_tokens = int(item["estimated_skeleton_tokens"])
+        baseline_skeleton_chars = int(baseline["skeleton_chars"])
+        density_skeleton_chars = int(item["skeleton_chars"])
+        comparisons.append(
+            {
+                "label": item["label"],
+                "backend": item["backend"],
+                "kind": expected_kind,
+                "sample_type": item.get("sample_type", ""),
+                "skeleton_density": density,
+                "baseline_skeleton_chars": baseline_skeleton_chars,
+                "density_skeleton_chars": density_skeleton_chars,
+                "skeleton_char_size_ratio": round(
+                    density_skeleton_chars / baseline_skeleton_chars, 4
+                ) if baseline_skeleton_chars else 0.0,
+                "baseline_skeleton_tokens": baseline_skeleton_tokens,
+                "density_skeleton_tokens": density_skeleton_tokens,
+                "skeleton_token_size_ratio": round(
+                    density_skeleton_tokens / baseline_skeleton_tokens, 4
+                ) if baseline_skeleton_tokens else 0.0,
+                "baseline_compress_ms_avg": baseline["compress_ms_avg"],
+                "density_compress_ms_avg": item["compress_ms_avg"],
                 "compress_time_ratio": round(
                     item["compress_ms_avg"] / baseline["compress_ms_avg"], 4
                 ) if baseline["compress_ms_avg"] else 0.0,
@@ -394,6 +491,8 @@ def _render_markdown(report: dict[str, Any]) -> str:
         f"- repo_root: `{report['repo_root']}`",
         f"- python: `{report['python']}`",
         f"- platform: `{report['platform']}`",
+        f"- synthetic_directory: `{report.get('benchmark_inputs', {}).get('synthetic_directory', '')}`",
+        f"- realistic_directory: `{report.get('benchmark_inputs', {}).get('realistic_directory', '')}`",
         "",
         "## Directory Cases",
         "",
@@ -436,6 +535,46 @@ def _render_markdown(report: dict[str, Any]) -> str:
             directory_rows,
         )
     )
+    if report["summaries"].get("realistic_directory_full_cases"):
+        lines.extend(["", "## Realistic Directory Cases", ""])
+        realistic_directory_rows = [
+            [
+                item["label"],
+                item["backend"],
+                item["sample_type"],
+                item["source_chars"],
+                item["skeleton_chars"],
+                item["estimated_source_tokens"],
+                item["estimated_skeleton_tokens"],
+                item["estimated_tokens_saved"],
+                item["token_ratio"],
+                item["compress_ms_avg"],
+                item["inspect_ms_avg"],
+                item["restore_ms_avg"],
+                item["restore_verified"],
+            ]
+            for item in report["summaries"]["realistic_directory_full_cases"]
+        ]
+        lines.append(
+            _markdown_table(
+                [
+                    "Case",
+                    "Backend",
+                    "Sample type",
+                    "Source chars",
+                    "Skeleton chars",
+                    "Source tokens",
+                    "Skeleton tokens",
+                    "Tokens saved",
+                    "Token ratio",
+                    "Compress ms",
+                    "Inspect ms",
+                    "Restore ms",
+                    "Restore ok",
+                ],
+                realistic_directory_rows,
+            )
+        )
     if report["summaries"].get("directory_incremental_cases"):
         lines.extend(["", "## Incremental Directory Cases", ""])
         incremental_rows = [
@@ -520,7 +659,9 @@ def _render_markdown(report: dict[str, Any]) -> str:
             [
                 item["label"],
                 item["backend"],
+                item["sample_type"],
                 item["focus_mode"],
+                item["skeleton_density"],
                 item["skeleton_chars"],
                 item["estimated_skeleton_tokens"],
                 item["compress_ms_avg"],
@@ -531,14 +672,16 @@ def _render_markdown(report: dict[str, Any]) -> str:
         lines.append(
             _markdown_table(
                 [
-                    "Case",
-                    "Backend",
-                    "Focus mode",
-                    "Skeleton chars",
-                    "Skeleton tokens",
-                    "Compress ms",
-                    "Restore ok",
-                ],
+                "Case",
+                "Backend",
+                "Sample type",
+                "Focus mode",
+                "Skeleton density",
+                "Skeleton chars",
+                "Skeleton tokens",
+                "Compress ms",
+                "Restore ok",
+            ],
                 focus_rows,
             )
         )
@@ -548,6 +691,7 @@ def _render_markdown(report: dict[str, Any]) -> str:
             [
                 item["label"],
                 item["backend"],
+                item["sample_type"],
                 item["focus_mode"],
                 item["full_skeleton_chars"],
                 item["focused_skeleton_chars"],
@@ -566,6 +710,7 @@ def _render_markdown(report: dict[str, Any]) -> str:
                 [
                     "Case",
                     "Backend",
+                    "Sample type",
                     "Focus mode",
                     "Full skeleton chars",
                     "Focused skeleton chars",
@@ -578,6 +723,46 @@ def _render_markdown(report: dict[str, Any]) -> str:
                     "Compress ratio",
                 ],
                 directory_focus_comparison_rows,
+            )
+        )
+    if report["summaries"].get("directory_density_comparison"):
+        lines.extend(["", "## Directory Density Comparison", ""])
+        directory_density_rows = [
+            [
+                item["label"],
+                item["backend"],
+                item["sample_type"],
+                item["skeleton_density"],
+                item["baseline_skeleton_chars"],
+                item["density_skeleton_chars"],
+                item["skeleton_char_size_ratio"],
+                item["baseline_skeleton_tokens"],
+                item["density_skeleton_tokens"],
+                item["skeleton_token_size_ratio"],
+                item["baseline_compress_ms_avg"],
+                item["density_compress_ms_avg"],
+                item["compress_time_ratio"],
+            ]
+            for item in report["summaries"]["directory_density_comparison"]
+        ]
+        lines.append(
+            _markdown_table(
+                [
+                    "Case",
+                    "Backend",
+                    "Sample type",
+                    "Skeleton density",
+                    "Standard skeleton chars",
+                    "Density skeleton chars",
+                    "Skeleton char ratio",
+                    "Standard skeleton tokens",
+                    "Density skeleton tokens",
+                    "Skeleton token ratio",
+                    "Standard compress ms",
+                    "Density compress ms",
+                    "Compress ratio",
+                ],
+                directory_density_rows,
             )
         )
     lines.extend(["", "## Long Text Cases", ""])
@@ -619,13 +804,55 @@ def _render_markdown(report: dict[str, Any]) -> str:
             text_rows,
         )
     )
+    if report["summaries"].get("realistic_text_full_cases"):
+        lines.extend(["", "## Realistic Text Cases", ""])
+        realistic_text_rows = [
+            [
+                item["label"],
+                item["backend"],
+                item["sample_type"],
+                item["source_chars"],
+                item["skeleton_chars"],
+                item["estimated_source_tokens"],
+                item["estimated_skeleton_tokens"],
+                item["estimated_tokens_saved"],
+                item["token_ratio"],
+                item["compress_ms_avg"],
+                item["inspect_ms_avg"],
+                item["restore_ms_avg"],
+                item["restore_verified"],
+            ]
+            for item in report["summaries"]["realistic_text_full_cases"]
+        ]
+        lines.append(
+            _markdown_table(
+                [
+                    "Case",
+                    "Backend",
+                    "Sample type",
+                    "Source chars",
+                    "Skeleton chars",
+                    "Source tokens",
+                    "Skeleton tokens",
+                    "Tokens saved",
+                    "Token ratio",
+                    "Compress ms",
+                    "Inspect ms",
+                    "Restore ms",
+                    "Restore ok",
+                ],
+                realistic_text_rows,
+            )
+        )
     if report["summaries"].get("text_focus_cases"):
         lines.extend(["", "## Text Focus Cases", ""])
         text_focus_rows = [
             [
                 item["label"],
                 item["backend"],
+                item["sample_type"],
                 item["focus_mode"],
+                item["skeleton_density"],
                 item["skeleton_chars"],
                 item["estimated_skeleton_tokens"],
                 item["compress_ms_avg"],
@@ -636,14 +863,16 @@ def _render_markdown(report: dict[str, Any]) -> str:
         lines.append(
             _markdown_table(
                 [
-                    "Case",
-                    "Backend",
-                    "Focus mode",
-                    "Skeleton chars",
-                    "Skeleton tokens",
-                    "Compress ms",
-                    "Restore ok",
-                ],
+                "Case",
+                "Backend",
+                "Sample type",
+                "Focus mode",
+                "Skeleton density",
+                "Skeleton chars",
+                "Skeleton tokens",
+                "Compress ms",
+                "Restore ok",
+            ],
                 text_focus_rows,
             )
         )
@@ -653,6 +882,7 @@ def _render_markdown(report: dict[str, Any]) -> str:
             [
                 item["label"],
                 item["backend"],
+                item["sample_type"],
                 item["focus_mode"],
                 item["full_skeleton_chars"],
                 item["focused_skeleton_chars"],
@@ -671,6 +901,7 @@ def _render_markdown(report: dict[str, Any]) -> str:
                 [
                     "Case",
                     "Backend",
+                    "Sample type",
                     "Focus mode",
                     "Full skeleton chars",
                     "Focused skeleton chars",
@@ -683,6 +914,46 @@ def _render_markdown(report: dict[str, Any]) -> str:
                     "Compress ratio",
                 ],
                 text_focus_comparison_rows,
+            )
+        )
+    if report["summaries"].get("text_density_comparison"):
+        lines.extend(["", "## Text Density Comparison", ""])
+        text_density_rows = [
+            [
+                item["label"],
+                item["backend"],
+                item["sample_type"],
+                item["skeleton_density"],
+                item["baseline_skeleton_chars"],
+                item["density_skeleton_chars"],
+                item["skeleton_char_size_ratio"],
+                item["baseline_skeleton_tokens"],
+                item["density_skeleton_tokens"],
+                item["skeleton_token_size_ratio"],
+                item["baseline_compress_ms_avg"],
+                item["density_compress_ms_avg"],
+                item["compress_time_ratio"],
+            ]
+            for item in report["summaries"]["text_density_comparison"]
+        ]
+        lines.append(
+            _markdown_table(
+                [
+                    "Case",
+                    "Backend",
+                    "Sample type",
+                    "Skeleton density",
+                    "Standard skeleton chars",
+                    "Density skeleton chars",
+                    "Skeleton char ratio",
+                    "Standard skeleton tokens",
+                    "Density skeleton tokens",
+                    "Skeleton token ratio",
+                    "Standard compress ms",
+                    "Density compress ms",
+                    "Compress ratio",
+                ],
+                text_density_rows,
             )
         )
     lines.extend(["", "## Notes", ""])
@@ -774,6 +1045,7 @@ def _benchmark_directory_case(
     iterations: int,
     workspace: Path,
     focus_mode: str = "full",
+    skeleton_density: str = "adaptive",
 ) -> dict[str, Any]:
     compress_times: list[float] = []
     inspect_times: list[float] = []
@@ -790,6 +1062,8 @@ def _benchmark_directory_case(
                 "codebase",
                 "--focus-mode",
                 focus_mode,
+                "--skeleton-density",
+                skeleton_density,
                 "--input-dir",
                 str(source_dir),
                 "--output-dir",
@@ -845,6 +1119,7 @@ def _benchmark_directory_case(
         "label": label,
         "backend": backend,
         "kind": "directory",
+        "sample_type": "synthetic",
         "source_path": str(source_dir.resolve()),
         "compress": compress_payload,
         "inspect": inspect_payload,
@@ -942,6 +1217,7 @@ def _benchmark_incremental_directory_case(
         "label": label,
         "backend": backend,
         "kind": "directory_incremental",
+        "sample_type": "synthetic",
         "source_path": str(repo_dir.resolve()),
         "compress": compress_payload,
         "inspect": inspect_payload,
@@ -971,6 +1247,7 @@ def _benchmark_text_case(
     iterations: int,
     workspace: Path,
     focus_mode: str = "full",
+    skeleton_density: str = "adaptive",
 ) -> dict[str, Any]:
     compress_times: list[float] = []
     inspect_times: list[float] = []
@@ -987,6 +1264,8 @@ def _benchmark_text_case(
                 "writing",
                 "--focus-mode",
                 focus_mode,
+                "--skeleton-density",
+                skeleton_density,
                 "--text-file",
                 str(text_path),
                 "--output-dir",
@@ -1041,6 +1320,7 @@ def _benchmark_text_case(
         "label": label,
         "backend": backend,
         "kind": "text",
+        "sample_type": "synthetic",
         "source_path": str(text_path.resolve()),
         "compress": compress_payload,
         "inspect": inspect_payload,
@@ -1056,12 +1336,15 @@ def _benchmark_text_case(
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run repo-scale and long-text context compression benchmarks.")
     parser.add_argument("--directory", default=str(REPO_ROOT / "cli"), help="Directory input to benchmark.")
+    parser.add_argument("--real-directory", default=str(REPO_ROOT), help="Real repository directory input to benchmark alongside the synthetic directory case.")
     parser.add_argument("--iterations", type=int, default=2, help="Iterations per case/backend.")
     parser.add_argument("--tokenizer-model", default=DEFAULT_TOKENIZER_MODEL, help="Tokenizer model/encoding to request.")
     parser.add_argument("--backends", nargs="*", help="Explicit tokenizer backends to benchmark.")
     parser.add_argument("--directory-focus-modes", nargs="*", default=DEFAULT_DIRECTORY_FOCUS_MODES, help="Focus modes to benchmark for directory cases.")
     parser.add_argument("--text-focus-modes", nargs="*", default=DEFAULT_TEXT_FOCUS_MODES, help="Focus modes to benchmark for text cases.")
+    parser.add_argument("--skeleton-densities", nargs="*", default=DEFAULT_SKELETON_DENSITIES, help="Skeleton density modes to benchmark for full skeleton cases.")
     parser.add_argument("--text-target-chars", nargs="*", type=int, default=DEFAULT_TEXT_TARGETS, help="Synthetic long-text sizes.")
+    parser.add_argument("--real-text-files", nargs="*", default=[str(path) for path in DEFAULT_REAL_TEXT_FILES], help="Repository documents to concatenate into one realistic long-text corpus.")
     parser.add_argument("--output-json", default=str(DEFAULT_JSON), help="Where to write the benchmark JSON report.")
     parser.add_argument("--output-md", default=str(DEFAULT_MD), help="Where to write the Markdown benchmark report.")
     parser.add_argument("--quick", action="store_true", help="Run a smaller benchmark suitable for smoke coverage.")
@@ -1078,6 +1361,7 @@ def main() -> int:
     with tempfile.TemporaryDirectory(prefix="context_scale_benchmark.") as tmp:
         workspace = Path(tmp)
         directory_path = Path(args.directory).expanduser().resolve()
+        real_directory_path = Path(args.real_directory).expanduser().resolve()
         text_targets = list(args.text_target_chars)
         iterations = max(1, args.iterations)
         if args.quick:
@@ -1088,38 +1372,83 @@ def main() -> int:
         backends = _build_backends(args.backends, include_tiktoken=True)
         directory_focus_modes = list(dict.fromkeys(args.directory_focus_modes or DEFAULT_DIRECTORY_FOCUS_MODES))
         text_focus_modes = list(dict.fromkeys(args.text_focus_modes or DEFAULT_TEXT_FOCUS_MODES))
+        skeleton_densities = list(dict.fromkeys(args.skeleton_densities or DEFAULT_SKELETON_DENSITIES))
         incremental_repo_dir, incremental_fixture_metadata = _build_incremental_repo_fixture(directory_path, workspace)
+        realistic_text_path = workspace / "realistic_repo_corpus.md"
+        realistic_text_fixture = _build_realistic_text_fixture(
+            realistic_text_path,
+            source_files=[Path(item).expanduser() for item in (args.real_text_files or [])],
+        )
         text_cases: list[dict[str, Any]] = []
         for target_chars in text_targets:
             text_path = workspace / f"synthetic_book_{target_chars}.md"
             text_path.write_text(_build_long_text(target_chars), encoding="utf-8")
             for backend in backends:
                 for focus_mode in text_focus_modes:
-                    text_cases.append(
-                        _benchmark_text_case(
-                            label=f"book_{target_chars}_{focus_mode}",
-                            text_path=text_path,
-                            backend=backend,
-                            tokenizer_model=args.tokenizer_model,
-                            iterations=iterations,
-                            workspace=workspace,
-                            focus_mode=focus_mode,
+                    densities = skeleton_densities if focus_mode == "full" else ["adaptive"]
+                    for skeleton_density in densities:
+                        text_cases.append(
+                            _benchmark_text_case(
+                                label=f"book_{target_chars}_{focus_mode}_{skeleton_density}",
+                                text_path=text_path,
+                                backend=backend,
+                                tokenizer_model=args.tokenizer_model,
+                                iterations=iterations,
+                                workspace=workspace,
+                                focus_mode=focus_mode,
+                                skeleton_density=skeleton_density,
+                            )
                         )
+        realistic_text_cases: list[dict[str, Any]] = []
+        for backend in backends:
+            for focus_mode in text_focus_modes:
+                densities = skeleton_densities if focus_mode == "full" else ["adaptive"]
+                for skeleton_density in densities:
+                    case = _benchmark_text_case(
+                        label=f"realistic_repo_docs_{focus_mode}_{skeleton_density}",
+                        text_path=realistic_text_path,
+                        backend=backend,
+                        tokenizer_model=args.tokenizer_model,
+                        iterations=iterations,
+                        workspace=workspace,
+                        focus_mode=focus_mode,
+                        skeleton_density=skeleton_density,
                     )
+                    case["sample_type"] = "realistic"
+                    case["fixture_metadata"] = realistic_text_fixture
+                    realistic_text_cases.append(case)
 
         directory_cases = [
             _benchmark_directory_case(
-                label=f"{directory_path.name}_{focus_mode}",
+                label=f"{directory_path.name}_{focus_mode}_{skeleton_density}",
                 source_dir=directory_path,
                 backend=backend,
                 tokenizer_model=args.tokenizer_model,
                 iterations=iterations,
                 workspace=workspace,
                 focus_mode=focus_mode,
+                skeleton_density=skeleton_density,
             )
             for backend in backends
             for focus_mode in directory_focus_modes
+            for skeleton_density in (skeleton_densities if focus_mode == "full" else ["adaptive"])
         ]
+        realistic_directory_cases = []
+        for backend in backends:
+            for focus_mode in directory_focus_modes:
+                for skeleton_density in (skeleton_densities if focus_mode == "full" else ["adaptive"]):
+                    case = _benchmark_directory_case(
+                        label=f"{real_directory_path.name}_realistic_{focus_mode}_{skeleton_density}",
+                        source_dir=real_directory_path,
+                        backend=backend,
+                        tokenizer_model=args.tokenizer_model,
+                        iterations=iterations,
+                        workspace=workspace,
+                        focus_mode=focus_mode,
+                        skeleton_density=skeleton_density,
+                    )
+                    case["sample_type"] = "realistic"
+                    realistic_directory_cases.append(case)
         directory_incremental_cases = [
             _benchmark_incremental_directory_case(
                 label=f"{directory_path.name}_incremental",
@@ -1132,11 +1461,37 @@ def main() -> int:
             )
             for backend in backends
         ]
-        full_directory_cases = [case for case in directory_cases if case.get("compress", {}).get("focus_mode") == "full"]
-        full_text_cases = [case for case in text_cases if case.get("compress", {}).get("focus_mode") == "full"]
+        full_density_directory_cases = [
+            case for case in (directory_cases + realistic_directory_cases) if case.get("compress", {}).get("focus_mode") == "full"
+        ]
+        full_density_text_cases = [
+            case for case in (text_cases + realistic_text_cases) if case.get("compress", {}).get("focus_mode") == "full"
+        ]
+        full_directory_cases = [
+            case
+            for case in full_density_directory_cases
+            if case.get("compress", {}).get("skeleton_density") == "adaptive" and case.get("sample_type") == "synthetic"
+        ]
+        full_text_cases = [
+            case
+            for case in full_density_text_cases
+            if case.get("compress", {}).get("skeleton_density") == "adaptive" and case.get("sample_type") == "synthetic"
+        ]
+        realistic_full_directory_cases = [
+            case
+            for case in full_density_directory_cases
+            if case.get("compress", {}).get("skeleton_density") == "adaptive" and case.get("sample_type") == "realistic"
+        ]
+        realistic_full_text_cases = [
+            case
+            for case in full_density_text_cases
+            if case.get("compress", {}).get("skeleton_density") == "adaptive" and case.get("sample_type") == "realistic"
+        ]
         incremental_comparison = _build_incremental_comparison(full_directory_cases, directory_incremental_cases)
-        directory_focus_comparison = _build_focus_comparison(directory_cases, expected_kind="directory")
-        text_focus_comparison = _build_focus_comparison(text_cases, expected_kind="text")
+        directory_focus_comparison = _build_focus_comparison(directory_cases + realistic_directory_cases, expected_kind="directory")
+        text_focus_comparison = _build_focus_comparison(text_cases + realistic_text_cases, expected_kind="text")
+        directory_density_comparison = _build_density_comparison(full_density_directory_cases, expected_kind="directory")
+        text_density_comparison = _build_density_comparison(full_density_text_cases, expected_kind="text")
 
         report = {
             "status": "ok",
@@ -1147,20 +1502,33 @@ def main() -> int:
             "tokenizer_model": args.tokenizer_model,
             "backends": backends,
             "iterations": iterations,
+            "benchmark_inputs": {
+                "synthetic_directory": str(directory_path),
+                "realistic_directory": str(real_directory_path),
+                "realistic_text_fixture": realistic_text_fixture,
+            },
             "directory_cases": directory_cases,
+            "realistic_directory_cases": realistic_directory_cases,
             "directory_incremental_cases": directory_incremental_cases,
             "text_cases": text_cases,
+            "realistic_text_cases": realistic_text_cases,
             "summaries": {
                 "directory_cases": [_summarize_case(case) for case in directory_cases],
                 "directory_full_cases": [_summarize_case(case) for case in full_directory_cases],
+                "realistic_directory_cases": [_summarize_case(case) for case in realistic_directory_cases],
+                "realistic_directory_full_cases": [_summarize_case(case) for case in realistic_full_directory_cases],
                 "directory_incremental_cases": [_summarize_case(case) for case in directory_incremental_cases],
                 "incremental_comparison": incremental_comparison,
                 "text_cases": [_summarize_case(case) for case in text_cases],
                 "text_full_cases": [_summarize_case(case) for case in full_text_cases],
-                "directory_focus_cases": [_summarize_case(case) for case in directory_cases],
+                "realistic_text_cases": [_summarize_case(case) for case in realistic_text_cases],
+                "realistic_text_full_cases": [_summarize_case(case) for case in realistic_full_text_cases],
+                "directory_focus_cases": [_summarize_case(case) for case in (directory_cases + realistic_directory_cases)],
                 "directory_focus_comparison": directory_focus_comparison,
-                "text_focus_cases": [_summarize_case(case) for case in text_cases],
+                "directory_density_comparison": directory_density_comparison,
+                "text_focus_cases": [_summarize_case(case) for case in (text_cases + realistic_text_cases)],
                 "text_focus_comparison": text_focus_comparison,
+                "text_density_comparison": text_density_comparison,
             },
         }
         output_json.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")

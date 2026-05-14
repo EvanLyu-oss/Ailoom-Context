@@ -17,23 +17,29 @@ trap cleanup EXIT
 ok_context_preset_json=false
 ok_context_compress_text_json=false
 ok_context_compress_text_writing_outline_json=false
+ok_context_compress_text_density_json=false
 ok_context_restore_text_json=false
 ok_context_compress_directory_json=false
 ok_context_compress_directory_symbols_json=false
+ok_context_compress_directory_aggregation_json=false
 ok_context_compress_incremental_json=false
 ok_context_inspect_incremental_json=false
 ok_context_restore_incremental_json=false
 ok_context_bundle_json=false
 ok_context_bundle_incremental_json=false
 ok_context_apply_check_text_json=false
+ok_context_apply_check_text_drift_json=false
+ok_context_apply_check_directory_drift_json=false
 ok_context_apply_check_incremental_json=false
 ok_context_patch_text_json=false
 ok_context_patch_incremental_json=false
 ok_context_patch_directory_mixed_json=false
 ok_context_patch_apply_text_json=false
+ok_context_patch_apply_merge_conflict_json=false
 ok_context_patch_apply_directory_json=false
 ok_context_patch_apply_dry_run_report_json=false
 ok_context_patch_apply_policy_template_json=false
+ok_context_patch_apply_policy_block_json=false
 ok_context_patch_apply_incremental_json=false
 ok_context_patch_apply_incremental_dry_run_report_json=false
 ok_context_restore_invalid_relpath_json=false
@@ -90,10 +96,46 @@ p = json.loads(open(sys.argv[1], encoding='utf-8').read())
 assert p['status'] == 'ok'
 assert p['focus_mode'] == 'writing-outline'
 assert 'FOCUS_MODE: writing-outline' in p['skeleton_text']
+assert 'CHAPTER_FOLDS:' in p['skeleton_text']
 assert 'HEADINGS:' in p['skeleton_text']
 assert 'SECTIONS:' in p['skeleton_text']
 PY
 ok_context_compress_text_writing_outline_json=true
+
+large_text_file="$TMP_ROOT/large_text.md"
+python3 - "$large_text_file" <<'PY'
+from pathlib import Path
+import sys
+parts = []
+for idx in range(1, 181):
+    parts.append(
+        f"# Chapter {idx}\n\n"
+        f"This chapter keeps repeating context compression continuity, exact restore, patch replay, and benchmark harness language {idx}.\n\n"
+        "## Notes\n\n"
+        "The structure should stay visible while the adaptive skeleton gets more selective on large inputs.\n"
+    )
+Path(sys.argv[1]).write_text("\n".join(parts), encoding="utf-8")
+PY
+context_text_standard_json="$TMP_ROOT/context_text_standard.json"
+context_text_compact_json="$TMP_ROOT/context_text_compact.json"
+python3 -m cli context compress --text-file "$large_text_file" --skeleton-density standard --json > "$context_text_standard_json"
+python3 -m cli context compress --text-file "$large_text_file" --skeleton-density compact --json > "$context_text_compact_json"
+python3 - "$context_text_standard_json" "$context_text_compact_json" <<'PY'
+import json, sys
+standard = json.loads(open(sys.argv[1], encoding='utf-8').read())
+compact = json.loads(open(sys.argv[2], encoding='utf-8').read())
+assert standard['status'] == 'ok'
+assert compact['status'] == 'ok'
+assert standard['skeleton_density'] == 'standard'
+assert compact['skeleton_density'] == 'compact'
+assert 'SKELETON_DENSITY: standard' in standard['skeleton_text']
+assert 'SKELETON_DENSITY: compact' in compact['skeleton_text']
+assert compact['source_summary']['chapter_group_count'] >= 6
+assert 'CHAPTER_FOLDS:' in compact['skeleton_text']
+assert compact['skeleton_char_count'] < standard['skeleton_char_count']
+assert '... (+' in compact['skeleton_text']
+PY
+ok_context_compress_text_density_json=true
 
 text_bundle_dir="$TMP_ROOT/text_bundle"
 python3 -m cli context compress --text-file "$text_file" --output-dir "$text_bundle_dir" --json > /dev/null
@@ -159,6 +201,77 @@ assert 'IMPORTS:' not in p['skeleton_text']
 assert 'TREE:' not in p['skeleton_text']
 PY
 ok_context_compress_directory_symbols_json=true
+
+large_project_dir="$TMP_ROOT/large_project"
+mkdir -p \
+  "$large_project_dir/src/api" \
+  "$large_project_dir/src/core" \
+  "$large_project_dir/docs" \
+  "$large_project_dir/tests" \
+  "$large_project_dir/scripts" \
+  "$large_project_dir/examples"
+python3 - "$large_project_dir" <<'PY'
+from pathlib import Path
+import sys
+root = Path(sys.argv[1])
+for idx in range(1, 51):
+    (root / "src" / "api" / f"handler_{idx}.py").write_text(
+        "from pathlib import Path\n\n"
+        f"def handler_{idx}() -> str:\n"
+        f"    return 'api-{idx}'\n",
+        encoding="utf-8",
+    )
+for idx in range(1, 51):
+    (root / "src" / "core" / f"service_{idx}.py").write_text(
+        "import json\n\n"
+        f"def service_{idx}() -> str:\n"
+        f"    return 'core-{idx}'\n",
+        encoding="utf-8",
+    )
+for idx in range(1, 21):
+    (root / "docs" / f"chapter_{idx}.md").write_text(
+        f"# Chapter {idx}\n\nThis chapter describes context compression structure {idx}.\n",
+        encoding="utf-8",
+    )
+for idx in range(1, 21):
+    (root / "tests" / f"test_case_{idx}.py").write_text(
+        f"def test_case_{idx}() -> None:\n    assert True\n",
+        encoding="utf-8",
+    )
+for idx in range(1, 11):
+    (root / "scripts" / f"task_{idx}.sh").write_text(
+        "#!/bin/sh\n"
+        f"echo task-{idx}\n",
+        encoding="utf-8",
+    )
+for idx in range(1, 11):
+    (root / "examples" / f"snippet_{idx}.md").write_text(
+        f"# Example {idx}\n\nThis example mirrors compression usage {idx}.\n",
+        encoding="utf-8",
+    )
+PY
+context_dir_standard_json="$TMP_ROOT/context_dir_standard.json"
+context_dir_adaptive_json="$TMP_ROOT/context_dir_adaptive.json"
+python3 -m cli context compress --preset codebase --input-dir "$large_project_dir" --skeleton-density standard --json > "$context_dir_standard_json"
+python3 -m cli context compress --preset codebase --input-dir "$large_project_dir" --skeleton-density adaptive --json > "$context_dir_adaptive_json"
+python3 - "$context_dir_standard_json" "$context_dir_adaptive_json" <<'PY'
+import json, sys
+standard = json.loads(open(sys.argv[1], encoding='utf-8').read())
+adaptive = json.loads(open(sys.argv[2], encoding='utf-8').read())
+assert standard['status'] == 'ok'
+assert adaptive['status'] == 'ok'
+assert adaptive['source_summary']['directory_groups']
+assert adaptive['source_summary']['extension_mix']
+assert 'DIRECTORY_GROUPS:' in adaptive['skeleton_text']
+assert 'HOT_SUBTREES:' in adaptive['skeleton_text']
+assert 'COLLAPSED_SUBTREES:' in adaptive['skeleton_text']
+assert 'EXTENSION_MIX:' in adaptive['skeleton_text']
+assert 'sample_paths=' in adaptive['skeleton_text']
+assert 'roots=' in adaptive['skeleton_text']
+assert adaptive['skeleton_char_count'] < standard['skeleton_char_count']
+assert '... (+' in adaptive['skeleton_text']
+PY
+ok_context_compress_directory_aggregation_json=true
 
 # incremental compress / inspect / restore
 cat > "$project_dir/src/app.py" <<'TXT'
@@ -247,6 +360,58 @@ assert p['status'] == 'ok'
 assert p['apply_check_passed'] is True
 PY
 ok_context_apply_check_text_json=true
+
+drift_text="$TMP_ROOT/drift_text.md"
+cat > "$drift_text" <<'TXT'
+Tiny unrelated note.
+TXT
+apply_check_text_drift_json="$TMP_ROOT/apply_check_text_drift.json"
+set +e
+python3 -m cli context apply-check --package-file "$text_bundle_dir/context_manifest.json" --text-file "$drift_text" --json > "$apply_check_text_drift_json"
+rc=$?
+set -e
+python3 - "$apply_check_text_drift_json" "$rc" <<'PY'
+import json, sys
+p = json.loads(open(sys.argv[1], encoding='utf-8').read())
+assert int(sys.argv[2]) in {0, 3}
+assert p['status'] == 'warning'
+assert p['apply_check_passed'] is False
+assert p['alignment_band'] == 'drifting'
+assert p['drift_findings']
+assert p['revision_targets']
+PY
+ok_context_apply_check_text_drift_json=true
+
+drift_dir="$TMP_ROOT/drift_dir"
+mkdir -p "$drift_dir/src" "$drift_dir/docs" "$drift_dir/extras"
+cat > "$drift_dir/src/app.py" <<'TXT'
+from pathlib import Path
+
+def run() -> str:
+    return "drifted"
+TXT
+ln -s "../src/app.py" "$drift_dir/docs/notes.md"
+for idx in 1 2 3 4 5; do
+  printf 'extra %s\n' "$idx" > "$drift_dir/extras/extra_$idx.txt"
+done
+apply_check_directory_drift_json="$TMP_ROOT/apply_check_directory_drift.json"
+set +e
+python3 -m cli context apply-check --package-file "$dir_bundle/context_manifest.json" --input-dir "$drift_dir" --json > "$apply_check_directory_drift_json"
+rc=$?
+set -e
+python3 - "$apply_check_directory_drift_json" "$rc" <<'PY'
+import json, sys
+p = json.loads(open(sys.argv[1], encoding='utf-8').read())
+assert int(sys.argv[2]) in {0, 3}
+assert p['status'] == 'warning'
+assert p['apply_check_passed'] is False
+assert p['alignment_band'] == 'drifting'
+assert any('file tree dropped' in finding.lower() for finding in p['drift_findings'])
+assert any('large number of files' in finding.lower() for finding in p['drift_findings'])
+assert any('file kinds changed' in finding.lower() for finding in p['drift_findings'])
+assert p['revision_targets']
+PY
+ok_context_apply_check_directory_drift_json=true
 
 # patch text
 edited_text="$TMP_ROOT/edited_text.md"
@@ -366,6 +531,27 @@ assert hashlib.sha256(open(sys.argv[2], 'rb').read()).hexdigest() == hashlib.sha
 PY
 ok_context_patch_apply_text_json=true
 
+merge_conflict_target="$TMP_ROOT/replayed_text_conflict.md"
+cat > "$merge_conflict_target" <<'TXT'
+Conflicting local edit before replay.
+TXT
+patch_apply_merge_conflict_json="$TMP_ROOT/patch_apply_merge_conflict.json"
+set +e
+python3 -m cli context patch-apply --patch-file "$TMP_ROOT/patch_text/patch_manifest.json" --source-package-file "$text_bundle_dir/context_manifest.json" --merge-mode reject-conflicts --output-file "$merge_conflict_target" --json > "$patch_apply_merge_conflict_json"
+rc=$?
+set -e
+python3 - "$patch_apply_merge_conflict_json" "$rc" <<'PY'
+import json, sys
+p = json.loads(open(sys.argv[1], encoding='utf-8').read())
+assert int(sys.argv[2]) in {0, 3}
+assert p['status'] == 'warning'
+assert p['apply_mode'] == 'merge_conflict_blocked'
+assert p['merge_check_passed'] is False
+assert p['merge_conflict_count'] >= 1
+assert p['merge_conflicts']
+PY
+ok_context_patch_apply_merge_conflict_json=true
+
 patch_apply_dir_json="$TMP_ROOT/patch_apply_dir.json"
 python3 -m cli context patch-apply --patch-file "$TMP_ROOT/patch_mixed/patch_manifest.json" --source-package-file "$mixed_bundle/context_manifest.json" --policy-mode open --merge-mode overwrite --output-dir "$TMP_ROOT/mixed_output" --json > "$patch_apply_dir_json"
 python3 - "$patch_apply_dir_json" "$modified_dir" "$TMP_ROOT/mixed_output/mixed_original" <<'PY'
@@ -409,6 +595,24 @@ assert 'src' in p['policy_template']['allow_roots']
 assert 'src/generated' in p['policy_template']['forbid_roots']
 PY
 ok_context_patch_apply_policy_template_json=true
+
+patch_apply_policy_block_json="$TMP_ROOT/patch_apply_policy_block.json"
+set +e
+python3 -m cli context patch-apply --patch-file "$TMP_ROOT/patch_incremental/patch_manifest.json" --source-package-file "$incremental_bundle/context_manifest.json" --policy-mode strict --output-dir "$TMP_ROOT/incremental_policy_block" --json > "$patch_apply_policy_block_json"
+rc=$?
+set -e
+python3 - "$patch_apply_policy_block_json" "$rc" <<'PY'
+import json, sys
+p = json.loads(open(sys.argv[1], encoding='utf-8').read())
+assert int(sys.argv[2]) in {0, 3}
+assert p['status'] == 'warning'
+assert p['apply_mode'] == 'policy_blocked'
+assert p['policy_passed'] is False
+assert p['policy_mode'] == 'strict'
+assert p['policy_findings']
+assert any('blocks added paths' in finding.lower() for finding in p['policy_findings'])
+PY
+ok_context_patch_apply_policy_block_json=true
 
 # incremental patch apply
 patch_apply_incremental_json="$TMP_ROOT/patch_apply_incremental.json"
@@ -497,12 +701,18 @@ assert Path(sys.argv[2]).exists()
 assert p['status'] == 'ok'
 assert p['directory_cases']
 assert p['directory_incremental_cases']
+assert p['realistic_directory_cases']
+assert p['realistic_text_cases']
 assert p['summaries']['incremental_comparison']
 assert p['summaries']['directory_focus_comparison']
 assert p['summaries']['text_focus_comparison']
+assert p['summaries']['realistic_directory_full_cases']
+assert p['summaries']['realistic_text_full_cases']
 assert any(item['focus_mode'] == 'symbols' for item in p['summaries']['directory_focus_cases'])
 assert any(item['focus_mode'] == 'writing-outline' for item in p['summaries']['text_focus_cases'])
 assert all(case['restore_verified'] is True for case in p['directory_cases'])
+assert all(case['restore_verified'] is True for case in p['realistic_directory_cases'])
+assert all(case['restore_verified'] is True for case in p['realistic_text_cases'])
 assert all(case['restore_verified'] is True for case in p['directory_incremental_cases'])
 PY
 ok_context_scale_benchmark_json=true
@@ -510,23 +720,29 @@ ok_context_scale_benchmark_json=true
 export CLI_SMOKE_OK_CONTEXT_PRESET_JSON="$ok_context_preset_json"
 export CLI_SMOKE_OK_CONTEXT_COMPRESS_TEXT_JSON="$ok_context_compress_text_json"
 export CLI_SMOKE_OK_CONTEXT_COMPRESS_TEXT_WRITING_OUTLINE_JSON="$ok_context_compress_text_writing_outline_json"
+export CLI_SMOKE_OK_CONTEXT_COMPRESS_TEXT_DENSITY_JSON="$ok_context_compress_text_density_json"
 export CLI_SMOKE_OK_CONTEXT_RESTORE_TEXT_JSON="$ok_context_restore_text_json"
 export CLI_SMOKE_OK_CONTEXT_COMPRESS_DIRECTORY_JSON="$ok_context_compress_directory_json"
 export CLI_SMOKE_OK_CONTEXT_COMPRESS_DIRECTORY_SYMBOLS_JSON="$ok_context_compress_directory_symbols_json"
+export CLI_SMOKE_OK_CONTEXT_COMPRESS_DIRECTORY_AGGREGATION_JSON="$ok_context_compress_directory_aggregation_json"
 export CLI_SMOKE_OK_CONTEXT_COMPRESS_INCREMENTAL_JSON="$ok_context_compress_incremental_json"
 export CLI_SMOKE_OK_CONTEXT_INSPECT_INCREMENTAL_JSON="$ok_context_inspect_incremental_json"
 export CLI_SMOKE_OK_CONTEXT_RESTORE_INCREMENTAL_JSON="$ok_context_restore_incremental_json"
 export CLI_SMOKE_OK_CONTEXT_BUNDLE_JSON="$ok_context_bundle_json"
 export CLI_SMOKE_OK_CONTEXT_BUNDLE_INCREMENTAL_JSON="$ok_context_bundle_incremental_json"
 export CLI_SMOKE_OK_CONTEXT_APPLY_CHECK_TEXT_JSON="$ok_context_apply_check_text_json"
+export CLI_SMOKE_OK_CONTEXT_APPLY_CHECK_TEXT_DRIFT_JSON="$ok_context_apply_check_text_drift_json"
+export CLI_SMOKE_OK_CONTEXT_APPLY_CHECK_DIRECTORY_DRIFT_JSON="$ok_context_apply_check_directory_drift_json"
 export CLI_SMOKE_OK_CONTEXT_APPLY_CHECK_INCREMENTAL_JSON="$ok_context_apply_check_incremental_json"
 export CLI_SMOKE_OK_CONTEXT_PATCH_TEXT_JSON="$ok_context_patch_text_json"
 export CLI_SMOKE_OK_CONTEXT_PATCH_INCREMENTAL_JSON="$ok_context_patch_incremental_json"
 export CLI_SMOKE_OK_CONTEXT_PATCH_DIRECTORY_MIXED_JSON="$ok_context_patch_directory_mixed_json"
 export CLI_SMOKE_OK_CONTEXT_PATCH_APPLY_TEXT_JSON="$ok_context_patch_apply_text_json"
+export CLI_SMOKE_OK_CONTEXT_PATCH_APPLY_MERGE_CONFLICT_JSON="$ok_context_patch_apply_merge_conflict_json"
 export CLI_SMOKE_OK_CONTEXT_PATCH_APPLY_DIRECTORY_JSON="$ok_context_patch_apply_directory_json"
 export CLI_SMOKE_OK_CONTEXT_PATCH_APPLY_DRY_RUN_REPORT_JSON="$ok_context_patch_apply_dry_run_report_json"
 export CLI_SMOKE_OK_CONTEXT_PATCH_APPLY_POLICY_TEMPLATE_JSON="$ok_context_patch_apply_policy_template_json"
+export CLI_SMOKE_OK_CONTEXT_PATCH_APPLY_POLICY_BLOCK_JSON="$ok_context_patch_apply_policy_block_json"
 export CLI_SMOKE_OK_CONTEXT_PATCH_APPLY_INCREMENTAL_JSON="$ok_context_patch_apply_incremental_json"
 export CLI_SMOKE_OK_CONTEXT_PATCH_APPLY_INCREMENTAL_DRY_RUN_REPORT_JSON="$ok_context_patch_apply_incremental_dry_run_report_json"
 export CLI_SMOKE_OK_CONTEXT_RESTORE_INVALID_RELPATH_JSON="$ok_context_restore_invalid_relpath_json"
@@ -538,23 +754,29 @@ checks = {
     'context_preset_json_ok': os.environ['CLI_SMOKE_OK_CONTEXT_PRESET_JSON'] == 'true',
     'context_compress_text_json_ok': os.environ['CLI_SMOKE_OK_CONTEXT_COMPRESS_TEXT_JSON'] == 'true',
     'context_compress_text_writing_outline_json_ok': os.environ['CLI_SMOKE_OK_CONTEXT_COMPRESS_TEXT_WRITING_OUTLINE_JSON'] == 'true',
+    'context_compress_text_density_json_ok': os.environ['CLI_SMOKE_OK_CONTEXT_COMPRESS_TEXT_DENSITY_JSON'] == 'true',
     'context_restore_text_json_ok': os.environ['CLI_SMOKE_OK_CONTEXT_RESTORE_TEXT_JSON'] == 'true',
     'context_compress_directory_json_ok': os.environ['CLI_SMOKE_OK_CONTEXT_COMPRESS_DIRECTORY_JSON'] == 'true',
     'context_compress_directory_symbols_json_ok': os.environ['CLI_SMOKE_OK_CONTEXT_COMPRESS_DIRECTORY_SYMBOLS_JSON'] == 'true',
+    'context_compress_directory_aggregation_json_ok': os.environ['CLI_SMOKE_OK_CONTEXT_COMPRESS_DIRECTORY_AGGREGATION_JSON'] == 'true',
     'context_compress_incremental_json_ok': os.environ['CLI_SMOKE_OK_CONTEXT_COMPRESS_INCREMENTAL_JSON'] == 'true',
     'context_inspect_incremental_json_ok': os.environ['CLI_SMOKE_OK_CONTEXT_INSPECT_INCREMENTAL_JSON'] == 'true',
     'context_restore_incremental_json_ok': os.environ['CLI_SMOKE_OK_CONTEXT_RESTORE_INCREMENTAL_JSON'] == 'true',
     'context_bundle_json_ok': os.environ['CLI_SMOKE_OK_CONTEXT_BUNDLE_JSON'] == 'true',
     'context_bundle_incremental_json_ok': os.environ['CLI_SMOKE_OK_CONTEXT_BUNDLE_INCREMENTAL_JSON'] == 'true',
     'context_apply_check_text_json_ok': os.environ['CLI_SMOKE_OK_CONTEXT_APPLY_CHECK_TEXT_JSON'] == 'true',
+    'context_apply_check_text_drift_json_ok': os.environ['CLI_SMOKE_OK_CONTEXT_APPLY_CHECK_TEXT_DRIFT_JSON'] == 'true',
+    'context_apply_check_directory_drift_json_ok': os.environ['CLI_SMOKE_OK_CONTEXT_APPLY_CHECK_DIRECTORY_DRIFT_JSON'] == 'true',
     'context_apply_check_incremental_json_ok': os.environ['CLI_SMOKE_OK_CONTEXT_APPLY_CHECK_INCREMENTAL_JSON'] == 'true',
     'context_patch_text_json_ok': os.environ['CLI_SMOKE_OK_CONTEXT_PATCH_TEXT_JSON'] == 'true',
     'context_patch_incremental_json_ok': os.environ['CLI_SMOKE_OK_CONTEXT_PATCH_INCREMENTAL_JSON'] == 'true',
     'context_patch_directory_mixed_json_ok': os.environ['CLI_SMOKE_OK_CONTEXT_PATCH_DIRECTORY_MIXED_JSON'] == 'true',
     'context_patch_apply_text_json_ok': os.environ['CLI_SMOKE_OK_CONTEXT_PATCH_APPLY_TEXT_JSON'] == 'true',
+    'context_patch_apply_merge_conflict_json_ok': os.environ['CLI_SMOKE_OK_CONTEXT_PATCH_APPLY_MERGE_CONFLICT_JSON'] == 'true',
     'context_patch_apply_directory_json_ok': os.environ['CLI_SMOKE_OK_CONTEXT_PATCH_APPLY_DIRECTORY_JSON'] == 'true',
     'context_patch_apply_dry_run_report_json_ok': os.environ['CLI_SMOKE_OK_CONTEXT_PATCH_APPLY_DRY_RUN_REPORT_JSON'] == 'true',
     'context_patch_apply_policy_template_json_ok': os.environ['CLI_SMOKE_OK_CONTEXT_PATCH_APPLY_POLICY_TEMPLATE_JSON'] == 'true',
+    'context_patch_apply_policy_block_json_ok': os.environ['CLI_SMOKE_OK_CONTEXT_PATCH_APPLY_POLICY_BLOCK_JSON'] == 'true',
     'context_patch_apply_incremental_json_ok': os.environ['CLI_SMOKE_OK_CONTEXT_PATCH_APPLY_INCREMENTAL_JSON'] == 'true',
     'context_patch_apply_incremental_dry_run_report_json_ok': os.environ['CLI_SMOKE_OK_CONTEXT_PATCH_APPLY_INCREMENTAL_DRY_RUN_REPORT_JSON'] == 'true',
     'context_restore_invalid_relpath_json_ok': os.environ['CLI_SMOKE_OK_CONTEXT_RESTORE_INVALID_RELPATH_JSON'] == 'true',

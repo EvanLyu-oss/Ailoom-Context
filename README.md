@@ -29,6 +29,7 @@ That gives us a practical workflow for large repositories and long documents:
 - `context patch` and `context patch-apply` on incremental bundles: keep replay scoped to the git change surface
 - `context compress --focus-mode ...`: reshape the skeleton for symbols, imports, tree, or writing-outline views
 - `context compress --skeleton-density ...`: keep the restore package exact while making large repo and long-text skeletons more selective
+- `context compress --exclude ...` plus `.mcp-skeletonignore`: trim generated, dependency, cache, or build paths from directory and incremental bundles
 - large directory skeletons now include grouped directory and extension overviews so omitted file-entry detail still keeps structural continuity
 - large directory skeletons now prioritize hot subtrees for entry expansion and fold colder subtrees into compact overview blocks
 - long-form text skeletons now emit folded chapter outlines so very long drafts keep narrative shape with a lower token budget
@@ -41,11 +42,14 @@ Stable in `0.1.x`:
 
 - compressing text, one file, or one directory into `MCP-SKL.v1` plus an exact restore package
 - inspecting and restoring text, file, directory, and incremental directory bundles
+- full directory restore reconstructs every file, symlink, and empty directory included in the restore package; by default directory compression skips `.git`, `__pycache__`, and `.pytest_cache`
+- non-UTF-8 text inputs keep original bytes for restore while using best-effort decode fallback for skeleton structure
 - `apply-check` structural drift gates for text, files, directories, and incremental directory surfaces
 - patch export and patch replay for text, files, directories, and incremental bundles
 - dry-run replay reports, policy-aware replay, and merge-aware replay checks
 - skeleton focus modes: `full`, `tree`, `imports`, `symbols`, `writing-outline`
 - skeleton density modes: `adaptive`, `standard`, `compact`
+- preset-specific skeleton strategies for `generic`, `codebase`, `writing`, `website`, and `ecommerce`
 - benchmark reports for synthetic and repeatable repo-derived samples
 
 Experimental in `0.1.x`:
@@ -54,7 +58,7 @@ Experimental in `0.1.x`:
 - scoring thresholds inside `apply-check`
 - the adaptive budgeting heuristics for hot subtrees, folded chapters, and omitted entries
 - benchmark timings across machines and tokenizer installations
-- non-UTF-8 edge cases beyond the current binary-preservation path
+- automatic encoding detection is best-effort when multiple legacy encodings can decode the same byte stream
 
 Command exit behavior:
 
@@ -101,9 +105,13 @@ Compress a directory:
 PYTHONPATH="$PWD" python3 -m cli context compress \
   --preset codebase \
   --input-dir ./cli \
+  --exclude "__pycache__/" \
+  --exclude "*.pyc" \
   --output-dir /absolute/path/to/context-bundle \
   --json
 ```
+
+For repeatable project-level filtering, add a `.mcp-skeletonignore` file at the input directory root. Blank lines and `#` comments are ignored; simple relative paths and globs such as `dist/`, `node_modules/`, `*.map`, and `generated/*.json` are supported.
 
 Compress the same directory with one symbols-focused skeleton:
 
@@ -114,6 +122,8 @@ PYTHONPATH="$PWD" python3 -m cli context compress \
   --input-dir ./cli \
   --json
 ```
+
+Presets do not change restore fidelity, but they do change the AI-facing skeleton strategy. For example, `codebase` spends more budget on imports, symbols, and code-heavy hot subtrees, while `writing` spends more budget on chapter folds, headings, and prose entries.
 
 Compress a long book draft with a tighter skeleton budget:
 
@@ -186,6 +196,8 @@ PYTHONPATH="$PWD" python3 -m cli context compress \
   --output-dir /absolute/path/to/context-incremental-bundle \
   --json
 ```
+
+Incremental restore intentionally reconstructs only that git change surface plus an `.ail_incremental_manifest.json` removed-path manifest. Use a non-incremental directory bundle when you need a complete project-tree restore.
 
 Validate one edited incremental surface:
 

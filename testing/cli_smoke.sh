@@ -19,7 +19,11 @@ ok_context_compress_text_json=false
 ok_context_compress_text_writing_outline_json=false
 ok_context_compress_text_density_json=false
 ok_context_restore_text_json=false
+ok_context_non_utf8_text_fallback_json=false
 ok_context_compress_directory_json=false
+ok_context_restore_directory_completeness_audit_json=false
+ok_context_directory_filter_ignore_json=false
+ok_context_preset_strategy_differentiation_json=false
 ok_context_compress_directory_symbols_json=false
 ok_context_compress_directory_aggregation_json=false
 ok_context_compress_incremental_json=false
@@ -152,6 +156,51 @@ assert orig == rest
 PY
 ok_context_restore_text_json=true
 
+# non-UTF-8 text decode fallback with exact byte restore
+non_utf8_root="$TMP_ROOT/non_utf8"
+mkdir -p "$non_utf8_root/project/docs"
+python3 - "$non_utf8_root/gbk_notes.md" "$non_utf8_root/project/docs/japanese.txt" "$non_utf8_root/project/docs/latin1.txt" <<'PY'
+from pathlib import Path
+import sys
+Path(sys.argv[1]).write_bytes("# 标题\n\n这是 GBK 编码文本，用于测试无损恢复。\n".encode("gb18030"))
+Path(sys.argv[2]).write_bytes("第一章\n\nこれは Shift-JIS の文章です。\n".encode("shift_jis"))
+Path(sys.argv[3]).write_bytes("Résumé\n\nCafé naïve façade.\n".encode("latin-1"))
+PY
+non_utf8_text_json="$TMP_ROOT/non_utf8_text.json"
+non_utf8_text_bundle="$TMP_ROOT/non_utf8_text_bundle"
+non_utf8_text_restore="$TMP_ROOT/non_utf8_restored.md"
+python3 -m cli context compress --text-file "$non_utf8_root/gbk_notes.md" --output-dir "$non_utf8_text_bundle" --json > "$non_utf8_text_json"
+python3 -m cli context restore --package-file "$non_utf8_text_bundle/context_manifest.json" --output-file "$non_utf8_text_restore" --json > /dev/null
+non_utf8_dir_json="$TMP_ROOT/non_utf8_dir.json"
+python3 -m cli context compress --input-dir "$non_utf8_root/project" --json > "$non_utf8_dir_json"
+python3 - "$non_utf8_text_json" "$non_utf8_root/gbk_notes.md" "$non_utf8_text_restore" "$non_utf8_dir_json" <<'PY'
+import hashlib
+import json
+import sys
+from pathlib import Path
+
+text_payload = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+original = Path(sys.argv[2])
+restored = Path(sys.argv[3])
+dir_payload = json.loads(Path(sys.argv[4]).read_text(encoding="utf-8"))
+
+assert text_payload["status"] == "ok"
+assert text_payload["compression_mode"] == "text"
+assert text_payload["source_summary"]["source_encoding"] == "gb18030"
+assert text_payload["source_summary"]["heading_count"] == 1
+assert "标题" in text_payload["skeleton_text"]
+assert hashlib.sha256(original.read_bytes()).hexdigest() == hashlib.sha256(restored.read_bytes()).hexdigest()
+
+entries = {item["relative_path"]: item for item in dir_payload["source_summary"]["entries"]}
+assert dir_payload["source_summary"]["binary_files"] == 0
+assert dir_payload["source_summary"]["text_files"] == 2
+assert entries["docs/japanese.txt"]["kind"] == "text"
+assert entries["docs/latin1.txt"]["kind"] == "text"
+assert entries["docs/japanese.txt"]["summary"]["source_encoding"] in {"shift_jis", "gb18030"}
+assert entries["docs/latin1.txt"]["summary"]["source_encoding"] in {"cp1252", "latin-1"}
+PY
+ok_context_non_utf8_text_fallback_json=true
+
 # directory bundle baseline
 project_dir="$TMP_ROOT/project"
 mkdir -p "$project_dir/src" "$project_dir/docs"
@@ -187,6 +236,254 @@ assert p['compression_mode'] == 'directory'
 assert p['source_summary']['total_files'] == 3
 PY
 ok_context_compress_directory_json=true
+
+# directory restore completeness audit
+audit_dir="$TMP_ROOT/restore_audit_project"
+mkdir -p \
+  "$audit_dir/src/nested/deep" \
+  "$audit_dir/assets" \
+  "$audit_dir/empty/leaf" \
+  "$audit_dir/.git/objects" \
+  "$audit_dir/__pycache__" \
+  "$audit_dir/.pytest_cache/v"
+cat > "$audit_dir/src/main.py" <<'TXT'
+def main() -> str:
+    return "restore-audit"
+TXT
+cat > "$audit_dir/src/nested/deep/notes.md" <<'TXT'
+# Audit
+
+Directory restore should preserve every included payload.
+TXT
+python3 - "$audit_dir/assets/blob.bin" <<'PY'
+from pathlib import Path
+import sys
+Path(sys.argv[1]).write_bytes(bytes(range(64)))
+PY
+cat > "$audit_dir/.git/config" <<'TXT'
+[core]
+	repositoryformatversion = 0
+TXT
+cat > "$audit_dir/__pycache__/ignored.pyc" <<'TXT'
+ignored bytecode placeholder
+TXT
+cat > "$audit_dir/.pytest_cache/v/cache" <<'TXT'
+ignored pytest cache placeholder
+TXT
+ln -s "../assets/blob.bin" "$audit_dir/src/blob-link.bin"
+audit_bundle="$TMP_ROOT/restore_audit_bundle"
+audit_compress_json="$TMP_ROOT/restore_audit_compress.json"
+audit_restore_json="$TMP_ROOT/restore_audit_restore.json"
+audit_restore_root="$TMP_ROOT/restore_audit_output"
+python3 -m cli context compress --input-dir "$audit_dir" --output-dir "$audit_bundle" --json > "$audit_compress_json"
+python3 -m cli context restore --package-file "$audit_bundle/context_manifest.json" --output-dir "$audit_restore_root" --json > "$audit_restore_json"
+python3 - "$audit_compress_json" "$audit_restore_json" "$audit_dir" "$audit_restore_root/restore_audit_project" <<'PY'
+import base64
+import hashlib
+import json
+import os
+import sys
+import zlib
+from pathlib import Path
+
+compress = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+restore = json.loads(Path(sys.argv[2]).read_text(encoding="utf-8"))
+original = Path(sys.argv[3])
+restored = Path(sys.argv[4])
+skip_names = {".git", "__pycache__", ".pytest_cache"}
+
+assert compress["status"] == "ok"
+assert restore["status"] == "ok"
+summary = compress["source_summary"]
+assert set(summary["skip_dir_names"]) == skip_names
+assert summary["skipped_dir_count"] == 3
+assert summary["skipped_dirs"] == [".git", ".pytest_cache", "__pycache__"]
+
+blob = compress["restore_package"]
+decoded = json.loads(zlib.decompress(base64.b64decode(blob["payload"])).decode("utf-8"))
+restore_file_paths = sorted(item["relative_path"] for item in decoded["files"])
+restore_symlink_paths = sorted(item["relative_path"] for item in decoded["symlinks"])
+restore_empty_dirs = sorted(decoded["empty_dirs"])
+
+expected_files = []
+expected_symlinks = []
+expected_empty_dirs = []
+skipped_original_paths = []
+for root, dirnames, filenames in os.walk(original):
+    root_path = Path(root)
+    skipped_here = sorted(name for name in dirnames if name in skip_names)
+    for dirname in skipped_here:
+        skipped_original_paths.append((root_path / dirname).relative_to(original).as_posix())
+    dirnames[:] = [name for name in dirnames if name not in skip_names]
+    rel_dir = "." if root_path == original else root_path.relative_to(original).as_posix()
+    if not filenames and not dirnames and rel_dir != ".":
+        expected_empty_dirs.append(rel_dir)
+    for filename in sorted(filenames):
+        item = root_path / filename
+        rel_path = item.relative_to(original).as_posix()
+        if item.is_symlink():
+            expected_symlinks.append(rel_path)
+        else:
+            expected_files.append(rel_path)
+
+assert skipped_original_paths == [".git", ".pytest_cache", "__pycache__"]
+assert restore_file_paths == sorted(expected_files)
+assert restore_symlink_paths == sorted(expected_symlinks)
+assert restore_empty_dirs == sorted(expected_empty_dirs)
+
+restored_files = []
+restored_symlinks = []
+restored_empty_dirs = []
+for root, dirnames, filenames in os.walk(restored, followlinks=False):
+    root_path = Path(root)
+    rel_dir = "." if root_path == restored else root_path.relative_to(restored).as_posix()
+    if not filenames and not dirnames and rel_dir != ".":
+        restored_empty_dirs.append(rel_dir)
+    for filename in sorted(filenames):
+        item = root_path / filename
+        rel_path = item.relative_to(restored).as_posix()
+        if item.is_symlink():
+            restored_symlinks.append(rel_path)
+        else:
+            restored_files.append(rel_path)
+
+assert sorted(restored_files) == sorted(expected_files)
+assert sorted(restored_symlinks) == sorted(expected_symlinks)
+assert sorted(restored_empty_dirs) == sorted(expected_empty_dirs)
+for rel_path in expected_files:
+    assert hashlib.sha256((original / rel_path).read_bytes()).hexdigest() == hashlib.sha256((restored / rel_path).read_bytes()).hexdigest()
+for rel_path in expected_symlinks:
+    assert os.readlink(original / rel_path) == os.readlink(restored / rel_path)
+for skipped_dir in skipped_original_paths:
+    assert not (restored / skipped_dir).exists()
+    assert all(not path.startswith(f"{skipped_dir}/") and path != skipped_dir for path in restore_file_paths + restore_symlink_paths + restore_empty_dirs)
+PY
+ok_context_restore_directory_completeness_audit_json=true
+
+# directory filtering with .mcp-skeletonignore and --exclude
+filter_dir="$TMP_ROOT/filter_project"
+mkdir -p "$filter_dir/src" "$filter_dir/logs" "$filter_dir/node_modules/pkg" "$filter_dir/dist" "$filter_dir/tmp"
+cat > "$filter_dir/.mcp-skeletonignore" <<'TXT'
+# MCP-Skeleton local ignore
+logs/
+node_modules/
+*.tmp
+TXT
+cat > "$filter_dir/README.md" <<'TXT'
+# Filter Project
+TXT
+cat > "$filter_dir/src/app.py" <<'TXT'
+def keep() -> str:
+    return "included"
+TXT
+cat > "$filter_dir/logs/debug.log" <<'TXT'
+ignored log
+TXT
+cat > "$filter_dir/node_modules/pkg/index.js" <<'TXT'
+ignored dependency
+TXT
+cat > "$filter_dir/dist/app.js" <<'TXT'
+ignored build
+TXT
+cat > "$filter_dir/src/app.py.map" <<'TXT'
+ignored map
+TXT
+cat > "$filter_dir/tmp/cache.tmp" <<'TXT'
+ignored tmp
+TXT
+filter_json="$TMP_ROOT/filter_context.json"
+filter_bundle="$TMP_ROOT/filter_bundle"
+filter_restore_root="$TMP_ROOT/filter_restore"
+python3 -m cli context compress --input-dir "$filter_dir" --exclude "dist/" --exclude "*.map" --output-dir "$filter_bundle" --json > "$filter_json"
+python3 -m cli context restore --package-file "$filter_bundle/context_manifest.json" --output-dir "$filter_restore_root" --json > /dev/null
+python3 - "$filter_json" "$filter_restore_root/filter_project" <<'PY'
+import base64
+import json
+import sys
+import zlib
+from pathlib import Path
+
+payload = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+restored = Path(sys.argv[2])
+summary = payload["source_summary"]
+assert payload["status"] == "ok"
+assert summary["filter_patterns"] == ["logs/", "node_modules/", "*.tmp", "dist/", "*.map"]
+assert summary["filtered_dir_count"] == 3
+assert summary["filtered_file_count"] == 2
+assert summary["filtered_path_count"] == 5
+for rel in ["logs", "node_modules", "dist", "src/app.py.map", "tmp/cache.tmp"]:
+    assert rel in summary["filtered_paths_preview"]
+blob = payload["restore_package"]
+decoded = json.loads(zlib.decompress(base64.b64decode(blob["payload"])).decode("utf-8"))
+paths = sorted(item["relative_path"] for item in decoded["files"]) + sorted(item["relative_path"] for item in decoded["symlinks"])
+assert "README.md" in paths
+assert "src/app.py" in paths
+assert ".mcp-skeletonignore" in paths
+assert all(not path.startswith(("logs/", "node_modules/", "dist/")) for path in paths)
+assert "src/app.py.map" not in paths
+assert "tmp/cache.tmp" not in paths
+assert (restored / "src/app.py").exists()
+assert not (restored / "logs").exists()
+assert not (restored / "node_modules").exists()
+assert not (restored / "dist").exists()
+assert not (restored / "src/app.py.map").exists()
+assert not (restored / "tmp/cache.tmp").exists()
+PY
+ok_context_directory_filter_ignore_json=true
+
+# preset strategy differentiation on mixed large directories
+preset_strategy_dir="$TMP_ROOT/preset_strategy_project"
+mkdir -p "$preset_strategy_dir/src" "$preset_strategy_dir/docs"
+python3 - "$preset_strategy_dir" <<'PY'
+from pathlib import Path
+import sys
+root = Path(sys.argv[1])
+for idx in range(1, 46):
+    (root / "src" / f"module_{idx}.py").write_text(
+        f"import json\n\n"
+        f"def symbol_{idx}() -> str:\n"
+        f"    return 'module-{idx}'\n",
+        encoding="utf-8",
+    )
+for idx in range(1, 46):
+    (root / "docs" / f"chapter_{idx}.md").write_text(
+        f"# Chapter {idx}\n\n"
+        f"This chapter keeps narrative continuity for preset strategy testing {idx}.\n\n"
+        f"## Scene {idx}\n\n"
+        "The writing preset should prefer these prose anchors when the directory is folded.\n",
+        encoding="utf-8",
+    )
+PY
+preset_codebase_json="$TMP_ROOT/preset_codebase.json"
+preset_writing_json="$TMP_ROOT/preset_writing.json"
+python3 -m cli context compress --preset codebase --input-dir "$preset_strategy_dir" --skeleton-density compact --json > "$preset_codebase_json"
+python3 -m cli context compress --preset writing --input-dir "$preset_strategy_dir" --skeleton-density compact --json > "$preset_writing_json"
+python3 - "$preset_codebase_json" "$preset_writing_json" <<'PY'
+import json
+import re
+import sys
+from pathlib import Path
+
+codebase = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+writing = json.loads(Path(sys.argv[2]).read_text(encoding="utf-8"))
+assert codebase["status"] == "ok"
+assert writing["status"] == "ok"
+assert codebase["preset_skeleton_strategy"]
+assert writing["preset_skeleton_strategy"]
+assert "PRESET_STRATEGY:" in codebase["skeleton_text"]
+assert "PRESET_EXCLUDE_HINTS:" in codebase["skeleton_text"]
+assert "spend more skeleton budget on imports" in codebase["skeleton_text"]
+assert "spend more skeleton budget on chapter folds" in writing["skeleton_text"]
+codebase_files = re.findall(r"FILE\[[^\]]+\]: ([^\n]+)", codebase["skeleton_text"])
+writing_files = re.findall(r"FILE\[[^\]]+\]: ([^\n]+)", writing["skeleton_text"])
+assert codebase_files
+assert writing_files
+assert codebase_files[0].startswith("src/")
+assert writing_files[0].startswith("docs/")
+assert "SYMBOLS:" in codebase["skeleton_text"]
+assert "CHAPTER_FOLDS:" in writing["skeleton_text"]
+PY
+ok_context_preset_strategy_differentiation_json=true
 
 context_dir_symbols_json="$TMP_ROOT/context_dir_symbols.json"
 python3 -m cli context compress --preset codebase --focus-mode symbols --input-dir "$project_dir" --json > "$context_dir_symbols_json"
@@ -722,7 +1019,11 @@ export CLI_SMOKE_OK_CONTEXT_COMPRESS_TEXT_JSON="$ok_context_compress_text_json"
 export CLI_SMOKE_OK_CONTEXT_COMPRESS_TEXT_WRITING_OUTLINE_JSON="$ok_context_compress_text_writing_outline_json"
 export CLI_SMOKE_OK_CONTEXT_COMPRESS_TEXT_DENSITY_JSON="$ok_context_compress_text_density_json"
 export CLI_SMOKE_OK_CONTEXT_RESTORE_TEXT_JSON="$ok_context_restore_text_json"
+export CLI_SMOKE_OK_CONTEXT_NON_UTF8_TEXT_FALLBACK_JSON="$ok_context_non_utf8_text_fallback_json"
 export CLI_SMOKE_OK_CONTEXT_COMPRESS_DIRECTORY_JSON="$ok_context_compress_directory_json"
+export CLI_SMOKE_OK_CONTEXT_RESTORE_DIRECTORY_COMPLETENESS_AUDIT_JSON="$ok_context_restore_directory_completeness_audit_json"
+export CLI_SMOKE_OK_CONTEXT_DIRECTORY_FILTER_IGNORE_JSON="$ok_context_directory_filter_ignore_json"
+export CLI_SMOKE_OK_CONTEXT_PRESET_STRATEGY_DIFFERENTIATION_JSON="$ok_context_preset_strategy_differentiation_json"
 export CLI_SMOKE_OK_CONTEXT_COMPRESS_DIRECTORY_SYMBOLS_JSON="$ok_context_compress_directory_symbols_json"
 export CLI_SMOKE_OK_CONTEXT_COMPRESS_DIRECTORY_AGGREGATION_JSON="$ok_context_compress_directory_aggregation_json"
 export CLI_SMOKE_OK_CONTEXT_COMPRESS_INCREMENTAL_JSON="$ok_context_compress_incremental_json"
@@ -756,7 +1057,11 @@ checks = {
     'context_compress_text_writing_outline_json_ok': os.environ['CLI_SMOKE_OK_CONTEXT_COMPRESS_TEXT_WRITING_OUTLINE_JSON'] == 'true',
     'context_compress_text_density_json_ok': os.environ['CLI_SMOKE_OK_CONTEXT_COMPRESS_TEXT_DENSITY_JSON'] == 'true',
     'context_restore_text_json_ok': os.environ['CLI_SMOKE_OK_CONTEXT_RESTORE_TEXT_JSON'] == 'true',
+    'context_non_utf8_text_fallback_json_ok': os.environ['CLI_SMOKE_OK_CONTEXT_NON_UTF8_TEXT_FALLBACK_JSON'] == 'true',
     'context_compress_directory_json_ok': os.environ['CLI_SMOKE_OK_CONTEXT_COMPRESS_DIRECTORY_JSON'] == 'true',
+    'context_restore_directory_completeness_audit_json_ok': os.environ['CLI_SMOKE_OK_CONTEXT_RESTORE_DIRECTORY_COMPLETENESS_AUDIT_JSON'] == 'true',
+    'context_directory_filter_ignore_json_ok': os.environ['CLI_SMOKE_OK_CONTEXT_DIRECTORY_FILTER_IGNORE_JSON'] == 'true',
+    'context_preset_strategy_differentiation_json_ok': os.environ['CLI_SMOKE_OK_CONTEXT_PRESET_STRATEGY_DIFFERENTIATION_JSON'] == 'true',
     'context_compress_directory_symbols_json_ok': os.environ['CLI_SMOKE_OK_CONTEXT_COMPRESS_DIRECTORY_SYMBOLS_JSON'] == 'true',
     'context_compress_directory_aggregation_json_ok': os.environ['CLI_SMOKE_OK_CONTEXT_COMPRESS_DIRECTORY_AGGREGATION_JSON'] == 'true',
     'context_compress_incremental_json_ok': os.environ['CLI_SMOKE_OK_CONTEXT_COMPRESS_INCREMENTAL_JSON'] == 'true',

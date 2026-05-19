@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import base64
 import difflib
+import fnmatch
 import hashlib
 import json
 import os
@@ -27,6 +28,16 @@ TEXT_EXTENSIONS = {
     ".txt", ".md", ".rst", ".csv", ".tsv", ".json", ".yaml", ".yml", ".toml", ".xml", ".html", ".css",
     ".scss", ".py", ".js", ".ts", ".tsx", ".jsx", ".vue", ".go", ".rs", ".java", ".sql",
 }
+TEXT_DECODE_CANDIDATES = (
+    "utf-8",
+    "utf-8-sig",
+    "gb18030",
+    "big5",
+    "shift_jis",
+    "euc_kr",
+    "cp1252",
+    "latin-1",
+)
 STOPWORDS = {
     "the", "and", "for", "that", "with", "this", "from", "into", "your", "have", "will", "more", "than",
     "what", "when", "where", "which", "their", "them", "they", "about", "would", "could", "should",
@@ -99,6 +110,11 @@ CONTEXT_PRESETS: dict[str, dict[str, Any]] = {
             "treat the bundle as a balanced AI-facing compression surface",
         ],
         "best_for": ["mixed notes", "unknown repos", "general AI handoff"],
+        "skeleton_strategy": [
+            "balanced ordering across code, prose, tree, and relationship signals",
+            "moderate budgets for directory entries, headings, symbols, and top terms",
+        ],
+        "suggested_excludes": ["dist/", "build/", "node_modules/", "__pycache__/", "*.pyc"],
     },
     "codebase": {
         "preset_id": "codebase",
@@ -109,6 +125,11 @@ CONTEXT_PRESETS: dict[str, dict[str, Any]] = {
             "optimize the skeleton for code-reading models and IDE copilots",
         ],
         "best_for": ["backend repos", "frontend code trees", "refactor and onboarding handoff"],
+        "skeleton_strategy": [
+            "spend more skeleton budget on imports, symbols, routes, and code-bearing hot subtrees",
+            "prefer code entries over prose entries when large directories must be folded",
+        ],
+        "suggested_excludes": ["node_modules/", "dist/", "build/", "coverage/", ".next/", ".venv/", "__pycache__/", "*.pyc", "*.map"],
     },
     "writing": {
         "preset_id": "writing",
@@ -119,6 +140,11 @@ CONTEXT_PRESETS: dict[str, dict[str, Any]] = {
             "optimize for review, expansion, and continuation workflows",
         ],
         "best_for": ["books", "articles", "copy drafts", "story planning"],
+        "skeleton_strategy": [
+            "spend more skeleton budget on chapter folds, headings, section flow, and vocabulary",
+            "prefer prose entries over implementation detail when mixed directories must be folded",
+        ],
+        "suggested_excludes": ["exports/", "draft-renders/", ".obsidian/workspace*", "*.pdf", "*.epub"],
     },
     "website": {
         "preset_id": "website",
@@ -129,6 +155,11 @@ CONTEXT_PRESETS: dict[str, dict[str, Any]] = {
             "optimize for static-site and customization workflows",
         ],
         "best_for": ["landing pages", "personal sites", "company/product sites"],
+        "skeleton_strategy": [
+            "spend more skeleton budget on routes, page structure, components, and managed content boundaries",
+            "prefer frontend source and content files over generated assets when directories must be folded",
+        ],
+        "suggested_excludes": ["node_modules/", "dist/", "build/", ".next/", "public/assets/generated/", "*.map"],
     },
     "ecommerce": {
         "preset_id": "ecommerce",
@@ -139,6 +170,11 @@ CONTEXT_PRESETS: dict[str, dict[str, Any]] = {
             "optimize for experimental ecommerce scaffolds and operator review",
         ],
         "best_for": ["storefront skeletons", "catalog review", "checkout-flow analysis"],
+        "skeleton_strategy": [
+            "spend more skeleton budget on catalog, cart, checkout, account, and transaction-adjacent flows",
+            "prefer route and state-flow files over generated assets when directories must be folded",
+        ],
+        "suggested_excludes": ["node_modules/", "dist/", "build/", "coverage/", "product-images/generated/", "*.map"],
     },
 }
 
@@ -157,6 +193,7 @@ def build_context_compress_payload(
     base_commit: str | None = None,
     focus_mode: str | None = None,
     skeleton_density: str | None = None,
+    exclude_patterns: list[str] | None = None,
 ) -> dict[str, Any]:
     preset = resolve_context_preset(preset_id)
     resolved_focus_mode = _normalize_context_focus_mode(focus_mode)
@@ -169,6 +206,7 @@ def build_context_compress_payload(
             base_commit=base_commit,
             tokenizer_backend=tokenizer_backend,
             tokenizer_model=tokenizer_model,
+            exclude_patterns=exclude_patterns,
         )
     else:
         source = _resolve_context_input_source(
@@ -179,6 +217,7 @@ def build_context_compress_payload(
             command_label="context compress",
             tokenizer_backend=tokenizer_backend,
             tokenizer_model=tokenizer_model,
+            exclude_patterns=exclude_patterns,
         )
 
     skeleton_text = _render_skeleton_text(
@@ -206,6 +245,8 @@ def build_context_compress_payload(
         "preset_label": preset["label"],
         "preset_focus": list(preset["focus"]),
         "preset_best_for": list(preset["best_for"]),
+        "preset_skeleton_strategy": list(preset.get("skeleton_strategy") or []),
+        "preset_suggested_excludes": list(preset.get("suggested_excludes") or []),
         "focus_mode": resolved_focus_mode,
         "skeleton_density": resolved_skeleton_density,
         "compression_mode": source["compression_mode"],
@@ -268,7 +309,11 @@ def restore_context_from_package(
     if mode == "text":
         text = str(decoded.get("text") or "")
         if output_file is not None:
-            _write_text(output_file, text)
+            content_b64 = str(decoded.get("content_b64") or "").strip()
+            if content_b64:
+                _write_bytes_file(output_file, _decode_restore_content_b64(content_b64))
+            else:
+                _write_text(output_file, text)
             restore_summary["restored_paths"].append(str(output_file.resolve()))
             restore_summary["next_steps"].append(f"open {output_file.resolve()}")
             return restore_summary, None
@@ -359,6 +404,7 @@ def build_context_bundle_payload(
     base_commit: str | None = None,
     focus_mode: str | None = None,
     skeleton_density: str | None = None,
+    exclude_patterns: list[str] | None = None,
 ) -> dict[str, Any]:
     compression_payload = build_context_compress_payload(
         inline_text=inline_text,
@@ -373,6 +419,7 @@ def build_context_bundle_payload(
         base_commit=base_commit,
         focus_mode=focus_mode,
         skeleton_density=skeleton_density,
+        exclude_patterns=exclude_patterns,
     )
     inspect_payload = inspect_context_package(
         compression_payload,
@@ -1122,19 +1169,29 @@ def _build_inline_text_source(text: str) -> dict[str, Any]:
 
 
 def _build_text_file_source(path: Path) -> dict[str, Any]:
-    text = path.read_text(encoding="utf-8")
+    path = path.expanduser().resolve()
+    data = path.read_bytes()
+    decoded_text = _decode_text_bytes(path, data, allow_extension_hint=True)
+    if decoded_text is None:
+        raise ValueError(f"context compress --text-file could not decode `{path}` as text")
+    text = decoded_text["text"]
     summary = _text_summary(text, label=path.name)
+    summary["source_encoding"] = decoded_text["encoding"]
+    summary["encoding_confidence"] = decoded_text["confidence"]
     return {
         "compression_mode": "text",
         "source_kind": summary["source_kind"],
         "source_label": path.name,
-        "source_path": str(path.resolve()),
+        "source_path": str(path),
         "source_summary": summary,
         "restore_blob": {
             "mode": "text",
             "source_label": path.name,
             "source_kind": summary["source_kind"],
             "text": text,
+            "content_b64": base64.b64encode(data).decode("ascii"),
+            "sha256": _sha256_bytes(data),
+            "source_encoding": decoded_text["encoding"],
         },
     }
 
@@ -1142,11 +1199,13 @@ def _build_text_file_source(path: Path) -> dict[str, Any]:
 def _build_file_source(path: Path) -> dict[str, Any]:
     path = path.expanduser().resolve()
     data = path.read_bytes()
-    is_text = _looks_like_text(path, data)
-    if is_text:
-        text = data.decode("utf-8")
+    decoded_text = _decode_text_bytes(path, data, allow_extension_hint=True)
+    if decoded_text is not None:
+        text = decoded_text["text"]
         source_kind = "code" if _is_code_path(path) else "text"
         summary = _code_summary(text, path.name) if source_kind == "code" else _text_summary(text, label=path.name)
+        summary["source_encoding"] = decoded_text["encoding"]
+        summary["encoding_confidence"] = decoded_text["confidence"]
     else:
         source_kind = "binary"
         summary = {
@@ -1174,13 +1233,85 @@ def _build_file_source(path: Path) -> dict[str, Any]:
     }
 
 
+def _build_context_path_filter(root: Path, *, exclude_patterns: list[str] | None = None) -> dict[str, Any]:
+    root = root.expanduser().resolve()
+    ignore_file = root / ".mcp-skeletonignore"
+    ignore_patterns = _read_context_ignore_patterns(ignore_file)
+    cli_patterns = _normalize_context_filter_patterns(exclude_patterns or [])
+    patterns = [*ignore_patterns, *cli_patterns]
+    return {
+        "patterns": patterns,
+        "ignore_file": str(ignore_file) if ignore_file.exists() else "",
+    }
+
+
+def _read_context_ignore_patterns(ignore_file: Path) -> list[str]:
+    if not ignore_file.exists():
+        return []
+    patterns: list[str] = []
+    for line in ignore_file.read_text(encoding="utf-8").splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        patterns.append(stripped)
+    return _normalize_context_filter_patterns(patterns)
+
+
+def _normalize_context_filter_patterns(patterns: list[str]) -> list[str]:
+    normalized: list[str] = []
+    seen: set[str] = set()
+    for pattern in patterns:
+        value = str(pattern or "").strip().replace("\\", "/")
+        if not value or value.startswith("#"):
+            continue
+        while value.startswith("./"):
+            value = value[2:]
+        value = value.lstrip("/")
+        if not value:
+            continue
+        if value not in seen:
+            normalized.append(value)
+            seen.add(value)
+    return normalized
+
+
+def _context_path_is_filtered(rel_path: str, path_filter: dict[str, Any], *, is_dir: bool) -> bool:
+    normalized = str(rel_path or "").strip().replace("\\", "/").strip("/")
+    if not normalized:
+        return False
+    for pattern in path_filter.get("patterns") or []:
+        if _context_filter_pattern_matches(normalized, str(pattern), is_dir=is_dir):
+            return True
+    return False
+
+
+def _context_filter_pattern_matches(rel_path: str, pattern: str, *, is_dir: bool) -> bool:
+    pattern = pattern.strip().replace("\\", "/")
+    if not pattern:
+        return False
+    dir_only = pattern.endswith("/")
+    if dir_only and not is_dir:
+        pattern = pattern.rstrip("/")
+        return rel_path == pattern or rel_path.startswith(f"{pattern}/")
+    pattern = pattern.rstrip("/")
+    if not pattern:
+        return False
+    candidates = [rel_path]
+    if "/" not in pattern:
+        candidates.extend(part for part in rel_path.split("/") if part)
+        candidates.append(Path(rel_path).name)
+    return any(fnmatch.fnmatchcase(candidate, pattern) for candidate in candidates)
+
+
 def _build_directory_source(
     path: Path,
     *,
     tokenizer_backend: str | None = None,
     tokenizer_model: str | None = None,
+    exclude_patterns: list[str] | None = None,
 ) -> dict[str, Any]:
     path = path.expanduser().resolve()
+    path_filter = _build_context_path_filter(path, exclude_patterns=exclude_patterns)
     files: list[dict[str, Any]] = []
     symlinks: list[dict[str, Any]] = []
     empty_dirs: list[str] = []
@@ -1190,6 +1321,9 @@ def _build_directory_source(
     total_bytes = 0
     total_chars = 0
     skeleton_entries: list[dict[str, Any]] = []
+    skipped_dirs: list[str] = []
+    filtered_dirs: list[str] = []
+    filtered_files: list[str] = []
     requested_backend = _normalize_tokenizer_backend(tokenizer_backend)
     requested_model = str(tokenizer_model or "").strip() or "cl100k_base"
     tokenizer_encoder = None
@@ -1203,14 +1337,27 @@ def _build_directory_source(
             tokenizer_error = f"{type(exc).__name__}: {exc}"
 
     for current_root, dirnames, filenames in os.walk(path):
-        dirnames[:] = [name for name in dirnames if name not in SKIP_DIR_NAMES]
         current_path = Path(current_root)
+        skipped_here = sorted(name for name in dirnames if name in SKIP_DIR_NAMES)
+        for dirname in skipped_here:
+            skipped_dirs.append((current_path / dirname).relative_to(path).as_posix())
+        kept_dirnames = []
+        for dirname in sorted(name for name in dirnames if name not in SKIP_DIR_NAMES):
+            rel_child_dir = (current_path / dirname).relative_to(path).as_posix()
+            if _context_path_is_filtered(rel_child_dir, path_filter, is_dir=True):
+                filtered_dirs.append(rel_child_dir)
+            else:
+                kept_dirnames.append(dirname)
+        dirnames[:] = kept_dirnames
         rel_dir = "." if current_path == path else current_path.relative_to(path).as_posix()
         if not filenames and not dirnames and rel_dir != ".":
             empty_dirs.append(rel_dir)
         for filename in sorted(filenames):
             item_path = current_path / filename
             rel_path = item_path.relative_to(path).as_posix()
+            if _context_path_is_filtered(rel_path, path_filter, is_dir=False):
+                filtered_files.append(rel_path)
+                continue
             if item_path.is_symlink():
                 symlinks.append({"relative_path": rel_path, "link_target": os.readlink(item_path)})
                 skeleton_entries.append({"relative_path": rel_path, "kind": "symlink", "summary": {"target": os.readlink(item_path)}})
@@ -1223,9 +1370,10 @@ def _build_directory_source(
                 "sha256": _sha256_bytes(data),
             }
             files.append(file_record)
-            is_text = _looks_like_text(item_path, data)
-            if is_text:
-                text = data.decode("utf-8")
+            decoded_text = _decode_text_bytes(item_path, data, allow_extension_hint=True)
+            if decoded_text is not None:
+                text = decoded_text["text"]
+                file_record["source_encoding"] = decoded_text["encoding"]
                 total_chars += len(text)
                 if tokenizer_encoder is not None:
                     tokenizer_source_count += len(tokenizer_encoder.encode(text))
@@ -1237,6 +1385,8 @@ def _build_directory_source(
                     text_files += 1
                     summary = _text_summary(text, label=rel_path)
                     kind = "text"
+                summary["source_encoding"] = decoded_text["encoding"]
+                summary["encoding_confidence"] = decoded_text["confidence"]
             else:
                 binary_files += 1
                 kind = "binary"
@@ -1261,6 +1411,15 @@ def _build_directory_source(
         "binary_files": binary_files,
         "symlink_count": len(symlinks),
         "empty_dir_count": len(empty_dirs),
+        "skip_dir_names": sorted(SKIP_DIR_NAMES),
+        "skipped_dir_count": len(skipped_dirs),
+        "skipped_dirs": skipped_dirs,
+        "filter_patterns": path_filter["patterns"],
+        "ignore_file": path_filter["ignore_file"],
+        "filtered_dir_count": len(filtered_dirs),
+        "filtered_file_count": len(filtered_files),
+        "filtered_path_count": len(filtered_dirs) + len(filtered_files),
+        "filtered_paths_preview": sorted(filtered_dirs + filtered_files)[:80],
         "total_bytes": total_bytes,
         "total_chars": total_chars,
         "tree": [entry["relative_path"] for entry in sorted(skeleton_entries, key=lambda item: item["relative_path"])],
@@ -1457,8 +1616,10 @@ def _build_incremental_directory_source(
     base_commit: str | None = None,
     tokenizer_backend: str | None = None,
     tokenizer_model: str | None = None,
+    exclude_patterns: list[str] | None = None,
 ) -> dict[str, Any]:
     path = path.expanduser().resolve()
+    path_filter = _build_context_path_filter(path, exclude_patterns=exclude_patterns)
     change_set = _collect_incremental_repo_paths(path, base_commit=base_commit)
     repo_root = change_set["repo_root"]
     scope_rel = PurePosixPath(change_set["scope_rel"] or ".")
@@ -1488,12 +1649,24 @@ def _build_incremental_directory_source(
     removed_paths = [
         _scope_rel_from_repo_rel(repo_rel, scope_rel)
         for repo_rel in change_set["removed_repo_paths"]
+        if not _context_path_is_filtered(_scope_rel_from_repo_rel(repo_rel, scope_rel), path_filter, is_dir=False)
+    ]
+    filtered_incremental_paths = [
+        _scope_rel_from_repo_rel(repo_rel, scope_rel)
+        for repo_rel in (
+            list(change_set["added_repo_paths"])
+            + list(change_set["changed_repo_paths"])
+            + list(change_set["removed_repo_paths"])
+        )
+        if _context_path_is_filtered(_scope_rel_from_repo_rel(repo_rel, scope_rel), path_filter, is_dir=False)
     ]
 
     existing_repo_paths = [
         ("added", repo_rel) for repo_rel in change_set["added_repo_paths"]
+        if not _context_path_is_filtered(_scope_rel_from_repo_rel(repo_rel, scope_rel), path_filter, is_dir=False)
     ] + [
         ("changed", repo_rel) for repo_rel in change_set["changed_repo_paths"]
+        if not _context_path_is_filtered(_scope_rel_from_repo_rel(repo_rel, scope_rel), path_filter, is_dir=False)
     ]
 
     for path_kind, repo_rel in sorted(existing_repo_paths, key=lambda item: item[1]):
@@ -1517,9 +1690,10 @@ def _build_incremental_directory_source(
                 "sha256": _sha256_bytes(data),
             }
             files.append(file_record)
-            is_text = _looks_like_text(item_path, data)
-            if is_text:
-                text = data.decode("utf-8")
+            decoded_text = _decode_text_bytes(item_path, data, allow_extension_hint=True)
+            if decoded_text is not None:
+                text = decoded_text["text"]
+                file_record["source_encoding"] = decoded_text["encoding"]
                 total_chars += len(text)
                 if tokenizer_encoder is not None:
                     tokenizer_source_count += len(tokenizer_encoder.encode(text))
@@ -1531,6 +1705,8 @@ def _build_incremental_directory_source(
                     text_files += 1
                     summary = _text_summary(text, label=rel_path)
                     kind = "text"
+                summary["source_encoding"] = decoded_text["encoding"]
+                summary["encoding_confidence"] = decoded_text["confidence"]
             else:
                 binary_files += 1
                 kind = "binary"
@@ -1560,6 +1736,10 @@ def _build_incremental_directory_source(
         "binary_files": binary_files,
         "symlink_count": len(symlinks),
         "empty_dir_count": 0,
+        "filter_patterns": path_filter["patterns"],
+        "ignore_file": path_filter["ignore_file"],
+        "filtered_incremental_path_count": len(filtered_incremental_paths),
+        "filtered_paths_preview": sorted(filtered_incremental_paths)[:80],
         "total_bytes": total_bytes,
         "total_chars": total_chars,
         "tree": [entry["relative_path"] for entry in sorted(skeleton_entries, key=lambda item: item["relative_path"])],
@@ -2160,6 +2340,7 @@ def _render_skeleton_text(
         source["source_summary"],
         focus_mode=focus_mode,
         skeleton_density=skeleton_density,
+        preset_id=str(preset.get("preset_id") or "generic"),
     )
     lines = [
         SKELETON_LANGUAGE,
@@ -2175,6 +2356,12 @@ def _render_skeleton_text(
         lines.append(f"SOURCE_PATH: {source['source_path']}")
     lines.append("PRESET_FOCUS:")
     lines.extend([f"  - {item}" for item in preset["focus"]])
+    if preset.get("skeleton_strategy"):
+        lines.append("PRESET_STRATEGY:")
+        lines.extend([f"  - {item}" for item in preset.get("skeleton_strategy", [])])
+    if preset.get("suggested_excludes"):
+        lines.append("PRESET_EXCLUDE_HINTS:")
+        lines.extend([f"  - {item}" for item in preset.get("suggested_excludes", [])])
     lines.append("CORE:")
     lines.extend(
         _render_core_summary_lines(
@@ -2215,6 +2402,7 @@ def _resolve_context_input_source(
     command_label: str,
     tokenizer_backend: str | None = None,
     tokenizer_model: str | None = None,
+    exclude_patterns: list[str] | None = None,
 ) -> dict[str, Any]:
     source_count = sum(1 for item in [inline_text.strip() if inline_text else "", text_file, input_file, input_dir] if item)
     if source_count != 1:
@@ -2230,6 +2418,7 @@ def _resolve_context_input_source(
             input_dir,
             tokenizer_backend=tokenizer_backend,
             tokenizer_model=tokenizer_model,
+            exclude_patterns=exclude_patterns,
         )
     raise ValueError(f"{command_label} did not receive a usable input source")
 
@@ -2272,6 +2461,8 @@ def resolve_context_preset(preset_id: str | None) -> dict[str, Any]:
         "label": preset["label"],
         "focus": list(preset["focus"]),
         "best_for": list(preset["best_for"]),
+        "skeleton_strategy": list(preset.get("skeleton_strategy") or []),
+        "suggested_excludes": list(preset.get("suggested_excludes") or []),
     }
 
 
@@ -2296,6 +2487,7 @@ def _resolve_skeleton_density_profile(
     *,
     focus_mode: str,
     skeleton_density: str,
+    preset_id: str = "generic",
 ) -> dict[str, Any]:
     source_kind = str(summary.get("source_kind") or "")
     total_files = int(summary.get("total_files", 0) or 0)
@@ -2397,18 +2589,44 @@ def _resolve_skeleton_density_profile(
     }
 
     if skeleton_density == "standard":
-        return standard
+        return _apply_preset_density_profile(standard, preset_id=preset_id, source_kind=source_kind)
     if skeleton_density == "compact":
-        return compact
+        return _apply_preset_density_profile(compact, preset_id=preset_id, source_kind=source_kind)
     if huge_directory or huge_text:
-        return compact
+        return _apply_preset_density_profile(compact, preset_id=preset_id, source_kind=source_kind)
     if large_directory or large_text:
-        return adaptive_large
+        return _apply_preset_density_profile(adaptive_large, preset_id=preset_id, source_kind=source_kind)
     if source_kind == "directory" and (total_files >= 40 or total_chars >= 100_000):
-        return adaptive_medium
+        return _apply_preset_density_profile(adaptive_medium, preset_id=preset_id, source_kind=source_kind)
     if source_kind in {"text", "markdown"} and (paragraph_count >= 30 or total_chars >= 20_000):
-        return adaptive_medium
-    return standard
+        return _apply_preset_density_profile(adaptive_medium, preset_id=preset_id, source_kind=source_kind)
+    return _apply_preset_density_profile(standard, preset_id=preset_id, source_kind=source_kind)
+
+
+def _apply_preset_density_profile(profile: dict[str, Any], *, preset_id: str, source_kind: str) -> dict[str, Any]:
+    tuned = dict(profile)
+    preset = str(preset_id or "generic").strip().lower()
+    if preset == "codebase":
+        tuned["imports_limit"] = max(int(tuned.get("imports_limit", 0) or 0), 16)
+        tuned["symbols_limit"] = max(int(tuned.get("symbols_limit", 0) or 0), 28)
+        tuned["relationships_limit"] = max(int(tuned.get("relationships_limit", 0) or 0), 14)
+        tuned["directory_kind_priority"] = ["code", "symlink", "text", "markdown", "binary"]
+        if source_kind == "directory":
+            tuned["hot_subtree_entry_limit"] = max(int(tuned.get("hot_subtree_entry_limit", 0) or 0), 20)
+        return tuned
+    if preset == "writing":
+        tuned["headings_limit"] = max(int(tuned.get("headings_limit", 0) or 0), 28)
+        tuned["sections_limit"] = max(int(tuned.get("sections_limit", 0) or 0), 14)
+        tuned["chapter_fold_limit"] = max(int(tuned.get("chapter_fold_limit", 0) or 0), 20)
+        tuned["chapter_fold_heading_limit"] = max(int(tuned.get("chapter_fold_heading_limit", 0) or 0), 4)
+        tuned["directory_kind_priority"] = ["text", "markdown", "code", "symlink", "binary"]
+        if source_kind == "directory":
+            tuned["directory_entry_top_terms_limit"] = max(int(tuned.get("directory_entry_top_terms_limit", 0) or 0), 4)
+        return tuned
+    if preset in {"website", "ecommerce"}:
+        tuned["relationships_limit"] = max(int(tuned.get("relationships_limit", 0) or 0), 18)
+        tuned["directory_kind_priority"] = ["code", "text", "markdown", "symlink", "binary"]
+    return tuned
 
 
 def _render_core_summary_lines(
@@ -2588,6 +2806,18 @@ def _select_directory_entries(
         entry for entry in entries
         if _directory_entry_matches_focus(str(entry.get("kind") or ""), focus_mode)
     ]
+    kind_priority = {
+        kind: index
+        for index, kind in enumerate(density_profile.get("directory_kind_priority") or [])
+    }
+    if kind_priority:
+        eligible_entries = sorted(
+            eligible_entries,
+            key=lambda entry: (
+                kind_priority.get(str(entry.get("kind") or ""), 99),
+                str(entry.get("relative_path") or ""),
+            ),
+        )
     if focus_mode != "full":
         tree_fill_entries = [entry for entry in entries if entry not in eligible_entries]
     else:
@@ -2596,10 +2826,22 @@ def _select_directory_entries(
         eligible_entries = list(entries)
         tree_fill_entries = []
 
+    group_candidates = [
+        group for group in (summary.get("directory_groups") or [])
+        if str(group.get("group") or "").strip()
+    ]
+    if kind_priority:
+        group_candidates = sorted(
+            group_candidates,
+            key=lambda group: (
+                _directory_group_kind_rank(group, kind_priority),
+                -int(group.get("priority_score", 0) or 0),
+                str(group.get("group") or ""),
+            ),
+        )
     group_priority = [
         str(group.get("group") or "")
-        for group in (summary.get("directory_groups") or [])[: int(density_profile.get("hot_subtree_limit", 0))]
-        if str(group.get("group") or "").strip()
+        for group in group_candidates[: int(density_profile.get("hot_subtree_limit", 0))]
     ]
     group_to_entries: dict[str, list[dict[str, Any]]] = {}
     for entry in eligible_entries:
@@ -2646,6 +2888,17 @@ def _select_directory_entries(
         _append(entry)
 
     return selected
+
+
+def _directory_group_kind_rank(group: dict[str, Any], kind_priority: dict[str, int]) -> int:
+    candidates: list[tuple[int, str]] = [
+        (int(group.get("code_files", 0) or 0), "code"),
+        (int(group.get("text_files", 0) or 0), "text"),
+        (int(group.get("symlink_count", 0) or 0), "symlink"),
+        (int(group.get("binary_files", 0) or 0), "binary"),
+    ]
+    _count, dominant_kind = max(candidates, key=lambda item: item[0])
+    return kind_priority.get(dominant_kind, 99)
 
 
 def _select_directory_tree_items(
@@ -3135,20 +3388,38 @@ def _build_text_chapter_groups(
     return groups
 
 
-def _looks_like_text(path: Path, data: bytes) -> bool:
-    if path.suffix.lower() in TEXT_EXTENSIONS:
-        try:
-            data.decode("utf-8")
-            return True
-        except UnicodeDecodeError:
-            return False
+def _decode_text_bytes(path: Path, data: bytes, *, allow_extension_hint: bool = False) -> dict[str, Any] | None:
     if b"\x00" in data[:4096]:
-        return False
-    try:
-        data.decode("utf-8")
-        return True
-    except UnicodeDecodeError:
-        return False
+        return None
+    extension_hint = allow_extension_hint and path.suffix.lower() in TEXT_EXTENSIONS
+    for encoding in TEXT_DECODE_CANDIDATES:
+        try:
+            text = data.decode(encoding)
+        except UnicodeDecodeError:
+            continue
+        score = _decoded_text_printable_score(text)
+        if score >= 0.92 or (extension_hint and score >= 0.82):
+            return {
+                "text": text,
+                "encoding": encoding,
+                "confidence": "high" if encoding.startswith("utf") or score >= 0.98 else "medium",
+                "printable_score": round(score, 4),
+            }
+    return None
+
+
+def _looks_like_text(path: Path, data: bytes) -> bool:
+    return _decode_text_bytes(path, data, allow_extension_hint=True) is not None
+
+
+def _decoded_text_printable_score(text: str) -> float:
+    if not text:
+        return 1.0
+    printable = 0
+    for char in text:
+        if char in "\n\r\t" or char.isprintable():
+            printable += 1
+    return printable / max(1, len(text))
 
 
 def _is_code_path(path: Path) -> bool:
@@ -3474,22 +3745,18 @@ def _build_token_source_text_from_restore_blob(restore_blob: dict[str, Any]) -> 
             return ""
         raw_bytes = _decode_restore_content_b64(restore_blob.get("content_b64"))
         file_name = str(restore_blob.get("file_name") or restore_blob.get("source_label") or "context-file")
-        if raw_bytes and _looks_like_text(Path(file_name), raw_bytes):
-            try:
-                return raw_bytes.decode("utf-8")
-            except UnicodeDecodeError:
-                return ""
+        decoded_text = _decode_text_bytes(Path(file_name), raw_bytes, allow_extension_hint=True)
+        if decoded_text is not None:
+            return str(decoded_text["text"])
         return ""
     if mode in {"directory", "directory_incremental"}:
         parts: list[str] = []
         for item in sorted(restore_blob.get("files") or [], key=lambda entry: str(entry.get("relative_path") or "")):
             rel_path = str(item.get("relative_path") or "")
             raw_bytes = _decode_restore_content_b64(item.get("content_b64"))
-            if raw_bytes and _looks_like_text(Path(rel_path), raw_bytes):
-                try:
-                    parts.append(raw_bytes.decode("utf-8"))
-                except UnicodeDecodeError:
-                    continue
+            decoded_text = _decode_text_bytes(Path(rel_path), raw_bytes, allow_extension_hint=True)
+            if decoded_text is not None:
+                parts.append(str(decoded_text["text"]))
         return "\n\n".join(part for part in parts if part)
     return ""
 
@@ -4108,14 +4375,16 @@ def _build_file_patch_artifacts(
     snapshot_file = snapshot_root / file_name
     _write_bytes_file(snapshot_file, candidate_bytes)
 
-    is_text = _looks_like_text(Path(file_name), original_bytes) and _looks_like_text(Path(file_name), candidate_bytes)
+    original_decoded_text = _decode_text_bytes(Path(file_name), original_bytes, allow_extension_hint=True)
+    candidate_decoded_text = _decode_text_bytes(Path(file_name), candidate_bytes, allow_extension_hint=True)
+    is_text = original_decoded_text is not None and candidate_decoded_text is not None
     files: dict[str, Path] = {"candidate_snapshot_file": snapshot_file}
     added_lines = 0
     removed_lines = 0
     patch_mode = "file_binary_replace"
     if is_text:
-        original_text = original_bytes.decode("utf-8")
-        candidate_text = candidate_bytes.decode("utf-8")
+        original_text = str(original_decoded_text["text"])
+        candidate_text = str(candidate_decoded_text["text"])
         diff_lines = list(
             difflib.unified_diff(
                 original_text.splitlines(),
@@ -4209,11 +4478,11 @@ def _build_directory_patch_artifacts(
     for rel_path in sorted(set(added_paths + removed_paths + changed_paths)):
         original_bytes = original_files.get(rel_path)
         candidate_bytes = candidate_files.get(rel_path)
-        original_is_text = original_bytes is not None and _looks_like_text(Path(rel_path), original_bytes)
-        candidate_is_text = candidate_bytes is not None and _looks_like_text(Path(rel_path), candidate_bytes)
-        if original_is_text or candidate_is_text:
-            original_text = original_bytes.decode("utf-8") if original_is_text and original_bytes is not None else ""
-            candidate_text = candidate_bytes.decode("utf-8") if candidate_is_text and candidate_bytes is not None else ""
+        original_decoded_text = _decode_text_bytes(Path(rel_path), original_bytes or b"", allow_extension_hint=True) if original_bytes is not None else None
+        candidate_decoded_text = _decode_text_bytes(Path(rel_path), candidate_bytes or b"", allow_extension_hint=True) if candidate_bytes is not None else None
+        if original_decoded_text is not None or candidate_decoded_text is not None:
+            original_text = str(original_decoded_text["text"]) if original_decoded_text is not None else ""
+            candidate_text = str(candidate_decoded_text["text"]) if candidate_decoded_text is not None else ""
             diff_lines = list(
                 difflib.unified_diff(
                     original_text.splitlines(),

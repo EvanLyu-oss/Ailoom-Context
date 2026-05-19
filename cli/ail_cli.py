@@ -109,6 +109,7 @@ def cmd_context(args: argparse.Namespace) -> int:
             base_commit=getattr(args, "base_commit", None),
             focus_mode=getattr(args, "focus_mode", None),
             skeleton_density=getattr(args, "skeleton_density", None),
+            exclude_patterns=list(getattr(args, "exclude_patterns", None) or []),
         )
         output_file = getattr(args, "output_file", None)
         if getattr(args, "emit_skeleton", False):
@@ -139,6 +140,7 @@ def cmd_context(args: argparse.Namespace) -> int:
             base_commit=getattr(args, "base_commit", None),
             focus_mode=getattr(args, "focus_mode", None),
             skeleton_density=getattr(args, "skeleton_density", None),
+            exclude_patterns=list(getattr(args, "exclude_patterns", None) or []),
         )
         exit_code = EXIT_OK if (payload.get("apply_check") is None or bool((payload.get("apply_check") or {}).get("apply_check_passed"))) else EXIT_VALIDATION
         if getattr(args, "emit_summary", False):
@@ -378,6 +380,7 @@ def _build_parser() -> argparse.ArgumentParser:
     compress.add_argument("--preset", dest="preset_id", default="generic")
     compress.add_argument("--focus-mode", dest="focus_mode", default="full", choices=["full", "tree", "imports", "symbols", "writing-outline"])
     compress.add_argument("--skeleton-density", dest="skeleton_density", default="adaptive", choices=["adaptive", "standard", "compact"])
+    compress.add_argument("--exclude", dest="exclude_patterns", action="append", help="Exclude a relative path or glob from directory compression; can be repeated")
     compress.add_argument("--incremental", action="store_true")
     compress.add_argument("--base-commit", dest="base_commit")
     compress.add_argument("--tokenizer-backend", dest="tokenizer_backend", default="auto", choices=["auto", "heuristic", "tiktoken"])
@@ -424,6 +427,7 @@ def _build_parser() -> argparse.ArgumentParser:
     bundle.add_argument("--preset", dest="preset_id", default="generic")
     bundle.add_argument("--focus-mode", dest="focus_mode", default="full", choices=["full", "tree", "imports", "symbols", "writing-outline"])
     bundle.add_argument("--skeleton-density", dest="skeleton_density", default="adaptive", choices=["adaptive", "standard", "compact"])
+    bundle.add_argument("--exclude", dest="exclude_patterns", action="append", help="Exclude a relative path or glob from directory compression; can be repeated")
     bundle.add_argument("--incremental", action="store_true")
     bundle.add_argument("--base-commit", dest="base_commit")
     bundle.add_argument("--candidate-text", dest="candidate_text")

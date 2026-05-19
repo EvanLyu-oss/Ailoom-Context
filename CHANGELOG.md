@@ -14,6 +14,7 @@
 - validated input files and directories before compression so missing paths return invalid-usage errors instead of empty successful bundles
 - added incremental diagnostics for clean or filtered git change surfaces and smoke coverage for zero-change incremental runs
 - documented a safe dogfood workflow using ignored result directories and sandbox restores
+- added `testing/dogfood_self_check.sh` to compress, inspect, sandbox-restore, and hash-check this repository during active development
 
 ## 0.1.0
 

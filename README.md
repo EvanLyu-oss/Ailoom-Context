@@ -204,20 +204,10 @@ Incremental restore intentionally reconstructs only that git change surface plus
 Safe dogfood workflow for active development:
 
 ```bash
-PYTHONPATH="$PWD" python3 -m cli context bundle \
-  --preset codebase \
-  --input-dir "$PWD" \
-  --exclude testing/results/ \
-  --output-dir testing/results/dogfood-current \
-  --json
-
-PYTHONPATH="$PWD" python3 -m cli context restore \
-  --package-file testing/results/dogfood-current/context_manifest.json \
-  --output-dir testing/results/dogfood-restore \
-  --json
+bash testing/dogfood_self_check.sh
 ```
 
-Keep dogfood restore and replay outputs outside the source tree or under ignored result directories. Prefer `patch-apply --dry-run --write-dry-run-report ...` until the replay surface has been inspected.
+The dogfood self-check compresses this repository, inspects the bundle, restores into `testing/results/dogfood-self-check/restore`, and verifies restored file hashes against the included source files. Keep dogfood restore and replay outputs outside the source tree or under ignored result directories. Prefer `patch-apply --dry-run --write-dry-run-report ...` until the replay surface has been inspected.
 
 Validate one edited incremental surface:
 

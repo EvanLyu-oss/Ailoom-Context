@@ -246,6 +246,12 @@ Quick benchmark:
 python3 testing/context_scale_benchmark.py --quick
 ```
 
+Cross-platform smoke checks, including Windows environments without Bash:
+
+```bash
+python3 testing/run_cli_checks.py
+```
+
 Repo-scale benchmark:
 
 ```bash

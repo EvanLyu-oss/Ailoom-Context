@@ -246,6 +246,14 @@ Quick benchmark:
 python3 testing/context_scale_benchmark.py --quick
 ```
 
+Named benchmark scale profiles:
+
+```bash
+python3 testing/context_scale_benchmark.py --scale-profile quick
+python3 testing/context_scale_benchmark.py --scale-profile standard
+python3 testing/context_scale_benchmark.py --scale-profile stress
+```
+
 Cross-platform smoke checks, including Windows environments without Bash:
 
 ```bash
@@ -285,6 +293,7 @@ The benchmark compares:
 - optional baseline JSON comparisons for non-blocking restore, token-ratio, and compression-time regression trends
 - executive summaries for quick test-machine handoff of readiness, regression, restore, and recommended modes
 - stdout executive summaries from the benchmark command so CI and test-machine logs carry the key result without opening report files
+- named benchmark scale profiles for quick smoke coverage, standard release checks, and stress test-machine runs
 - configurable scale-health checks for restore verification, monorepo file floor, and large-directory token ratios
 - scale-health guardrails for best verified monorepo and realistic-directory size ratio versus full+standard baselines
 - synthetic fixtures vs realistic repo-scale directory/text corpora

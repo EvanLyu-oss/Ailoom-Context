@@ -1296,7 +1296,8 @@ def _check_scale_benchmark_quick(workspace: Path) -> None:
         [
             sys.executable,
             str(ROOT / "testing" / "context_scale_benchmark.py"),
-            "--quick",
+            "--scale-profile",
+            "quick",
             "--output-json",
             str(output_json),
             "--output-md",
@@ -1310,6 +1311,9 @@ def _check_scale_benchmark_quick(workspace: Path) -> None:
     assert stdout_payload["status"] == "ok"
     assert stdout_payload["executive_summary"]["overall_status"] in {"ready", "watch"}
     assert report["status"] == "ok"
+    assert report["scale_profile"] == "quick"
+    assert report["iterations"] == 1
+    assert report["benchmark_inputs"]["monorepo_fixture"]["package_count"] == 3
     assert report["release_readiness"]["restore_verified_count"] == report["release_readiness"]["case_count"]
     assert report["scale_health"]["status"] in {"ok", "warn"}
     scale_checks = {item["name"]: item for item in report["scale_health"]["checks"]}

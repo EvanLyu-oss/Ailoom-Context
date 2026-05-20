@@ -31,12 +31,36 @@ DEFAULT_TOKENIZER_MODEL = "cl100k_base"
 DEFAULT_DIRECTORY_FOCUS_MODES = ["full", "tree", "imports", "symbols"]
 DEFAULT_TEXT_FOCUS_MODES = ["full", "writing-outline"]
 DEFAULT_SKELETON_DENSITIES = ["adaptive", "standard", "compact"]
+STRESS_TEXT_TARGETS = [100_000, 400_000, 800_000]
 DEFAULT_SCALE_HEALTH_THRESHOLDS = {
     "monorepo_min_files": 100,
     "monorepo_max_token_ratio": 0.75,
     "realistic_directory_max_token_ratio": 0.25,
     "monorepo_best_size_ratio_vs_standard": 0.45,
     "realistic_directory_best_size_ratio_vs_standard": 0.25,
+}
+SCALE_PROFILE_DEFAULTS = {
+    "quick": {
+        "iterations": 1,
+        "monorepo_packages": 3,
+        "monorepo_files_per_package": 60,
+        "text_targets": QUICK_TEXT_TARGETS,
+        "use_synthetic_directory": True,
+    },
+    "standard": {
+        "iterations": 2,
+        "monorepo_packages": 6,
+        "monorepo_files_per_package": 80,
+        "text_targets": DEFAULT_TEXT_TARGETS,
+        "use_synthetic_directory": False,
+    },
+    "stress": {
+        "iterations": 2,
+        "monorepo_packages": 10,
+        "monorepo_files_per_package": 120,
+        "text_targets": STRESS_TEXT_TARGETS,
+        "use_synthetic_directory": False,
+    },
 }
 DEFAULT_REAL_TEXT_FILES = [
     REPO_ROOT / "README.md",
@@ -974,6 +998,7 @@ def _render_markdown(report: dict[str, Any]) -> str:
         f"- repo_root: `{report['repo_root']}`",
         f"- python: `{report['python']}`",
         f"- platform: `{report['platform']}`",
+        f"- scale_profile: `{report.get('scale_profile', 'standard')}`",
         f"- synthetic_directory: `{report.get('benchmark_inputs', {}).get('synthetic_directory', '')}`",
         f"- realistic_directory: `{report.get('benchmark_inputs', {}).get('realistic_directory', '')}`",
         f"- monorepo_directory: `{report.get('benchmark_inputs', {}).get('monorepo_directory', '')}`",
@@ -2160,6 +2185,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--directory", default=str(REPO_ROOT / "cli"), help="Directory input to benchmark.")
     parser.add_argument("--real-directory", default=str(REPO_ROOT), help="Real repository directory input to benchmark alongside the synthetic directory case.")
     parser.add_argument("--iterations", type=int, default=2, help="Iterations per case/backend.")
+    parser.add_argument("--scale-profile", choices=sorted(SCALE_PROFILE_DEFAULTS), help="Named benchmark scale profile. Use quick for smoke, standard for release checks, or stress for deep test-machine coverage.")
     parser.add_argument("--tokenizer-model", default=DEFAULT_TOKENIZER_MODEL, help="Tokenizer model/encoding to request.")
     parser.add_argument("--backends", nargs="*", help="Explicit tokenizer backends to benchmark.")
     parser.add_argument("--directory-focus-modes", nargs="*", default=DEFAULT_DIRECTORY_FOCUS_MODES, help="Focus modes to benchmark for directory cases.")
@@ -2193,16 +2219,29 @@ def main() -> int:
         workspace = Path(tmp)
         directory_path = Path(args.directory).expanduser().resolve()
         real_directory_path = Path(args.real_directory).expanduser().resolve()
+        scale_profile = "quick" if args.quick else (args.scale_profile or "standard")
+        profile_defaults = SCALE_PROFILE_DEFAULTS[scale_profile]
         text_targets = list(args.text_target_chars)
         iterations = max(1, args.iterations)
-        if args.quick:
+        if bool(profile_defaults["use_synthetic_directory"]):
             directory_path = _build_directory_fixture(workspace)
-            text_targets = QUICK_TEXT_TARGETS
-            iterations = 1
+        if scale_profile == "quick":
+            text_targets = list(profile_defaults["text_targets"])
+            iterations = int(profile_defaults["iterations"])
+        elif scale_profile == "stress":
+            text_targets = list(args.text_target_chars) if args.text_target_chars != DEFAULT_TEXT_TARGETS else list(profile_defaults["text_targets"])
+            iterations = max(iterations, int(profile_defaults["iterations"]))
 
         backends = _build_backends(args.backends, include_tiktoken=True)
-        monorepo_packages = 3 if args.quick else max(1, args.monorepo_packages)
-        monorepo_files_per_package = 60 if args.quick else max(1, args.monorepo_files_per_package)
+        if scale_profile == "quick":
+            monorepo_packages = int(profile_defaults["monorepo_packages"])
+            monorepo_files_per_package = int(profile_defaults["monorepo_files_per_package"])
+        elif scale_profile == "stress":
+            monorepo_packages = max(int(profile_defaults["monorepo_packages"]), max(1, args.monorepo_packages))
+            monorepo_files_per_package = max(int(profile_defaults["monorepo_files_per_package"]), max(1, args.monorepo_files_per_package))
+        else:
+            monorepo_packages = max(1, args.monorepo_packages)
+            monorepo_files_per_package = max(1, args.monorepo_files_per_package)
         monorepo_path, monorepo_fixture = _build_monorepo_fixture(
             workspace,
             package_count=monorepo_packages,
@@ -2409,6 +2448,7 @@ def main() -> int:
             "repo_root": str(REPO_ROOT),
             "python": sys.version.split()[0],
             "platform": platform.platform(),
+            "scale_profile": scale_profile,
             "tokenizer_model": args.tokenizer_model,
             "backends": backends,
             "iterations": iterations,
@@ -2418,6 +2458,7 @@ def main() -> int:
                 "monorepo_directory": str(monorepo_path),
                 "monorepo_fixture": monorepo_fixture,
                 "realistic_text_fixture": realistic_text_fixture,
+                "text_target_chars": text_targets,
                 "baseline_json": str(Path(args.baseline_json).expanduser().resolve()) if args.baseline_json else "",
             },
             "scale_health": scale_health,

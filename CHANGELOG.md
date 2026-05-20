@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- added named benchmark scale profiles for quick, standard, and stress coverage, while preserving the existing `--quick` shortcut
 - added scale-health guardrails that ensure best verified monorepo and realistic-directory skeletons stay compact versus full+standard baselines
 - enriched benchmark recommendations with per-source grouping, candidate counts, token savings percentages, token-ratio span, and compression-time comparisons for large-directory and long-text tuning
 - preserved text-density budgets under the writing preset so adaptive and compact long-text skeletons can produce meaningful token savings without changing restore fidelity

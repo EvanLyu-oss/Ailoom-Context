@@ -4,6 +4,7 @@ import argparse
 import hashlib
 import json
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -321,8 +322,8 @@ def _check_directory_focus_density(workspace: Path) -> None:
     assert compact["skeleton_char_count"] < standard["skeleton_char_count"]
 
 
-def _build_incremental_repo(workspace: Path) -> Path:
-    project = workspace / "incremental_project"
+def _build_incremental_repo(workspace: Path, *, name: str = "incremental_project") -> Path:
+    project = workspace / name
     (project / "src").mkdir(parents=True)
     (project / "docs").mkdir()
     (project / "src" / "app.py").write_text("def run() -> str:\n    return 'base'\n", encoding="utf-8")
@@ -380,7 +381,7 @@ def _check_incremental_compress_restore(workspace: Path) -> None:
         ]
     )
     assert restore["status"] == "ok"
-    restored = restore_root / "incremental_project"
+    restored = restore_root / project.name
     assert _sha256(project / "src" / "app.py") == _sha256(restored / "src" / "app.py")
     assert _sha256(project / "src" / "new.py") == _sha256(restored / "src" / "new.py")
     manifest = json.loads((restored / ".ail_incremental_manifest.json").read_text(encoding="utf-8"))
@@ -612,10 +613,228 @@ def _check_directory_patch_apply_reports(workspace: Path) -> None:
     assert blocked["policy_passed"] is False
 
 
+def _check_incremental_patch_apply_reports(workspace: Path) -> None:
+    project = _build_incremental_repo(workspace, name="incremental_patch_project")
+    bundle_dir = workspace / "incremental_patch_bundle"
+    _run_cli_json(
+        [
+            "context",
+            "compress",
+            "--input-dir",
+            str(project),
+            "--incremental",
+            "--output-dir",
+            str(bundle_dir),
+            "--json",
+        ]
+    )
+    restore_root = workspace / "incremental_patch_restore"
+    _run_cli_json(
+        [
+            "context",
+            "restore",
+            "--package-file",
+            str(bundle_dir / "context_manifest.json"),
+            "--output-dir",
+            str(restore_root),
+            "--json",
+        ]
+    )
+    candidate = workspace / "incremental_candidate"
+    restored = restore_root / project.name
+    shutil.copytree(restored, candidate)
+    (candidate / "docs").mkdir(exist_ok=True)
+    (candidate / "src" / "app.py").write_text("def run() -> str:\n    return 'candidate'\n", encoding="utf-8")
+    (candidate / "docs" / "notes.md").write_text("Recovered note.\n", encoding="utf-8")
+
+    apply_check = _run_cli_json(
+        [
+            "context",
+            "apply-check",
+            "--package-file",
+            str(bundle_dir / "context_manifest.json"),
+            "--input-dir",
+            str(candidate),
+            "--json",
+        ]
+    )
+    assert apply_check["status"] == "ok"
+    assert apply_check["apply_check_passed"] is True
+    assert apply_check["incremental_mode"] is True
+    assert apply_check["incremental_changed_paths"] == ["src/app.py"]
+    assert apply_check["incremental_added_paths"] == ["src/new.py"]
+    assert apply_check["incremental_removed_paths"] == []
+    assert apply_check["incremental_path_count"] == 2
+
+    patch_dir = workspace / "incremental_patch"
+    patch = _run_cli_json(
+        [
+            "context",
+            "patch",
+            "--package-file",
+            str(bundle_dir / "context_manifest.json"),
+            "--input-dir",
+            str(candidate),
+            "--output-dir",
+            str(patch_dir),
+            "--json",
+        ]
+    )
+    assert patch["incremental_mode"] is True
+    assert patch["incremental_changed_paths"] == ["src/app.py"]
+    assert patch["incremental_added_paths"] == ["src/new.py"]
+    assert patch["incremental_removed_paths"] == []
+    assert patch["added_paths"] == ["docs/notes.md"]
+
+    output_dir = workspace / "incremental_replay"
+    replay = _run_cli_json(
+        [
+            "context",
+            "patch-apply",
+            "--patch-file",
+            str(patch_dir / "patch_manifest.json"),
+            "--source-package-file",
+            str(bundle_dir / "context_manifest.json"),
+            "--output-dir",
+            str(output_dir),
+            "--json",
+        ]
+    )
+    replayed = output_dir / project.name
+    assert replay["status"] == "ok"
+    assert replay["incremental_mode"] is True
+    assert replay["apply_mode"] == "directory_incremental_restore_plus_overlay"
+    assert replay["incremental_changed_paths"] == ["src/app.py"]
+    assert replay["incremental_added_paths"] == ["src/new.py"]
+    assert replay["incremental_removed_paths"] == []
+    for rel in ["src/app.py", "src/new.py", "docs/notes.md"]:
+        assert _sha256(candidate / rel) == _sha256(replayed / rel)
+    manifest = json.loads((replayed / ".ail_incremental_manifest.json").read_text(encoding="utf-8"))
+    assert manifest["removed_paths"] == []
+
+    dry_report = workspace / "incremental_dry_run_report.json"
+    dry_output = workspace / "incremental_dry_output"
+    dry = _run_cli_json(
+        [
+            "context",
+            "patch-apply",
+            "--patch-file",
+            str(patch_dir / "patch_manifest.json"),
+            "--source-package-file",
+            str(bundle_dir / "context_manifest.json"),
+            "--dry-run",
+            "--write-dry-run-report",
+            str(dry_report),
+            "--output-dir",
+            str(dry_output),
+            "--json",
+        ]
+    )
+    report = json.loads(dry_report.read_text(encoding="utf-8"))
+    assert dry["dry_run"] is True
+    assert dry["incremental_mode"] is True
+    assert report["dry_run"] is True
+    assert report["incremental_mode"] is True
+    assert report["incremental_change_counts"]["changed_paths"] == 1
+    assert report["incremental_change_counts"]["added_paths"] == 1
+    assert report["incremental_change_counts"]["removed_paths"] == 0
+    assert report["first_incremental_changed_path"] == "src/app.py"
+    assert report["first_incremental_added_path"] == "src/new.py"
+    assert report["first_incremental_removed_path"] == ""
+    assert not dry_output.exists()
+
+
+def _check_policy_template_json(workspace: Path) -> None:
+    del workspace
+    payload = _run_cli_json(
+        [
+            "context",
+            "patch-apply",
+            "--sample-policy",
+            "strict",
+            "--allow-root",
+            "src",
+            "--forbid-root",
+            "src/generated",
+            "--emit-policy-template",
+            "--json",
+        ]
+    )
+    assert payload["status"] == "ok"
+    assert payload["policy_mode"] == "strict"
+    assert "src" in payload["policy_template"]["allow_roots"]
+    assert "src/generated" in payload["policy_template"]["forbid_roots"]
+
+
 def _check_invalid_input_dir(workspace: Path) -> None:
     missing = workspace / "missing"
     payload = _run_cli_json(
         ["context", "compress", "--input-dir", str(missing), "--json"],
+        expect=2,
+    )
+    assert payload["status"] == "error"
+    assert payload["error"]["code"] == "invalid_usage"
+
+
+def _check_restore_invalid_relpath(workspace: Path) -> None:
+    invalid_manifest = workspace / "invalid_manifest.json"
+    invalid_manifest.write_text(
+        json.dumps(
+            {
+                "manifest_version": "1.0",
+                "compression_mode": "directory",
+                "source_kind": "mixed_project",
+                "source_label": "bad",
+                "restore_package": {
+                    "encoding": "zlib+base64+json",
+                    "sha256": "",
+                    "raw_byte_count": 0,
+                    "compressed_byte_count": 0,
+                    "payload": "",
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    import base64
+    import zlib
+
+    decoded = {
+        "mode": "directory",
+        "source_label": "bad",
+        "source_kind": "mixed_project",
+        "root_name": "bad",
+        "files": [
+            {
+                "relative_path": "../escape.txt",
+                "content_b64": base64.b64encode(b"bad").decode("ascii"),
+                "sha256": hashlib.sha256(b"bad").hexdigest(),
+            }
+        ],
+        "symlinks": [],
+        "empty_dirs": [],
+    }
+    raw = json.dumps(decoded, separators=(",", ":")).encode("utf-8")
+    compressed = zlib.compress(raw, level=9)
+    manifest = json.loads(invalid_manifest.read_text(encoding="utf-8"))
+    manifest["restore_package"] = {
+        "encoding": "zlib+base64+json",
+        "sha256": hashlib.sha256(raw).hexdigest(),
+        "raw_byte_count": len(raw),
+        "compressed_byte_count": len(compressed),
+        "payload": base64.b64encode(compressed).decode("ascii"),
+    }
+    invalid_manifest.write_text(json.dumps(manifest), encoding="utf-8")
+    payload = _run_cli_json(
+        [
+            "context",
+            "restore",
+            "--package-file",
+            str(invalid_manifest),
+            "--output-dir",
+            str(workspace / "invalid_restore"),
+            "--json",
+        ],
         expect=2,
     )
     assert payload["status"] == "error"
@@ -661,7 +880,10 @@ CHECKS: list[tuple[str, Callable[[Path], None]]] = [
     ("context_apply_patch_roundtrip_json_ok", _check_apply_patch_roundtrip),
     ("context_patch_apply_merge_conflict_json_ok", _check_patch_apply_merge_conflict),
     ("context_patch_apply_directory_reports_json_ok", _check_directory_patch_apply_reports),
+    ("context_patch_apply_incremental_reports_json_ok", _check_incremental_patch_apply_reports),
+    ("context_patch_apply_policy_template_json_ok", _check_policy_template_json),
     ("context_invalid_input_dir_json_ok", _check_invalid_input_dir),
+    ("context_restore_invalid_relpath_json_ok", _check_restore_invalid_relpath),
     ("context_scale_benchmark_quick_json_ok", _check_scale_benchmark_quick),
 ]
 

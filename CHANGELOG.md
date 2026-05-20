@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-- added a Python-native cross-platform smoke runner for Windows and other environments without Bash
+- added and expanded a Python-native cross-platform smoke runner for Windows and other environments without Bash
 
 ## 0.1.1
 

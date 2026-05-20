@@ -51,6 +51,10 @@ def _sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def _git(args: list[str], *, cwd: Path) -> None:
+    _run(["git", *args], cwd=cwd)
+
+
 def _check_py_compile(workspace: Path) -> None:
     del workspace
     _run(
@@ -187,6 +191,202 @@ def _check_directory_restore(workspace: Path) -> None:
     assert (restored_project / "empty" / "leaf").is_dir()
 
 
+def _check_directory_filtering(workspace: Path) -> None:
+    project = workspace / "filter_project"
+    (project / "src").mkdir(parents=True)
+    (project / "logs").mkdir()
+    (project / "node_modules" / "pkg").mkdir(parents=True)
+    (project / "dist").mkdir()
+    (project / ".mcp-skeletonignore").write_text("logs/\nnode_modules/\n*.tmp\n", encoding="utf-8")
+    (project / "README.md").write_text("# Filter Project\n", encoding="utf-8")
+    (project / "src" / "app.py").write_text("def keep() -> str:\n    return 'included'\n", encoding="utf-8")
+    (project / "logs" / "debug.log").write_text("ignored log\n", encoding="utf-8")
+    (project / "node_modules" / "pkg" / "index.js").write_text("ignored dependency\n", encoding="utf-8")
+    (project / "dist" / "app.js").write_text("ignored build\n", encoding="utf-8")
+    (project / "src" / "app.py.map").write_text("ignored map\n", encoding="utf-8")
+    (project / "tmp.tmp").write_text("ignored tmp\n", encoding="utf-8")
+
+    bundle_dir = workspace / "filter_bundle"
+    payload = _run_cli_json(
+        [
+            "context",
+            "compress",
+            "--input-dir",
+            str(project),
+            "--exclude",
+            "dist/",
+            "--exclude",
+            "*.map",
+            "--output-dir",
+            str(bundle_dir),
+            "--json",
+        ]
+    )
+    assert payload["status"] == "ok"
+    summary = payload["source_summary"]
+    assert summary["filtered_path_count"] >= 5
+    paths = {item["relative_path"] for item in summary["entries"]}
+    assert "README.md" in paths
+    assert "src/app.py" in paths
+    assert "logs/debug.log" not in paths
+    assert "node_modules/pkg/index.js" not in paths
+    assert "dist/app.js" not in paths
+    assert "src/app.py.map" not in paths
+    assert "tmp.tmp" not in paths
+
+    restore_root = workspace / "filter_restore"
+    _run_cli_json(
+        [
+            "context",
+            "restore",
+            "--package-file",
+            str(bundle_dir / "context_manifest.json"),
+            "--output-dir",
+            str(restore_root),
+            "--json",
+        ]
+    )
+    restored = restore_root / "filter_project"
+    assert (restored / "README.md").exists()
+    assert (restored / "src" / "app.py").exists()
+    assert not (restored / "logs" / "debug.log").exists()
+    assert not (restored / "dist" / "app.js").exists()
+
+
+def _check_directory_focus_density(workspace: Path) -> None:
+    project = workspace / "focus_project"
+    (project / "src").mkdir(parents=True)
+    (project / "docs").mkdir()
+    for idx in range(1, 45):
+        (project / "src" / f"module_{idx:02d}.py").write_text(
+            "import json\n\n"
+            f"def function_{idx}(value: str) -> str:\n"
+            "    return json.dumps({'value': value})\n",
+            encoding="utf-8",
+        )
+        (project / "docs" / f"chapter_{idx:02d}.md").write_text(
+            f"# Chapter {idx}\n\nThis chapter preserves writing context for focus testing.\n",
+            encoding="utf-8",
+        )
+
+    codebase = _run_cli_json(
+        ["context", "compress", "--preset", "codebase", "--input-dir", str(project), "--json"]
+    )
+    writing = _run_cli_json(
+        ["context", "compress", "--preset", "writing", "--input-dir", str(project), "--json"]
+    )
+    symbols = _run_cli_json(
+        [
+            "context",
+            "compress",
+            "--preset",
+            "codebase",
+            "--focus-mode",
+            "symbols",
+            "--input-dir",
+            str(project),
+            "--json",
+        ]
+    )
+    standard = _run_cli_json(
+        [
+            "context",
+            "compress",
+            "--input-dir",
+            str(project),
+            "--skeleton-density",
+            "standard",
+            "--json",
+        ]
+    )
+    compact = _run_cli_json(
+        [
+            "context",
+            "compress",
+            "--input-dir",
+            str(project),
+            "--skeleton-density",
+            "compact",
+            "--json",
+        ]
+    )
+
+    assert codebase["status"] == "ok"
+    assert writing["status"] == "ok"
+    assert symbols["status"] == "ok"
+    assert symbols["focus_mode"] == "symbols"
+    assert "FOCUS_MODE: symbols" in symbols["skeleton_text"]
+    assert "SYMBOLS:" in symbols["skeleton_text"]
+    assert codebase["skeleton_text"] != writing["skeleton_text"]
+    assert compact["skeleton_char_count"] < standard["skeleton_char_count"]
+
+
+def _build_incremental_repo(workspace: Path) -> Path:
+    project = workspace / "incremental_project"
+    (project / "src").mkdir(parents=True)
+    (project / "docs").mkdir()
+    (project / "src" / "app.py").write_text("def run() -> str:\n    return 'base'\n", encoding="utf-8")
+    (project / "docs" / "notes.md").write_text("Initial notes.\n", encoding="utf-8")
+    _git(["init", "-q"], cwd=project)
+    _git(["config", "user.email", "smoke@example.com"], cwd=project)
+    _git(["config", "user.name", "Python Smoke"], cwd=project)
+    _git(["add", "."], cwd=project)
+    _git(["commit", "-q", "-m", "base"], cwd=project)
+    (project / "src" / "app.py").write_text("def run() -> str:\n    return 'changed'\n", encoding="utf-8")
+    (project / "src" / "new.py").write_text("def added() -> str:\n    return 'new'\n", encoding="utf-8")
+    (project / "docs" / "notes.md").unlink()
+    return project
+
+
+def _check_incremental_compress_restore(workspace: Path) -> None:
+    project = _build_incremental_repo(workspace)
+    bundle_dir = workspace / "incremental_bundle"
+    payload = _run_cli_json(
+        [
+            "context",
+            "compress",
+            "--input-dir",
+            str(project),
+            "--incremental",
+            "--output-dir",
+            str(bundle_dir),
+            "--json",
+        ]
+    )
+    assert payload["status"] == "ok"
+    assert payload["incremental_mode"] is True
+    assert payload["incremental_changed_paths"] == ["src/app.py"]
+    assert payload["incremental_added_paths"] == ["src/new.py"]
+    assert payload["incremental_removed_paths"] == ["docs/notes.md"]
+    assert payload["incremental_path_count"] == 3
+
+    inspect = _run_cli_json(
+        ["context", "inspect", "--package-file", str(bundle_dir / "context_manifest.json"), "--json"]
+    )
+    assert inspect["status"] == "ok"
+    assert inspect["incremental_mode"] is True
+    assert inspect["incremental_path_count"] == 3
+
+    restore_root = workspace / "incremental_restore"
+    restore = _run_cli_json(
+        [
+            "context",
+            "restore",
+            "--package-file",
+            str(bundle_dir / "context_manifest.json"),
+            "--output-dir",
+            str(restore_root),
+            "--json",
+        ]
+    )
+    assert restore["status"] == "ok"
+    restored = restore_root / "incremental_project"
+    assert _sha256(project / "src" / "app.py") == _sha256(restored / "src" / "app.py")
+    assert _sha256(project / "src" / "new.py") == _sha256(restored / "src" / "new.py")
+    manifest = json.loads((restored / ".ail_incremental_manifest.json").read_text(encoding="utf-8"))
+    assert manifest["removed_paths"] == ["docs/notes.md"]
+
+
 def _check_apply_patch_roundtrip(workspace: Path) -> None:
     source = workspace / "source.md"
     candidate = workspace / "candidate.md"
@@ -293,6 +493,9 @@ CHECKS: list[tuple[str, Callable[[Path], None]]] = [
     ("context_restore_text_json_ok", _check_text_restore),
     ("context_non_utf8_text_restore_json_ok", _check_non_utf8_text_restore),
     ("context_restore_directory_json_ok", _check_directory_restore),
+    ("context_directory_filter_ignore_json_ok", _check_directory_filtering),
+    ("context_directory_focus_density_json_ok", _check_directory_focus_density),
+    ("context_compress_incremental_json_ok", _check_incremental_compress_restore),
     ("context_apply_patch_roundtrip_json_ok", _check_apply_patch_roundtrip),
     ("context_invalid_input_dir_json_ok", _check_invalid_input_dir),
     ("context_scale_benchmark_quick_json_ok", _check_scale_benchmark_quick),

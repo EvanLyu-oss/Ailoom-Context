@@ -2573,6 +2573,28 @@ def _resolve_skeleton_density_profile(
         ],
         "directory_entry_top_terms_limit": 8,
     }
+    standard_large_directory = {
+        "top_terms_limit": 6,
+        "imports_limit": 14,
+        "symbols_limit": 22,
+        "relationships_limit": 10,
+        "headings_limit": 18,
+        "sections_limit": 8,
+        "chapter_fold_limit": 14,
+        "chapter_fold_heading_limit": 3,
+        "tree_limit": 220 if focus_mode in {"full", "tree"} else 0,
+        "directory_entry_limit": 96,
+        "directory_group_limit": 12,
+        "extension_mix_limit": 10,
+        "hot_subtree_limit": 4,
+        "collapsed_subtree_limit": 6,
+        "hot_subtree_seed_limit": 3,
+        "hot_subtree_entry_limit": 16,
+        "directory_entry_core_fields": [
+            "source_kind", "lines", "paragraph_count", "heading_count", "total_chars",
+        ],
+        "directory_entry_top_terms_limit": 0,
+    }
     adaptive_medium = {
         "top_terms_limit": 6,
         "imports_limit": 12,
@@ -2641,6 +2663,8 @@ def _resolve_skeleton_density_profile(
     }
 
     if skeleton_density == "standard":
+        if large_directory or huge_directory:
+            return _apply_preset_density_profile(standard_large_directory, preset_id=preset_id, source_kind=source_kind)
         return _apply_preset_density_profile(standard, preset_id=preset_id, source_kind=source_kind)
     if skeleton_density == "compact":
         return _apply_preset_density_profile(compact, preset_id=preset_id, source_kind=source_kind)

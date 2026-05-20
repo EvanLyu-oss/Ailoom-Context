@@ -27,6 +27,7 @@
 - added executive benchmark summaries for quick test-machine handoff of readiness, regression, restore, and recommended modes
 - expanded benchmark stdout JSON with executive summary, release-readiness, and regression-trend snapshots for CI and test-machine logs
 - fixed text benchmark restore verification to use byte-exact output-file restore instead of stdout text emission, avoiding Windows newline translation false failures
+- bounded `standard` density directory skeletons for large repositories so monorepo-style inputs keep more complete structure without expanding past the source token footprint
 
 ## 0.1.0
 

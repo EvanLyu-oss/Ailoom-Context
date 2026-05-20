@@ -1,12 +1,12 @@
 # MCP-Skeleton Cross-Platform Validation Report
 
 Date: 2026-05-20
-Candidate: v0.1.1
+Candidate: v0.1.2
 Repository: https://github.com/EvanLyu-oss/MCP-Skeleton
 
 ## Summary
 
-MCP-Skeleton reached a cross-platform `ready` benchmark state after validation on macOS and Windows.
+MCP-Skeleton reached a cross-platform `ready` benchmark state after validation on macOS and Windows. The v0.1.2 candidate extends the v0.1.1 benchmark baseline with a Python-native smoke runner that now covers `25/25` checks on both platforms.
 
 The final Windows quick benchmark reported:
 
@@ -110,9 +110,34 @@ The text patch path now writes candidate snapshots as raw bytes and replays thos
 
 This confirms that text patch snapshot/replay now preserves candidate bytes exactly across platforms.
 
+## v0.1.2 Python Smoke Baseline
+
+After the text patch fix, the Python runner was expanded from `11` checks to `25` checks so Windows can validate more of the same context surface that the Bash runner covers on macOS and Unix-like environments.
+
+Newly covered paths include:
+
+- `context_compress_text_writing_outline_json_ok`
+- `context_compress_text_density_json_ok`
+- `context_compress_directory_symbols_json_ok`
+- `context_compress_directory_aggregation_json_ok`
+- `context_patch_text_json_ok`
+- `context_patch_incremental_json_ok`
+
+macOS validation for commit `a47b5fc` reported:
+
+- Python smoke runner: `25/25`
+- Bash smoke runner: `36/36`
+- dogfood self-check: `29/29` files restored with matching SHA256
+
+Windows validation for the same mainline update reported:
+
+- Python smoke runner: `25/25`
+- `failed`: `0`
+- update method: tarball download, because Git HTTPS timed out on the test machine
+
 ## Release Readiness
 
-The v0.1.1 candidate has no known blocking restore failures in the validated surfaces.
+The v0.1.2 candidate has no known blocking restore failures in the validated surfaces.
 
 Current status:
 

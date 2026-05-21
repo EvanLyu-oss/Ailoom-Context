@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- documented the final Windows v0.1.3 quick smoke and stress benchmark validation results
+
 ## 0.1.3
 
 - added a public cross-platform testing guide with quick smoke, stress benchmark, and test-machine result templates

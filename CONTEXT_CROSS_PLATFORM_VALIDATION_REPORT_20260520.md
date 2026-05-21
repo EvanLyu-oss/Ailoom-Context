@@ -33,13 +33,19 @@ The final v0.1.3 macOS candidate validation reported:
 - dogfood self-check: `30/30` files restored with matching SHA256
 - `py_compile`: pass
 
-The final post-v0.1.2 Windows validation before the v0.1.3 candidate reported:
+The final v0.1.3 Windows validation for commit `0bdb452` reported:
 
 - Python smoke runner: `25/25`
 - `context_scale_benchmark_quick_json_ok`: pass
+- stress benchmark: `70/70` cases restored
+- `stress_overall_status`: `ready`
+- `stress_scale_profile`: `stress`
+- stress monorepo fixture: `10` packages x `120` files per package
+- `stress_monorepo_max_token_ratio`: `0.0841`
+- `stress_realistic_directory_max_token_ratio`: `0.073`
+- `stress_best_large_directory_savings_percent`: `93.45`
+- `stress_best_long_text_savings_percent`: `54.51`
 - `failed`: `0`
-
-The Windows v0.1.3 final quick smoke is intentionally left for the external Windows test machine to confirm from the `v0.1.3` tag.
 
 ## Validated Fixes
 
@@ -168,6 +174,16 @@ macOS validation for commit `677d11e` reported:
 - dogfood self-check: `30/30` files restored with matching SHA256
 - `py_compile`: pass
 
+Windows validation for the v0.1.3 tag (`0bdb452`) reported:
+
+- quick smoke: `25/25`
+- stress benchmark: `70/70`
+- stress overall status: `ready`
+- stress scale profile: `stress`
+- stress monorepo fixture: `10` packages x `120` files per package
+- best large-directory savings: `93.45%`
+- best long-text savings: `54.51%`
+
 ## Release Readiness
 
 The v0.1.3 candidate has no known blocking restore failures in the validated surfaces.
@@ -181,7 +197,7 @@ Current status:
 - Large-directory token guardrails: `ok`
 - Benchmark scale profiles: `quick`, `standard`, and `stress`
 - Cross-platform testing workflow: documented in `CROSS_PLATFORM_TESTING.md`
-- Release readiness: `ready`
+- Release readiness: `ready` on macOS and Windows
 
 ## Notes
 

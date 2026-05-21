@@ -293,6 +293,7 @@ The benchmark compares:
 - optional baseline JSON comparisons for non-blocking restore, token-ratio, and compression-time regression trends
 - executive summaries for quick test-machine handoff of readiness, regression, restore, and recommended modes
 - stdout executive summaries from the benchmark command so CI and test-machine logs carry the key result without opening report files
+- stdout stress-handoff fields for scale profile, case count, monorepo fixture size, token-ratio guardrails, and best savings signals
 - named benchmark scale profiles for quick smoke coverage, standard release checks, and stress test-machine runs
 - configurable scale-health checks for restore verification, monorepo file floor, and large-directory token ratios
 - scale-health guardrails for best verified monorepo and realistic-directory size ratio versus full+standard baselines

@@ -1310,6 +1310,13 @@ def _check_scale_benchmark_quick(workspace: Path) -> None:
     assert output_md.exists()
     assert stdout_payload["status"] == "ok"
     assert stdout_payload["executive_summary"]["overall_status"] in {"ready", "watch"}
+    assert stdout_payload["executive_summary"]["scale_profile"] == "quick"
+    assert stdout_payload["executive_summary"]["case_count"] == report["release_readiness"]["case_count"]
+    assert stdout_payload["executive_summary"]["monorepo_package_count"] == 3
+    assert stdout_payload["executive_summary"]["monorepo_files_per_package"] == 60
+    assert stdout_payload["executive_summary"]["monorepo_max_token_ratio"] >= 0
+    assert stdout_payload["executive_summary"]["best_large_directory_savings_percent"] >= 30
+    assert stdout_payload["executive_summary"]["best_long_text_savings_percent"] >= 10
     assert report["status"] == "ok"
     assert report["scale_profile"] == "quick"
     assert report["iterations"] == 1

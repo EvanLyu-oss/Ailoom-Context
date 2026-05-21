@@ -983,6 +983,21 @@ def _build_executive_summary(
     }
 
 
+def _best_savings_percent(items: list[dict[str, Any]]) -> float:
+    savings = [
+        float(item.get("skeleton_token_savings_percent_vs_baseline") or 0.0)
+        for item in items
+    ]
+    return round(max(savings), 2) if savings else 0.0
+
+
+def _scale_check_observed(scale_health: dict[str, Any], name: str) -> Any:
+    for item in scale_health.get("checks") or []:
+        if item.get("name") == name:
+            return item.get("observed")
+    return 0
+
+
 def _markdown_table(headers: list[str], rows: list[list[Any]]) -> str:
     lines = ["| " + " | ".join(headers) + " |", "| " + " | ".join(["---"] * len(headers)) + " |"]
     for row in rows:
@@ -2440,6 +2455,24 @@ def main() -> int:
             regression_trends=regression_trends,
             large_directory_recommendations=large_directory_recommendations,
             long_text_recommendations=long_text_recommendations,
+        )
+        executive_summary.update(
+            {
+                "scale_profile": scale_profile,
+                "case_count": len(all_benchmark_cases),
+                "iterations": iterations,
+                "backend_count": len(backends),
+                "monorepo_package_count": monorepo_fixture.get("package_count", 0),
+                "monorepo_files_per_package": monorepo_fixture.get("files_per_package", 0),
+                "monorepo_expected_min_files": monorepo_fixture.get("expected_min_files", 0),
+                "text_target_chars": text_targets,
+                "monorepo_max_token_ratio": _scale_check_observed(scale_health, "monorepo_token_ratio"),
+                "realistic_directory_max_token_ratio": _scale_check_observed(scale_health, "realistic_directory_token_ratio"),
+                "monorepo_best_size_ratio_vs_standard": _scale_check_observed(scale_health, "monorepo_best_size_ratio_vs_standard"),
+                "realistic_directory_best_size_ratio_vs_standard": _scale_check_observed(scale_health, "realistic_directory_best_size_ratio_vs_standard"),
+                "best_large_directory_savings_percent": _best_savings_percent(large_directory_recommendations),
+                "best_long_text_savings_percent": _best_savings_percent(long_text_recommendations),
+            }
         )
 
         report = {

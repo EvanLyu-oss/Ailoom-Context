@@ -267,7 +267,7 @@ This Python runner covers key text, writing-outline, text-density, directory, bu
 
 `context compress --json` also emits `compression_warnings`, `compression_recommendations`, and `recommended_config` so users can spot token expansion or low-savings configurations and switch to a better focus/density without changing restore fidelity.
 
-Project defaults can live in `.mcp-skeleton.json` next to the input directory, or be passed explicitly with `--config`:
+Project defaults can live in `.mcp-skeleton.json`, `.mcp-skeleton.yaml`, or `.mcp-skeleton.yml` next to the input directory, or be passed explicitly with `--config`:
 
 ```json
 {
@@ -283,6 +283,8 @@ CLI flags override config values, while config and CLI `--exclude` patterns are 
 Generate or validate a config file from the CLI:
 
 ```bash
+python3 -m cli context config init --json
+python3 -m cli context init --output-file .mcp-skeleton.yaml --json
 python3 -m cli context config --output-file .mcp-skeleton.json --json
 python3 -m cli context config --validate --config .mcp-skeleton.json --json
 ```
@@ -297,6 +299,14 @@ python3 -m cli context config --recommend --input-dir . --preset codebase --outp
 
 Recommendation mode runs the same compression analysis used by `context compress`, then writes a reusable config with the suggested focus, density, and exclude patterns.
 Add `--output-report-file mcp-skeleton-onboarding.md` to write an audit-friendly Markdown report with the source summary, token estimate, warnings, and next steps.
+
+Install a lightweight git pre-commit hook for local self-use:
+
+```bash
+python3 -m cli context install-hook --json
+```
+
+The hook validates `.mcp-skeleton.json/yaml/yml` if present and runs CLI syntax checks. It does not apply patches, replay changes, or modify source files.
 
 Repo-scale benchmark:
 

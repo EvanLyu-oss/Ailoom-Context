@@ -46,6 +46,7 @@ CONTEXT_CONFIG_TEMPLATE = {
     "skeleton_density": "adaptive",
     "exclude": ["node_modules/", "dist/", "build/", "*.map"],
 }
+CONTEXT_CONFIG_FILENAMES = [".mcp-skeleton.json", ".mcp-skeleton.yaml", ".mcp-skeleton.yml"]
 
 
 def _print_json_payload(payload: Any, *, file: Any = sys.stdout) -> None:
@@ -88,6 +89,100 @@ def _write_cli_output_file(path: Path, payload: str | dict[str, Any], *, as_json
         path.write_text(str(payload), encoding="utf-8")
 
 
+def _strip_yaml_comment(line: str) -> str:
+    in_single = False
+    in_double = False
+    for index, char in enumerate(line):
+        if char == "'" and not in_double:
+            in_single = not in_single
+        elif char == '"' and not in_single:
+            in_double = not in_double
+        elif char == "#" and not in_single and not in_double:
+            return line[:index].rstrip()
+    return line.rstrip()
+
+
+def _parse_yaml_scalar(value: str) -> Any:
+    value = value.strip()
+    if not value:
+        return ""
+    if value.startswith("[") and value.endswith("]"):
+        try:
+            parsed = json.loads(value)
+            if isinstance(parsed, list):
+                return parsed
+        except json.JSONDecodeError:
+            return [item.strip().strip("'\"") for item in value[1:-1].split(",") if item.strip()]
+    if (value.startswith('"') and value.endswith('"')) or (value.startswith("'") and value.endswith("'")):
+        return value[1:-1]
+    return value
+
+
+def _parse_simple_yaml_config(text: str, *, path: Path) -> dict[str, Any]:
+    root: dict[str, Any] = {}
+    current_map = root
+    active_list_key: str | None = None
+    in_context = False
+    for raw_line in text.splitlines():
+        line = _strip_yaml_comment(raw_line)
+        if not line.strip():
+            continue
+        indent = len(line) - len(line.lstrip(" "))
+        stripped = line.strip()
+        if stripped.startswith("- "):
+            if active_list_key is None:
+                raise ValueError(f"invalid YAML config list item in {path}: {raw_line.strip()}")
+            current = current_map.setdefault(active_list_key, [])
+            if not isinstance(current, list):
+                raise ValueError(f"config field '{active_list_key}' must not mix scalar and list values")
+            current.append(_parse_yaml_scalar(stripped[2:]))
+            continue
+        if ":" not in stripped:
+            raise ValueError(f"invalid YAML config line in {path}: {raw_line.strip()}")
+        key, raw_value = stripped.split(":", 1)
+        key = key.strip()
+        if not key:
+            raise ValueError(f"invalid YAML config key in {path}: {raw_line.strip()}")
+        if indent == 0 and key != "context":
+            current_map = root
+            in_context = False
+        if key == "context" and indent == 0 and not raw_value.strip():
+            context_payload = root.setdefault("context", {})
+            if not isinstance(context_payload, dict):
+                raise ValueError(f"config field 'context' must be an object: {path}")
+            current_map = context_payload
+            in_context = True
+            active_list_key = None
+            continue
+        if indent > 0 and not in_context:
+            raise ValueError(f"nested YAML config is only supported under 'context': {path}")
+        value = raw_value.strip()
+        if value:
+            current_map[key] = _parse_yaml_scalar(value)
+            active_list_key = None
+        else:
+            current_map[key] = []
+            active_list_key = key
+    return root
+
+
+def _load_config_payload(path: Path) -> dict[str, Any]:
+    suffix = path.suffix.lower()
+    text = path.read_text(encoding="utf-8")
+    if suffix == ".json":
+        try:
+            payload = json.loads(text)
+        except json.JSONDecodeError as exc:
+            raise ValueError(f"invalid JSON config file {path}: {exc}") from exc
+    elif suffix in {".yaml", ".yml"}:
+        payload = _parse_simple_yaml_config(text, path=path)
+    else:
+        raise ValueError(f"unsupported config file extension for {path}; use .json, .yaml, or .yml")
+    if not isinstance(payload, dict):
+        raise ValueError(f"config file must contain an object: {path}")
+    return payload
+
+
 def _load_context_config(args: argparse.Namespace) -> tuple[Path | None, dict[str, Any]]:
     explicit = _opt_path(args, "config_file")
     candidates: list[Path] = []
@@ -98,21 +193,17 @@ def _load_context_config(args: argparse.Namespace) -> tuple[Path | None, dict[st
             path = _opt_path(args, attr)
             if path is None:
                 continue
-            candidates.append((path if path.is_dir() else path.parent) / ".mcp-skeleton.json")
+            config_dir = path if path.is_dir() else path.parent
+            candidates.extend(config_dir / filename for filename in CONTEXT_CONFIG_FILENAMES)
             break
-        candidates.append(Path.cwd() / ".mcp-skeleton.json")
+        candidates.extend(Path.cwd() / filename for filename in CONTEXT_CONFIG_FILENAMES)
 
     for path in candidates:
         if not path.exists():
             if explicit is not None:
                 raise FileNotFoundError(str(path))
             continue
-        try:
-            payload = json.loads(path.read_text(encoding="utf-8"))
-        except json.JSONDecodeError as exc:
-            raise ValueError(f"invalid JSON config file {path}: {exc}") from exc
-        if not isinstance(payload, dict):
-            raise ValueError(f"config file must contain a JSON object: {path}")
+        payload = _load_config_payload(path)
         context_payload = payload.get("context", payload)
         if not isinstance(context_payload, dict):
             raise ValueError(f"config field 'context' must be an object: {path}")
@@ -189,8 +280,22 @@ def _write_context_config_file(output_file: Path | None, config: dict[str, Any],
     if target.exists() and not force:
         raise ValueError(f"config file already exists; use --force to overwrite: {target}")
     target.parent.mkdir(parents=True, exist_ok=True)
-    target.write_text(json.dumps(config, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    if target.suffix.lower() in {".yaml", ".yml"}:
+        target.write_text(_render_context_config_yaml(config), encoding="utf-8")
+    else:
+        target.write_text(json.dumps(config, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     return str(target), True
+
+
+def _render_context_config_yaml(config: dict[str, Any]) -> str:
+    lines: list[str] = []
+    for key, value in config.items():
+        if isinstance(value, list):
+            lines.append(f"{key}:")
+            lines.extend(f"  - {item}" for item in value)
+        else:
+            lines.append(f"{key}: {value}")
+    return "\n".join(lines) + "\n"
 
 
 def _write_text_report_file(output_file: Path | None, report_text: str, *, force: bool) -> tuple[str, bool]:
@@ -265,6 +370,61 @@ def _render_context_config_recommend_report(payload: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
+def _build_context_install_hook_payload(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
+    hook_name = str(getattr(args, "hook_name", None) or "pre-commit").strip()
+    if hook_name != "pre-commit":
+        raise ValueError("only pre-commit hook installation is supported")
+    repo_root = Path.cwd().resolve()
+    git_dir = repo_root / ".git"
+    if not git_dir.exists() or not git_dir.is_dir():
+        raise ValueError("context install-hook must be run from a git repository root")
+    hook_path = git_dir / "hooks" / hook_name
+    hook_body = """#!/usr/bin/env sh
+set -eu
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+PYTHON_BIN="${PYTHON:-}"
+if [ -z "$PYTHON_BIN" ]; then
+  if command -v python3 >/dev/null 2>&1; then
+    PYTHON_BIN="python3"
+  else
+    PYTHON_BIN="python"
+  fi
+fi
+
+cd "$REPO_ROOT"
+
+for config_file in .mcp-skeleton.json .mcp-skeleton.yaml .mcp-skeleton.yml; do
+  if [ -f "$config_file" ]; then
+    "$PYTHON_BIN" -m cli context config --validate --config "$config_file" --json >/dev/null
+  fi
+done
+
+if [ -f cli/ail_cli.py ] && [ -f cli/context_compression.py ]; then
+  "$PYTHON_BIN" -m py_compile cli/ail_cli.py cli/context_compression.py
+fi
+"""
+    payload = {
+        "status": "ok",
+        "entrypoint": "context-install-hook",
+        "hook": hook_name,
+        "hook_path": str(hook_path),
+        "installed": False,
+        "dry_run": bool(getattr(args, "dry_run", False)),
+        "checks": ["config_validate_if_present", "py_compile_cli_if_present"],
+    }
+    if payload["dry_run"]:
+        payload["hook_preview"] = hook_body
+        return payload, EXIT_OK
+    if hook_path.exists() and not bool(getattr(args, "force", False)):
+        raise ValueError(f"hook already exists; use --force to overwrite: {hook_path}")
+    hook_path.parent.mkdir(parents=True, exist_ok=True)
+    hook_path.write_text(hook_body, encoding="utf-8")
+    hook_path.chmod(0o755)
+    payload["installed"] = True
+    return payload, EXIT_OK
+
+
 def _build_context_config_payload(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
     supported = {
         "presets": sorted(CONTEXT_PRESETS.keys()),
@@ -274,6 +434,9 @@ def _build_context_config_payload(args: argparse.Namespace) -> tuple[dict[str, A
     }
     output_file = _opt_path(args, "output_file")
     force = bool(getattr(args, "force", False))
+    config_action = str(getattr(args, "config_action", "") or "").strip()
+    if config_action == "init" and output_file is None:
+        output_file = Path(".mcp-skeleton.json")
     if bool(getattr(args, "validate", False)):
         config_file, config_values, context_defaults = _resolve_context_defaults(args)
         if config_file is None:
@@ -391,15 +554,21 @@ def main(argv: list[str] | None = None) -> int:
 
 def cmd_context(args: argparse.Namespace) -> int:
     command = getattr(args, "context_command", None)
-    supported = {"compress", "restore", "inspect", "apply-check", "preset", "config", "bundle", "patch", "patch-apply"}
+    supported = {"compress", "restore", "inspect", "apply-check", "preset", "config", "init", "install-hook", "bundle", "patch", "patch-apply"}
     if command not in supported:
-        return _emit_command_error(args, EXIT_USAGE, "invalid_usage", "supported context subcommands: compress, restore, inspect, apply-check, preset, config, bundle, patch, patch-apply")
+        return _emit_command_error(args, EXIT_USAGE, "invalid_usage", "supported context subcommands: compress, restore, inspect, apply-check, preset, config, init, install-hook, bundle, patch, patch-apply")
 
     if command == "preset":
         payload = build_context_preset_payload(getattr(args, "preset_id", None))
         return _emit_simple_result(args, payload)
 
-    if command == "config":
+    if command == "install-hook":
+        payload, exit_code = _build_context_install_hook_payload(args)
+        return _emit_simple_result(args, payload, text=str(payload.get("hook_preview", _render_simple_summary(payload, ["hook", "hook_path", "installed", "dry_run"]))), exit_code=exit_code)
+
+    if command in {"config", "init"}:
+        if command == "init":
+            setattr(args, "config_action", "init")
         payload, exit_code = _build_context_config_payload(args)
         if _json_enabled(args):
             _print_json_payload(payload)
@@ -693,7 +862,7 @@ def _build_parser() -> argparse.ArgumentParser:
     compress.add_argument("--text-file", dest="text_file")
     compress.add_argument("--input-file", dest="input_file")
     compress.add_argument("--input-dir", dest="input_dir")
-    compress.add_argument("--config", dest="config_file", help="Read context defaults from a .mcp-skeleton.json file")
+    compress.add_argument("--config", dest="config_file", help="Read context defaults from a .mcp-skeleton.json/yaml file")
     compress.add_argument("--preset", dest="preset_id")
     compress.add_argument("--focus-mode", dest="focus_mode", choices=["full", "tree", "imports", "symbols", "writing-outline"])
     compress.add_argument("--skeleton-density", dest="skeleton_density", choices=["adaptive", "standard", "compact"])
@@ -736,31 +905,43 @@ def _build_parser() -> argparse.ArgumentParser:
     preset.add_argument("preset_id", nargs="?", default="generic")
     preset.add_argument("--json", action="store_true")
 
-    config = context_subparsers.add_parser("config", help="Emit or validate a .mcp-skeleton.json project defaults file")
-    config.add_argument("--config", dest="config_file", help="Config file to validate; defaults to discovered .mcp-skeleton.json when --validate is used")
+    config = context_subparsers.add_parser("config", help="Emit, initialize, recommend, or validate a .mcp-skeleton.json/yaml project defaults file")
+    config.add_argument("config_action", nargs="?", choices=["init"], help="Use `init` to write .mcp-skeleton.json by default")
+    config.add_argument("--config", dest="config_file", help="Config file to validate; defaults to discovered .mcp-skeleton.json/yaml when --validate is used")
     config.add_argument("--validate", action="store_true", help="Validate an existing config file instead of emitting a template")
     config.add_argument("--recommend", action="store_true", help="Analyze an input and emit recommended project defaults")
     config.add_argument("--text", dest="context_text")
-    config.add_argument("--input-file", dest="input_file", help="Discover .mcp-skeleton.json next to this file when validating")
-    config.add_argument("--input-dir", dest="input_dir", help="Discover .mcp-skeleton.json inside this directory when validating")
-    config.add_argument("--text-file", dest="text_file", help="Discover .mcp-skeleton.json next to this text file when validating")
+    config.add_argument("--input-file", dest="input_file", help="Discover .mcp-skeleton config next to this file when validating")
+    config.add_argument("--input-dir", dest="input_dir", help="Discover .mcp-skeleton config inside this directory when validating")
+    config.add_argument("--text-file", dest="text_file", help="Discover .mcp-skeleton config next to this text file when validating")
     config.add_argument("--preset", dest="preset_id")
     config.add_argument("--focus-mode", dest="focus_mode", choices=["full", "tree", "imports", "symbols", "writing-outline"])
     config.add_argument("--skeleton-density", dest="skeleton_density", choices=["adaptive", "standard", "compact"])
     config.add_argument("--exclude", dest="exclude_patterns", action="append", help="Exclude a relative path or glob from recommendation analysis; can be repeated")
     config.add_argument("--tokenizer-backend", dest="tokenizer_backend", default="auto", choices=["auto", "heuristic", "tiktoken"])
     config.add_argument("--tokenizer-model", dest="tokenizer_model")
-    config.add_argument("--output-file", dest="output_file", help="Write the default template to this path")
+    config.add_argument("--output-file", dest="output_file", help="Write the default template to this path; .yaml/.yml writes YAML")
     config.add_argument("--output-report-file", dest="output_report_file", help="Write a Markdown recommendation report when using --recommend")
     config.add_argument("--force", action="store_true", help="Overwrite --output-file if it already exists")
     config.add_argument("--json", action="store_true")
+
+    init = context_subparsers.add_parser("init", help="Initialize a .mcp-skeleton.json/yaml project config")
+    init.add_argument("--output-file", dest="output_file", default=".mcp-skeleton.json", help="Config path to write; .yaml/.yml writes YAML")
+    init.add_argument("--force", action="store_true", help="Overwrite --output-file if it already exists")
+    init.add_argument("--json", action="store_true")
+
+    install_hook = context_subparsers.add_parser("install-hook", help="Install a lightweight git pre-commit hook for config validation and CLI syntax checks")
+    install_hook.add_argument("--hook", dest="hook_name", default="pre-commit", choices=["pre-commit"])
+    install_hook.add_argument("--dry-run", action="store_true", help="Print the hook that would be installed without writing it")
+    install_hook.add_argument("--force", action="store_true", help="Overwrite an existing hook")
+    install_hook.add_argument("--json", action="store_true")
 
     bundle = context_subparsers.add_parser("bundle", help="Export a full context bundle with compression, inspect, and optional apply-check artifacts")
     bundle.add_argument("--text", dest="context_text")
     bundle.add_argument("--text-file", dest="text_file")
     bundle.add_argument("--input-file", dest="input_file")
     bundle.add_argument("--input-dir", dest="input_dir")
-    bundle.add_argument("--config", dest="config_file", help="Read context defaults from a .mcp-skeleton.json file")
+    bundle.add_argument("--config", dest="config_file", help="Read context defaults from a .mcp-skeleton.json/yaml file")
     bundle.add_argument("--preset", dest="preset_id")
     bundle.add_argument("--focus-mode", dest="focus_mode", choices=["full", "tree", "imports", "symbols", "writing-outline"])
     bundle.add_argument("--skeleton-density", dest="skeleton_density", choices=["adaptive", "standard", "compact"])

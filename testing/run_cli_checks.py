@@ -354,6 +354,34 @@ def _check_context_config_json(workspace: Path) -> None:
     assert bundle["compression"]["config_file"].endswith(".mcp-skeleton.json")
 
 
+def _check_context_config_yaml_json(workspace: Path) -> None:
+    project = workspace / "configured_yaml_project"
+    (project / "src").mkdir(parents=True)
+    (project / "src" / "app.py").write_text("import os\n\nVALUE = os.getcwd()\n", encoding="utf-8")
+    (project / "skip.log").write_text("ignore me\n", encoding="utf-8")
+    (project / ".mcp-skeleton.yaml").write_text(
+        "context:\n"
+        "  preset: codebase\n"
+        "  focus_mode: symbols\n"
+        "  skeleton_density: compact\n"
+        "  exclude:\n"
+        "    - skip.log\n",
+        encoding="utf-8",
+    )
+    payload = _run_cli_json(["context", "compress", "--input-dir", str(project), "--json"])
+    assert payload["status"] == "ok"
+    assert payload["preset_id"] == "codebase"
+    assert payload["focus_mode"] == "symbols"
+    assert payload["skeleton_density"] == "compact"
+    assert payload["config_file"].endswith(".mcp-skeleton.yaml")
+    entries = {item["relative_path"] for item in payload["source_summary"]["entries"]}
+    assert "skip.log" not in entries
+
+    validated = _run_cli_json(["context", "config", "--validate", "--config", str(project / ".mcp-skeleton.yaml"), "--json"])
+    assert validated["status"] == "ok"
+    assert validated["resolved_defaults"]["focus_mode"] == "symbols"
+
+
 def _check_context_config_template_and_validation(workspace: Path) -> None:
     project = workspace / "config_command_project"
     project.mkdir()
@@ -380,6 +408,54 @@ def _check_context_config_template_and_validation(workspace: Path) -> None:
     assert invalid["status"] == "error"
     assert invalid["error"]["code"] == "invalid_usage"
     assert "focus_mode" in invalid["error"]["message"]
+
+
+def _check_context_config_init_json(workspace: Path) -> None:
+    project = workspace / "config_init_project"
+    project.mkdir()
+    json_config = project / ".mcp-skeleton.json"
+    yaml_config = project / ".mcp-skeleton.yaml"
+
+    initialized = _run_cli_json(["context", "config", "init", "--output-file", str(json_config), "--json"])
+    assert initialized["status"] == "ok"
+    assert initialized["mode"] == "template"
+    assert initialized["written"] is True
+    assert json_config.exists()
+
+    alias = _run_cli_json(["context", "init", "--output-file", str(yaml_config), "--json"])
+    assert alias["status"] == "ok"
+    assert alias["written"] is True
+    assert yaml_config.exists()
+    yaml_text = yaml_config.read_text(encoding="utf-8")
+    assert "preset: codebase" in yaml_text
+    assert "exclude:" in yaml_text
+    validated = _run_cli_json(["context", "config", "--validate", "--config", str(yaml_config), "--json"])
+    assert validated["resolved_defaults"]["preset_id"] == "codebase"
+
+
+def _check_context_install_hook_json(workspace: Path) -> None:
+    project = workspace / "hook_project"
+    project.mkdir()
+    _git(["init", "-q"], cwd=project)
+    (project / "cli").mkdir()
+    (project / "cli" / "ail_cli.py").write_text("VALUE = 1\n", encoding="utf-8")
+    (project / "cli" / "context_compression.py").write_text("VALUE = 2\n", encoding="utf-8")
+    (project / ".mcp-skeleton.yml").write_text("preset: codebase\nfocus_mode: imports\n", encoding="utf-8")
+
+    preview = _run_cli_json(["context", "install-hook", "--dry-run", "--json"], cwd=project)
+    assert preview["status"] == "ok"
+    assert preview["dry_run"] is True
+    assert preview["installed"] is False
+    assert "config_validate_if_present" in preview["checks"]
+
+    installed = _run_cli_json(["context", "install-hook", "--json"], cwd=project)
+    assert installed["status"] == "ok"
+    assert installed["installed"] is True
+    hook_path = project / ".git" / "hooks" / "pre-commit"
+    assert hook_path.exists()
+    hook_text = hook_path.read_text(encoding="utf-8")
+    assert ".mcp-skeleton.yaml" in hook_text
+    assert "py_compile" in hook_text
 
 
 def _check_context_config_recommend_json(workspace: Path) -> None:
@@ -1500,7 +1576,10 @@ CHECKS: list[tuple[str, Callable[[Path], None]]] = [
     ("context_non_utf8_text_restore_json_ok", _check_non_utf8_text_restore),
     ("context_restore_directory_json_ok", _check_directory_restore),
     ("context_config_json_ok", _check_context_config_json),
+    ("context_config_yaml_json_ok", _check_context_config_yaml_json),
     ("context_config_template_validation_json_ok", _check_context_config_template_and_validation),
+    ("context_config_init_json_ok", _check_context_config_init_json),
+    ("context_install_hook_json_ok", _check_context_install_hook_json),
     ("context_config_recommend_json_ok", _check_context_config_recommend_json),
     ("context_bundle_json_ok", _check_bundle_outputs),
     ("context_compress_incremental_clean_diagnostics_json_ok", _check_clean_incremental_diagnostics),

@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- added source scale profiling and large-directory filter/focus recommendations to `context compress`
 - added `.mcp-skeleton.yaml` and `.mcp-skeleton.yml` config discovery and validation
 - added `context config init`, `context init`, and YAML config template output by file suffix
 - added `context install-hook` for a lightweight pre-commit config validation and CLI syntax hook

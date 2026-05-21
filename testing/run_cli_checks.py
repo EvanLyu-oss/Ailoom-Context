@@ -881,6 +881,10 @@ def _check_directory_aggregation(workspace: Path) -> None:
     assert adaptive["status"] == "ok"
     assert adaptive["source_summary"]["directory_groups"]
     assert adaptive["source_summary"]["extension_mix"]
+    assert adaptive["source_scale_profile"]["scale_class"] == "large"
+    assert adaptive["source_scale_profile"]["total_files"] >= 120
+    assert adaptive["recommended_config"]["exclude"]
+    assert any(item["code"] == "no_directory_filters" for item in adaptive["compression_warnings"])
     assert "DIRECTORY_GROUPS:" in adaptive["skeleton_text"]
     assert "HOT_SUBTREES:" in adaptive["skeleton_text"]
     assert "COLLAPSED_SUBTREES:" in adaptive["skeleton_text"]

@@ -285,6 +285,7 @@ def build_context_compress_payload(
         "compression_warnings": advice["warnings"],
         "compression_recommendations": advice["recommendations"],
         "recommended_config": advice["recommended_config"],
+        "source_scale_profile": advice["source_scale_profile"],
         "next_steps": [
             "feed skeleton_text to the target AI or IDE instead of the original raw context",
             "keep the restore package together with the skeleton so the original source can be reconstructed exactly",
@@ -2236,6 +2237,11 @@ def _build_context_compress_summary_text(payload: dict[str, Any]) -> str:
             lines.append(f"{key}: {metrics.get(key)}")
     warnings = list(payload.get("compression_warnings") or [])
     recommendations = list(payload.get("compression_recommendations") or [])
+    scale_profile = payload.get("source_scale_profile") or {}
+    if scale_profile:
+        lines.append(f"source_scale_class: {scale_profile.get('scale_class', '')}")
+        if scale_profile.get("total_files"):
+            lines.append(f"source_scale_total_files: {scale_profile.get('total_files')}")
     if warnings:
         lines.append(f"compression_warning_count: {len(warnings)}")
         lines.append(f"first_compression_warning: {warnings[0].get('message', '')}")
@@ -3707,6 +3713,11 @@ def _build_compression_advice(
     skeleton_tokens = int(metrics.get("estimated_token_count_skeleton") or 0)
     tokens_saved = int(metrics.get("estimated_tokens_saved") or 0)
     savings_percent = round((tokens_saved / source_tokens) * 100, 2) if source_tokens else 0.0
+    total_files = int(source_summary.get("total_files", 0) or 0)
+    total_chars = int(source_summary.get("total_chars", 0) or source_summary.get("total_bytes", 0) or 0)
+    filter_patterns = [str(item) for item in (source_summary.get("filter_patterns") or []) if str(item).strip()]
+    preset_excludes = list((CONTEXT_PRESETS.get(preset_id) or CONTEXT_PRESETS["generic"]).get("suggested_excludes") or [])
+    scale_profile = _build_source_scale_profile(source_summary, metrics=metrics)
     warnings: list[dict[str, Any]] = []
     recommendations: list[dict[str, Any]] = []
 
@@ -3733,10 +3744,31 @@ def _build_compression_advice(
     suggested_focus = focus_mode
     suggested_density = skeleton_density
     if source_kind == "directory":
+        if scale_profile["scale_class"] in {"large", "huge"} and focus_mode == "full":
+            warnings.append(
+                {
+                    "code": "large_directory_full_focus",
+                    "severity": "notice",
+                    "message": f"{scale_profile['scale_class']} directory detected; imports/tree focus usually gives stronger AI-facing token savings",
+                    "total_files": total_files,
+                    "total_chars": total_chars,
+                }
+            )
+        if scale_profile["scale_class"] in {"medium", "large", "huge"} and not filter_patterns:
+            warnings.append(
+                {
+                    "code": "no_directory_filters",
+                    "severity": "notice",
+                    "message": "no directory filters are active; consider excluding dependency, build, cache, and generated paths",
+                    "suggested_excludes": preset_excludes,
+                }
+            )
         if focus_mode == "full":
             suggested_focus = "imports" if preset_id == "codebase" else "tree"
         if skeleton_density == "standard":
             suggested_density = "adaptive"
+        if scale_profile["scale_class"] == "huge":
+            suggested_density = "compact"
     elif source_kind in {"text", "markdown"}:
         if focus_mode == "full" and token_ratio >= 0.75:
             suggested_focus = "writing-outline"
@@ -3756,6 +3788,7 @@ def _build_compression_advice(
                 "suggested_skeleton_density": suggested_density,
                 "estimated_token_ratio": token_ratio,
                 "estimated_savings_percent": savings_percent,
+                "source_scale_class": scale_profile["scale_class"],
             }
         )
     elif savings_percent >= 30:
@@ -3767,6 +3800,7 @@ def _build_compression_advice(
                 "current_skeleton_density": skeleton_density,
                 "estimated_token_ratio": token_ratio,
                 "estimated_savings_percent": savings_percent,
+                "source_scale_class": scale_profile["scale_class"],
             }
         )
 
@@ -3774,12 +3808,52 @@ def _build_compression_advice(
         "preset_id": preset_id,
         "focus_mode": suggested_focus,
         "skeleton_density": suggested_density,
+        "exclude": preset_excludes if source_kind == "directory" else [],
         "reason": recommendations[0]["message"] if recommendations else "",
     }
     return {
         "warnings": warnings,
         "recommendations": recommendations,
         "recommended_config": recommended_config,
+        "source_scale_profile": scale_profile,
+    }
+
+
+def _build_source_scale_profile(source_summary: dict[str, Any], *, metrics: dict[str, Any]) -> dict[str, Any]:
+    source_kind = str(source_summary.get("source_kind") or "")
+    total_files = int(source_summary.get("total_files", 0) or 0)
+    total_chars = int(source_summary.get("total_chars", 0) or source_summary.get("total_bytes", 0) or 0)
+    paragraph_count = int(source_summary.get("paragraph_count", 0) or 0)
+    estimated_source_tokens = int(metrics.get("estimated_token_count_source") or 0)
+    if source_kind == "directory":
+        if total_files >= 400 or total_chars >= 1_000_000:
+            scale_class = "huge"
+        elif total_files >= 120 or total_chars >= 250_000:
+            scale_class = "large"
+        elif total_files >= 40 or total_chars >= 100_000:
+            scale_class = "medium"
+        else:
+            scale_class = "small"
+    elif source_kind in {"text", "markdown"}:
+        if total_chars >= 250_000 or paragraph_count >= 240:
+            scale_class = "huge"
+        elif total_chars >= 60_000 or paragraph_count >= 80:
+            scale_class = "large"
+        elif total_chars >= 20_000 or paragraph_count >= 30:
+            scale_class = "medium"
+        else:
+            scale_class = "small"
+    else:
+        scale_class = "small"
+    return {
+        "source_kind": source_kind,
+        "scale_class": scale_class,
+        "total_files": total_files,
+        "total_chars": total_chars,
+        "paragraph_count": paragraph_count,
+        "estimated_source_tokens": estimated_source_tokens,
+        "active_filter_count": len(source_summary.get("filter_patterns") or []),
+        "filtered_path_count": int(source_summary.get("filtered_path_count", 0) or 0),
     }
 
 

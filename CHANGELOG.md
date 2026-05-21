@@ -2,9 +2,9 @@
 
 ## Unreleased
 
-## 0.1.4 Candidate
+## 0.1.4
 
-- documented the macOS v0.1.4 candidate baseline and Windows validation commands
+- validated v0.1.4 on macOS and Windows, including Python smoke, dogfood self-check, and quick benchmark release readiness
 - documented the post-v0.1.3 macOS and Windows dogfood/config-onboarding validation baseline
 - added a cross-platform Python dogfood self-check that validates config recommendation, onboarding report, bundle, inspect, restore, and SHA256 parity
 - added optional Markdown onboarding reports for `context config --recommend`

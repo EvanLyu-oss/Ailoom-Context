@@ -234,11 +234,11 @@ Windows validation for commit `3f9c638` reported:
 
 The one-file count difference is expected for this snapshot because the macOS local validation included the newly added Python dogfood script in the source tree before the same update was validated from the Windows tarball context.
 
-## v0.1.4 Candidate macOS Baseline
+## v0.1.4 Release Baseline
 
-The v0.1.4 candidate collects the post-v0.1.3 onboarding and dogfood improvements into a release-candidate changelog section.
+v0.1.4 collects the post-v0.1.3 onboarding and dogfood improvements into a release baseline.
 
-macOS validation for commit `8981197` plus the v0.1.4 candidate documentation update reported:
+macOS validation for commit `4175af0` reported:
 
 - `py_compile`: pass for CLI, compression, benchmark, Python smoke, and Python dogfood entrypoints
 - `git diff --check`: pass
@@ -255,14 +255,23 @@ macOS validation for commit `8981197` plus the v0.1.4 candidate documentation up
 - `best_large_directory_savings_percent`: `92.82`
 - `best_long_text_savings_percent`: `54.41`
 
-Windows validation for the v0.1.4 candidate should run:
+Windows validation for commit `4175af0` reported:
 
-```powershell
-python -m py_compile cli/ail_cli.py cli/context_compression.py testing/context_scale_benchmark.py testing/run_cli_checks.py testing/dogfood_self_check.py
-python testing/run_cli_checks.py
-python testing/dogfood_self_check.py
-python testing/context_scale_benchmark.py --quick --output-json testing/results/windows_release_quick_benchmark.json --output-md testing/results/windows_release_quick_benchmark.md
-```
+- `py_compile`: pass with exit code `0`
+- Python smoke runner: `28/28`
+- Python dogfood self-check: `30/30` files restored with matching SHA256
+- `dogfood_self_check.status`: `ok`
+- `restore_status`: `ok`
+- `missing_count`: `0`
+- `mismatched_count`: `0`
+- quick benchmark: `ready`
+- quick benchmark restore verification: `62/62`
+- quick benchmark scale health: `ok`
+- quick benchmark release readiness: `ready`
+- `monorepo_max_token_ratio`: `0.5313`
+- `realistic_directory_max_token_ratio`: `0.0718`
+- `best_large_directory_savings_percent`: `92.62`
+- `best_long_text_savings_percent`: `54.53`
 
 ## Release Readiness
 

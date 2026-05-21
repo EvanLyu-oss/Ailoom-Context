@@ -204,10 +204,11 @@ Incremental restore intentionally reconstructs only that git change surface plus
 Safe dogfood workflow for active development:
 
 ```bash
+python3 testing/dogfood_self_check.py
 bash testing/dogfood_self_check.sh
 ```
 
-The dogfood self-check compresses this repository, inspects the bundle, restores into `testing/results/dogfood-self-check/restore`, and verifies restored file hashes against the included source files. Keep dogfood restore and replay outputs outside the source tree or under ignored result directories. Prefer `patch-apply --dry-run --write-dry-run-report ...` until the replay surface has been inspected.
+The dogfood self-check recommends an ignored `.mcp-skeleton.json`, writes an onboarding report, validates the config, compresses this repository, inspects the bundle, restores into `testing/results/dogfood-self-check/restore`, and verifies restored file hashes against the included source files. Keep dogfood restore and replay outputs outside the source tree or under ignored result directories. Prefer `patch-apply --dry-run --write-dry-run-report ...` until the replay surface has been inspected.
 
 Validate one edited incremental surface:
 

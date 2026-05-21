@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- added a cross-platform Python dogfood self-check that validates config recommendation, onboarding report, bundle, inspect, restore, and SHA256 parity
 - added optional Markdown onboarding reports for `context config --recommend`
 - added `context config --recommend` to generate project defaults from real compression analysis
 - added `context config` to emit and validate `.mcp-skeleton.json` templates with structured JSON output

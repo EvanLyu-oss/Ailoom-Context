@@ -34,9 +34,20 @@ Run from the repository root:
 pwd
 git status --short --branch
 git log --oneline --decorate -n 10
-python3 -m py_compile cli/ail_cli.py cli/context_compression.py testing/context_scale_benchmark.py
+python3 -m py_compile cli/ail_cli.py cli/context_compression.py testing/context_scale_benchmark.py testing/run_cli_checks.py testing/dogfood_self_check.py
+python3 testing/run_cli_checks.py
+python3 testing/dogfood_self_check.py
 bash testing/run_cli_checks.sh
-python3 testing/context_scale_benchmark.py --quick
+python3 testing/context_scale_benchmark.py --quick --output-json testing/results/release_quick_benchmark.json --output-md testing/results/release_quick_benchmark.md
+```
+
+On Windows or other environments without Bash, run:
+
+```powershell
+python -m py_compile cli/ail_cli.py cli/context_compression.py testing/context_scale_benchmark.py testing/run_cli_checks.py testing/dogfood_self_check.py
+python testing/run_cli_checks.py
+python testing/dogfood_self_check.py
+python testing/context_scale_benchmark.py --quick --output-json testing/results/windows_release_quick_benchmark.json --output-md testing/results/windows_release_quick_benchmark.md
 ```
 
 Optional fuller benchmark:
@@ -51,8 +62,11 @@ python3 testing/context_scale_benchmark.py \
 
 Expected minimum result:
 
-- `run_cli_checks.sh` reports `status: ok`
-- smoke coverage reports `30/30` passing or better
+- `testing/run_cli_checks.py` reports `status: ok`
+- Python smoke coverage reports `28/28` passing or better
+- `testing/dogfood_self_check.py` reports `status: ok`, `missing_count: 0`, and `mismatched_count: 0`
+- `run_cli_checks.sh` reports `status: ok` on Unix-like environments
+- Bash smoke coverage reports `36/36` passing or better on Unix-like environments
 - realistic directory and realistic text benchmark cases are present
 - restore verification is true for directory, text, incremental, and realistic benchmark cases
 
@@ -65,6 +79,7 @@ Confirm these files match the release boundary:
 - `CONTEXT_COMPRESSION_PRINCIPLES_20260507.md`: project principles still align with the public positioning
 - `CONTEXT_COMPRESSION_SPEC_20260428.md`: compression and restore contract remains accurate
 - `RELEASE_CHECKLIST_0_1.md`: this checklist is current
+- `CONTEXT_CROSS_PLATFORM_VALIDATION_REPORT_20260520.md`: latest macOS and Windows validation snapshots are recorded
 
 ## Artifact Review
 
@@ -82,23 +97,23 @@ Review changes:
 
 ```bash
 git diff --stat
-git diff -- README.md CHANGELOG.md RELEASE_CHECKLIST_0_1.md
+git diff -- README.md CHANGELOG.md RELEASE_CHECKLIST_0_1.md CONTEXT_CROSS_PLATFORM_VALIDATION_REPORT_20260520.md
 ```
 
 Suggested commit shape:
 
 ```bash
-git add README.md CHANGELOG.md RELEASE_CHECKLIST_0_1.md cli/ail_cli.py cli/context_compression.py testing/cli_smoke.sh testing/context_scale_benchmark.py
-git commit -m "stabilize context v0.1 release surface"
+git add README.md CHANGELOG.md RELEASE_CHECKLIST_0_1.md CONTEXT_CROSS_PLATFORM_VALIDATION_REPORT_20260520.md cli/ail_cli.py cli/context_compression.py testing/run_cli_checks.py testing/dogfood_self_check.py testing/context_scale_benchmark.py
+git commit -m "prepare v0.1.x release candidate"
 ```
 
-Suggested tag:
+Suggested tag pattern:
 
 ```bash
-git tag -a v0.1.0 -m "MCP-Skeleton v0.1.0"
+git tag -a v0.1.x -m "MCP-Skeleton v0.1.x"
 ```
 
-Only tag after the working tree contains exactly the intended release changes.
+Only tag after the working tree contains exactly the intended release changes and both macOS and Windows validation results have been recorded.
 
 ## Release Notes Summary
 
@@ -112,4 +127,3 @@ Known experimental areas:
 - apply-check scoring thresholds
 - exact skeleton text layout
 - cross-machine benchmark timing
-

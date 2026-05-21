@@ -353,6 +353,34 @@ def _check_context_config_json(workspace: Path) -> None:
     assert bundle["compression"]["config_file"].endswith(".mcp-skeleton.json")
 
 
+def _check_context_config_template_and_validation(workspace: Path) -> None:
+    project = workspace / "config_command_project"
+    project.mkdir()
+    config_file = project / ".mcp-skeleton.json"
+
+    template = _run_cli_json(["context", "config", "--output-file", str(config_file), "--json"])
+    assert template["status"] == "ok"
+    assert template["mode"] == "template"
+    assert template["written"] is True
+    assert template["config_file"].endswith(".mcp-skeleton.json")
+    assert config_file.exists()
+
+    validated = _run_cli_json(["context", "config", "--validate", "--config", str(config_file), "--json"])
+    assert validated["status"] == "ok"
+    assert validated["mode"] == "validate"
+    assert validated["resolved_defaults"]["preset_id"] == "codebase"
+    assert validated["resolved_defaults"]["focus_mode"] == "imports"
+    assert validated["resolved_defaults"]["skeleton_density"] == "adaptive"
+    assert "node_modules/" in validated["resolved_defaults"]["exclude_patterns"]
+
+    invalid_config = project / "invalid.json"
+    invalid_config.write_text(json.dumps({"focus_mode": "everything"}), encoding="utf-8")
+    invalid = _run_cli_json(["context", "config", "--validate", "--config", str(invalid_config), "--json"], expect=2)
+    assert invalid["status"] == "error"
+    assert invalid["error"]["code"] == "invalid_usage"
+    assert "focus_mode" in invalid["error"]["message"]
+
+
 def _check_bundle_outputs(workspace: Path) -> None:
     project = _build_simple_project(workspace, name="bundle_project", with_git=True)
     (project / "src" / "app.py").write_text(
@@ -1416,6 +1444,7 @@ CHECKS: list[tuple[str, Callable[[Path], None]]] = [
     ("context_non_utf8_text_restore_json_ok", _check_non_utf8_text_restore),
     ("context_restore_directory_json_ok", _check_directory_restore),
     ("context_config_json_ok", _check_context_config_json),
+    ("context_config_template_validation_json_ok", _check_context_config_template_and_validation),
     ("context_bundle_json_ok", _check_bundle_outputs),
     ("context_compress_incremental_clean_diagnostics_json_ok", _check_clean_incremental_diagnostics),
     ("context_apply_check_drift_json_ok", _check_apply_check_drift),

@@ -7,6 +7,8 @@ from pathlib import Path
 from typing import Any
 
 from .context_compression import (
+    CONTEXT_FOCUS_MODES,
+    CONTEXT_PRESETS,
     apply_context_patch_payload,
     build_context_apply_check_payload,
     build_context_bundle_payload,
@@ -19,12 +21,31 @@ from .context_compression import (
     inspect_context_package,
     load_context_package,
     restore_context_from_package,
+    resolve_context_preset,
+    SKELETON_DENSITY_MODES,
 )
 
 EXIT_OK = 0
 EXIT_GENERAL_ERROR = 1
 EXIT_USAGE = 2
 EXIT_VALIDATION = 3
+
+CONTEXT_CONFIG_KEYS = [
+    "preset",
+    "preset_id",
+    "focus_mode",
+    "skeleton_density",
+    "density",
+    "exclude",
+    "excludes",
+    "exclude_patterns",
+]
+CONTEXT_CONFIG_TEMPLATE = {
+    "preset": "codebase",
+    "focus_mode": "imports",
+    "skeleton_density": "adaptive",
+    "exclude": ["node_modules/", "dist/", "build/", "*.map"],
+}
 
 
 def _print_json_payload(payload: Any, *, file: Any = sys.stdout) -> None:
@@ -124,22 +145,92 @@ def _config_list(config: dict[str, Any], *keys: str) -> list[str]:
     return []
 
 
+def _normalize_config_choice(value: str | None, *, field: str, supported: set[str]) -> str | None:
+    if value is None:
+        return None
+    normalized = value.strip().lower()
+    if normalized not in supported:
+        supported_text = ", ".join(sorted(supported))
+        raise ValueError(f"config field '{field}' must be one of: {supported_text}")
+    return normalized
+
+
 def _resolve_context_defaults(args: argparse.Namespace) -> tuple[Path | None, dict[str, Any], dict[str, Any]]:
     config_file, config = _load_context_config(args)
     cli_excludes = list(getattr(args, "exclude_patterns", None) or [])
     config_excludes = _config_list(config, "exclude", "excludes", "exclude_patterns")
+    preset_id = getattr(args, "preset_id", None) or _config_string(config, "preset", "preset_id")
+    if preset_id is not None:
+        preset_id = resolve_context_preset(preset_id)["preset_id"]
+    focus_mode = getattr(args, "focus_mode", None) or _config_string(config, "focus_mode")
+    focus_mode = _normalize_config_choice(focus_mode, field="focus_mode", supported=CONTEXT_FOCUS_MODES)
+    skeleton_density = getattr(args, "skeleton_density", None) or _config_string(config, "skeleton_density", "density")
+    skeleton_density = _normalize_config_choice(skeleton_density, field="skeleton_density", supported=SKELETON_DENSITY_MODES)
     values = {
-        "preset_id": getattr(args, "preset_id", None) or _config_string(config, "preset", "preset_id"),
-        "focus_mode": getattr(args, "focus_mode", None) or _config_string(config, "focus_mode"),
-        "skeleton_density": getattr(args, "skeleton_density", None) or _config_string(config, "skeleton_density", "density"),
+        "preset_id": preset_id,
+        "focus_mode": focus_mode,
+        "skeleton_density": skeleton_density,
         "exclude_patterns": [*config_excludes, *cli_excludes],
     }
     config_values = {
         key: config[key]
-        for key in ["preset", "preset_id", "focus_mode", "skeleton_density", "density", "exclude", "excludes", "exclude_patterns"]
+        for key in CONTEXT_CONFIG_KEYS
         if key in config
     }
     return config_file, config_values, values
+
+
+def _build_context_config_payload(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
+    supported = {
+        "presets": sorted(CONTEXT_PRESETS.keys()),
+        "focus_modes": sorted(CONTEXT_FOCUS_MODES),
+        "skeleton_densities": sorted(SKELETON_DENSITY_MODES),
+        "config_keys": list(CONTEXT_CONFIG_KEYS),
+    }
+    output_file = _opt_path(args, "output_file")
+    if bool(getattr(args, "validate", False)):
+        config_file, config_values, context_defaults = _resolve_context_defaults(args)
+        if config_file is None:
+            raise FileNotFoundError(".mcp-skeleton.json")
+        return (
+            {
+                "status": "ok",
+                "entrypoint": "context-config",
+                "mode": "validate",
+                "config_file": str(config_file.resolve()),
+                "config_values": config_values,
+                "resolved_defaults": {
+                    "preset_id": context_defaults["preset_id"] or "generic",
+                    "focus_mode": context_defaults["focus_mode"] or "full",
+                    "skeleton_density": context_defaults["skeleton_density"] or "adaptive",
+                    "exclude_patterns": context_defaults["exclude_patterns"],
+                },
+                "supported": supported,
+            },
+            EXIT_OK,
+        )
+
+    payload = {
+        "status": "ok",
+        "entrypoint": "context-config",
+        "mode": "template",
+        "config_file": "",
+        "config": dict(CONTEXT_CONFIG_TEMPLATE),
+        "supported": supported,
+    }
+    if output_file is not None:
+        target = output_file.expanduser()
+        if not target.is_absolute():
+            target = (Path.cwd() / target).resolve()
+        if target.exists() and not bool(getattr(args, "force", False)):
+            raise ValueError(f"config file already exists; use --force to overwrite: {target}")
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(json.dumps(CONTEXT_CONFIG_TEMPLATE, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+        payload["config_file"] = str(target)
+        payload["written"] = True
+    else:
+        payload["written"] = False
+    return payload, EXIT_OK
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -162,13 +253,21 @@ def main(argv: list[str] | None = None) -> int:
 
 def cmd_context(args: argparse.Namespace) -> int:
     command = getattr(args, "context_command", None)
-    supported = {"compress", "restore", "inspect", "apply-check", "preset", "bundle", "patch", "patch-apply"}
+    supported = {"compress", "restore", "inspect", "apply-check", "preset", "config", "bundle", "patch", "patch-apply"}
     if command not in supported:
-        return _emit_command_error(args, EXIT_USAGE, "invalid_usage", "supported context subcommands: compress, restore, inspect, apply-check, preset, bundle, patch, patch-apply")
+        return _emit_command_error(args, EXIT_USAGE, "invalid_usage", "supported context subcommands: compress, restore, inspect, apply-check, preset, config, bundle, patch, patch-apply")
 
     if command == "preset":
         payload = build_context_preset_payload(getattr(args, "preset_id", None))
         return _emit_simple_result(args, payload)
+
+    if command == "config":
+        payload, exit_code = _build_context_config_payload(args)
+        if _json_enabled(args):
+            _print_json_payload(payload)
+        else:
+            print(json.dumps(payload.get("config", payload), indent=2, ensure_ascii=False))
+        return exit_code
 
     if command == "compress":
         config_file, config_values, context_defaults = _resolve_context_defaults(args)
@@ -498,6 +597,16 @@ def _build_parser() -> argparse.ArgumentParser:
     preset = context_subparsers.add_parser("preset", help="List available compression presets or inspect one selected preset")
     preset.add_argument("preset_id", nargs="?", default="generic")
     preset.add_argument("--json", action="store_true")
+
+    config = context_subparsers.add_parser("config", help="Emit or validate a .mcp-skeleton.json project defaults file")
+    config.add_argument("--config", dest="config_file", help="Config file to validate; defaults to discovered .mcp-skeleton.json when --validate is used")
+    config.add_argument("--validate", action="store_true", help="Validate an existing config file instead of emitting a template")
+    config.add_argument("--input-file", dest="input_file", help="Discover .mcp-skeleton.json next to this file when validating")
+    config.add_argument("--input-dir", dest="input_dir", help="Discover .mcp-skeleton.json inside this directory when validating")
+    config.add_argument("--text-file", dest="text_file", help="Discover .mcp-skeleton.json next to this text file when validating")
+    config.add_argument("--output-file", dest="output_file", help="Write the default template to this path")
+    config.add_argument("--force", action="store_true", help="Overwrite --output-file if it already exists")
+    config.add_argument("--json", action="store_true")
 
     bundle = context_subparsers.add_parser("bundle", help="Export a full context bundle with compression, inspect, and optional apply-check artifacts")
     bundle.add_argument("--text", dest="context_text")

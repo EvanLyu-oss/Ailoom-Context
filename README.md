@@ -279,6 +279,15 @@ Project defaults can live in `.mcp-skeleton.json` next to the input directory, o
 
 CLI flags override config values, while config and CLI `--exclude` patterns are combined.
 
+Generate or validate a config file from the CLI:
+
+```bash
+python3 -m cli context config --output-file .mcp-skeleton.json --json
+python3 -m cli context config --validate --config .mcp-skeleton.json --json
+```
+
+The config command reports supported presets, focus modes, density modes, and resolved defaults, which makes mis-typed values fail early before a long compression run.
+
 Repo-scale benchmark:
 
 ```bash

@@ -260,6 +260,8 @@ Cross-platform smoke checks, including Windows environments without Bash:
 python3 testing/run_cli_checks.py
 ```
 
+For repeatable test-machine prompts, stress benchmark commands, and result reporting templates, see [CROSS_PLATFORM_TESTING.md](CROSS_PLATFORM_TESTING.md).
+
 This Python runner covers key text, writing-outline, text-density, directory, bundle, filtering, focus/density, directory symbols/aggregation, incremental, clean incremental diagnostics, apply-check drift, text and incremental patch manifests, incremental patch replay, patch/replay, merge-conflict, dry-run report, policy template/block, invalid-input, invalid-restore-path, and benchmark readiness paths.
 
 Repo-scale benchmark:
@@ -317,6 +319,7 @@ Recent repeatable benchmark signals on this repository:
 - `/Users/carwynmac/MCP-Skeleton/CONTEXT_INCREMENTAL_BENCHMARK_REPORT_20260508.md`
 - `/Users/carwynmac/MCP-Skeleton/CONTEXT_FOCUS_BENCHMARK_REPORT_20260508.md`
 - `/Users/carwynmac/MCP-Skeleton/CONTEXT_CROSS_PLATFORM_VALIDATION_REPORT_20260520.md`
+- `/Users/carwynmac/MCP-Skeleton/CROSS_PLATFORM_TESTING.md`
 - `/Users/carwynmac/MCP-Skeleton/RELEASE_CHECKLIST_0_1.md`
 
 ## Scope

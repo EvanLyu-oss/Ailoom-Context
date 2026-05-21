@@ -184,6 +184,56 @@ Windows validation for the v0.1.3 tag (`0bdb452`) reported:
 - best large-directory savings: `93.45%`
 - best long-text savings: `54.51%`
 
+## Post-v0.1.3 Dogfood And Config-Onboarding Baseline
+
+After v0.1.3, the project added a safer onboarding path for real repositories:
+
+- `context config` emits and validates `.mcp-skeleton.json`
+- `context config --recommend` generates project defaults from real compression analysis
+- `context config --recommend --output-report-file ...` writes an audit-friendly Markdown onboarding report
+- `testing/dogfood_self_check.py` runs the full sandboxed self-use chain cross-platform
+
+The Python dogfood self-check validates:
+
+- config recommendation
+- onboarding report generation
+- config validation
+- bundle
+- inspect
+- restore
+- SHA256 parity against included source files
+
+macOS validation for commit `3f9c638` reported:
+
+- Python dogfood self-check: `31/31` files restored with matching SHA256
+- `config_recommend_status`: `ok`
+- `config_validate_status`: `ok`
+- `bundle_status`: `ok`
+- `inspect_status`: `ok`
+- `restore_status`: `ok`
+- `compression_ratio`: `0.0076`
+- `missing_count`: `0`
+- `mismatched_count`: `0`
+- Python smoke runner: `28/28`
+- Bash smoke runner: `36/36`
+- Bash dogfood wrapper: pass
+
+Windows validation for commit `3f9c638` reported:
+
+- Python dogfood self-check: `30/30` files restored with matching SHA256
+- `config_recommend_status`: `ok`
+- `config_validate_status`: `ok`
+- `bundle_status`: `ok`
+- `inspect_status`: `ok`
+- `restore_status`: `ok`
+- `compression_ratio`: `0.0076`
+- `missing_count`: `0`
+- `mismatched_count`: `0`
+- Python smoke runner: `28/28`
+- `failed`: `0`
+
+The one-file count difference is expected for this snapshot because the macOS local validation included the newly added Python dogfood script in the source tree before the same update was validated from the Windows tarball context.
+
 ## Release Readiness
 
 The v0.1.3 candidate has no known blocking restore failures in the validated surfaces.
@@ -197,6 +247,7 @@ Current status:
 - Large-directory token guardrails: `ok`
 - Benchmark scale profiles: `quick`, `standard`, and `stress`
 - Cross-platform testing workflow: documented in `CROSS_PLATFORM_TESTING.md`
+- Dogfood self-use workflow: validated on macOS and Windows with config recommendation, onboarding report generation, sandbox restore, and SHA256 parity
 - Release readiness: `ready` on macOS and Windows
 
 ## Notes

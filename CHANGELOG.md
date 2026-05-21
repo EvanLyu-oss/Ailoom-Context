@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- documented the post-v0.1.3 macOS and Windows dogfood/config-onboarding validation baseline
 - added a cross-platform Python dogfood self-check that validates config recommendation, onboarding report, bundle, inspect, restore, and SHA256 parity
 - added optional Markdown onboarding reports for `context config --recommend`
 - added `context config --recommend` to generate project defaults from real compression analysis

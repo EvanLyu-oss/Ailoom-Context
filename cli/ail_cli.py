@@ -193,6 +193,78 @@ def _write_context_config_file(output_file: Path | None, config: dict[str, Any],
     return str(target), True
 
 
+def _write_text_report_file(output_file: Path | None, report_text: str, *, force: bool) -> tuple[str, bool]:
+    if output_file is None:
+        return "", False
+    target = output_file.expanduser()
+    if not target.is_absolute():
+        target = (Path.cwd() / target).resolve()
+    if target.exists() and not force:
+        raise ValueError(f"report file already exists; use --force to overwrite: {target}")
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(report_text, encoding="utf-8")
+    return str(target), True
+
+
+def _render_context_config_recommend_report(payload: dict[str, Any]) -> str:
+    config = payload.get("config") or {}
+    analysis = payload.get("analysis") or {}
+    warnings = list(analysis.get("compression_warnings") or [])
+    recommendations = list(analysis.get("compression_recommendations") or [])
+    exclude_patterns = list(config.get("exclude") or [])
+    lines = [
+        "# MCP-Skeleton Config Recommendation",
+        "",
+        "## Source",
+        f"- source_kind: {analysis.get('source_kind', '')}",
+        f"- source_label: {analysis.get('source_label', '')}",
+        f"- current_preset: {analysis.get('preset_id', '')}",
+        f"- current_focus_mode: {analysis.get('focus_mode', '')}",
+        f"- current_skeleton_density: {analysis.get('skeleton_density', '')}",
+        "",
+        "## Recommended Config",
+        f"- preset: {config.get('preset', '')}",
+        f"- focus_mode: {config.get('focus_mode', '')}",
+        f"- skeleton_density: {config.get('skeleton_density', '')}",
+        f"- exclude_count: {len(exclude_patterns)}",
+    ]
+    if exclude_patterns:
+        lines.append("- exclude:")
+        lines.extend(f"  - {pattern}" for pattern in exclude_patterns)
+    lines.extend(
+        [
+            "",
+            "## Token Estimate",
+            f"- estimated_token_reduction_ratio: {analysis.get('estimated_token_reduction_ratio', '')}",
+            f"- estimated_token_direction: {analysis.get('estimated_token_direction', '')}",
+            f"- estimated_tokens_saved: {analysis.get('estimated_tokens_saved', '')}",
+            "",
+            "## Warnings",
+        ]
+    )
+    if warnings:
+        lines.extend(f"- {item.get('code', '')}: {item.get('message', '')}" for item in warnings)
+    else:
+        lines.append("- none")
+    lines.append("")
+    lines.append("## Recommendations")
+    if recommendations:
+        lines.extend(f"- {item.get('code', '')}: {item.get('message', '')}" for item in recommendations)
+    else:
+        lines.append("- current config is acceptable")
+    lines.extend(
+        [
+            "",
+            "## Next Steps",
+            "1. Review the generated `.mcp-skeleton.json` before committing it.",
+            "2. Run `python3 -m cli context config --validate --config .mcp-skeleton.json --json`.",
+            "3. Run `python3 -m cli context compress --input-dir . --json` and confirm the reported config file is used.",
+            "",
+        ]
+    )
+    return "\n".join(lines)
+
+
 def _build_context_config_payload(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
     supported = {
         "presets": sorted(CONTEXT_PRESETS.keys()),
@@ -250,29 +322,38 @@ def _build_context_config_payload(args: argparse.Namespace) -> tuple[dict[str, A
             "exclude": suggested_excludes,
         }
         written_path, written = _write_context_config_file(output_file, recommended_config, force=force)
-        return (
-            {
-                "status": "ok",
-                "entrypoint": "context-config",
-                "mode": "recommend",
-                "config_file": written_path,
-                "written": written,
-                "config": recommended_config,
-                "analysis": {
-                    "source_kind": compression_payload.get("source_kind"),
-                    "source_label": compression_payload.get("source_label"),
-                    "preset_id": compression_payload.get("preset_id"),
-                    "focus_mode": compression_payload.get("focus_mode"),
-                    "skeleton_density": compression_payload.get("skeleton_density"),
-                    "estimated_token_reduction_ratio": metrics.get("estimated_token_reduction_ratio"),
-                    "estimated_tokens_saved": metrics.get("estimated_tokens_saved"),
-                    "estimated_token_direction": metrics.get("estimated_token_direction"),
-                    "compression_warnings": compression_payload.get("compression_warnings") or [],
-                    "compression_recommendations": compression_payload.get("compression_recommendations") or [],
-                    "recommended_config": compression_payload.get("recommended_config") or {},
-                },
-                "supported": supported,
+        payload = {
+            "status": "ok",
+            "entrypoint": "context-config",
+            "mode": "recommend",
+            "config_file": written_path,
+            "written": written,
+            "config": recommended_config,
+            "analysis": {
+                "source_kind": compression_payload.get("source_kind"),
+                "source_label": compression_payload.get("source_label"),
+                "preset_id": compression_payload.get("preset_id"),
+                "focus_mode": compression_payload.get("focus_mode"),
+                "skeleton_density": compression_payload.get("skeleton_density"),
+                "estimated_token_reduction_ratio": metrics.get("estimated_token_reduction_ratio"),
+                "estimated_tokens_saved": metrics.get("estimated_tokens_saved"),
+                "estimated_token_direction": metrics.get("estimated_token_direction"),
+                "compression_warnings": compression_payload.get("compression_warnings") or [],
+                "compression_recommendations": compression_payload.get("compression_recommendations") or [],
+                "recommended_config": compression_payload.get("recommended_config") or {},
             },
+            "supported": supported,
+        }
+        report_text = _render_context_config_recommend_report(payload)
+        report_path, report_written = _write_text_report_file(
+            _opt_path(args, "output_report_file"),
+            report_text,
+            force=force,
+        )
+        payload["report_file"] = report_path
+        payload["report_written"] = report_written
+        return (
+            payload,
             EXIT_OK,
         )
 
@@ -670,6 +751,7 @@ def _build_parser() -> argparse.ArgumentParser:
     config.add_argument("--tokenizer-backend", dest="tokenizer_backend", default="auto", choices=["auto", "heuristic", "tiktoken"])
     config.add_argument("--tokenizer-model", dest="tokenizer_model")
     config.add_argument("--output-file", dest="output_file", help="Write the default template to this path")
+    config.add_argument("--output-report-file", dest="output_report_file", help="Write a Markdown recommendation report when using --recommend")
     config.add_argument("--force", action="store_true", help="Overwrite --output-file if it already exists")
     config.add_argument("--json", action="store_true")
 

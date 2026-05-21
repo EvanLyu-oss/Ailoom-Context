@@ -394,6 +394,7 @@ def _check_context_config_recommend_json(workspace: Path) -> None:
     )
     (project / "node_modules" / "ignored.js").write_text("console.log('large dependency');\n", encoding="utf-8")
     config_file = project / ".mcp-skeleton.json"
+    report_file = project / "mcp-skeleton-onboarding.md"
 
     recommended = _run_cli_json(
         [
@@ -406,18 +407,26 @@ def _check_context_config_recommend_json(workspace: Path) -> None:
             "codebase",
             "--output-file",
             str(config_file),
+            "--output-report-file",
+            str(report_file),
             "--json",
         ]
     )
     assert recommended["status"] == "ok"
     assert recommended["mode"] == "recommend"
     assert recommended["written"] is True
+    assert recommended["report_written"] is True
+    assert recommended["report_file"].endswith("mcp-skeleton-onboarding.md")
     assert recommended["config"]["preset"] == "codebase"
     assert recommended["config"]["focus_mode"] in {"imports", "tree", "symbols", "full"}
     assert recommended["config"]["skeleton_density"] in {"adaptive", "compact", "standard"}
     assert "node_modules/" in recommended["config"]["exclude"]
     assert recommended["analysis"]["source_kind"] in {"directory", "mixed_project", "codebase"}
     assert isinstance(recommended["analysis"]["estimated_token_reduction_ratio"], float)
+    report_text = report_file.read_text(encoding="utf-8")
+    assert "# MCP-Skeleton Config Recommendation" in report_text
+    assert "## Recommended Config" in report_text
+    assert "node_modules/" in report_text
 
     validated = _run_cli_json(["context", "config", "--validate", "--config", str(config_file), "--json"])
     assert validated["resolved_defaults"]["preset_id"] == "codebase"

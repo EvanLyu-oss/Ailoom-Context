@@ -314,6 +314,7 @@ def _write_text_report_file(output_file: Path | None, report_text: str, *, force
 def _render_context_config_recommend_report(payload: dict[str, Any]) -> str:
     config = payload.get("config") or {}
     analysis = payload.get("analysis") or {}
+    comparison = payload.get("comparison") or {}
     warnings = list(analysis.get("compression_warnings") or [])
     recommendations = list(analysis.get("compression_recommendations") or [])
     exclude_patterns = list(config.get("exclude") or [])
@@ -347,6 +348,12 @@ def _render_context_config_recommend_report(payload: dict[str, Any]) -> str:
             f"- estimated_token_direction: {analysis.get('estimated_token_direction', '')}",
             f"- estimated_tokens_saved: {analysis.get('estimated_tokens_saved', '')}",
             "",
+            "## Recommendation Estimate",
+            f"- current_token_ratio: {comparison.get('current_token_ratio', '')}",
+            f"- recommended_token_ratio: {comparison.get('recommended_token_ratio', '')}",
+            f"- estimated_token_ratio_delta: {comparison.get('estimated_token_ratio_delta', '')}",
+            f"- recommended_skeleton_char_count: {comparison.get('recommended_skeleton_char_count', '')}",
+            "",
             "## Warnings",
         ]
     )
@@ -371,6 +378,56 @@ def _render_context_config_recommend_report(payload: dict[str, Any]) -> str:
         ]
     )
     return "\n".join(lines)
+
+
+def _build_config_recommendation_comparison(
+    *,
+    args: argparse.Namespace,
+    current_payload: dict[str, Any],
+    recommended_config: dict[str, Any],
+) -> dict[str, Any]:
+    current_metrics = dict(current_payload.get("metrics") or {})
+    current_ratio = current_metrics.get("estimated_token_reduction_ratio")
+    try:
+        recommended_payload = build_context_compress_payload(
+            inline_text=_inline_text(args),
+            text_file=_opt_path(args, "text_file"),
+            input_file=_opt_path(args, "input_file"),
+            input_dir=_opt_path(args, "input_dir"),
+            preset_id=str(recommended_config.get("preset") or "generic"),
+            tokenizer_backend=getattr(args, "tokenizer_backend", None),
+            tokenizer_model=getattr(args, "tokenizer_model", None),
+            focus_mode=str(recommended_config.get("focus_mode") or "full"),
+            skeleton_density=str(recommended_config.get("skeleton_density") or "adaptive"),
+            exclude_patterns=list(recommended_config.get("exclude") or []),
+        )
+    except Exception as exc:  # noqa: BLE001 - surface recommendation audit failures without blocking config output
+        return {
+            "status": "warning",
+            "message": f"recommended config audit failed: {exc}",
+            "current_token_ratio": current_ratio,
+            "recommended_token_ratio": None,
+            "estimated_token_ratio_delta": None,
+        }
+    recommended_metrics = dict(recommended_payload.get("metrics") or {})
+    recommended_ratio = recommended_metrics.get("estimated_token_reduction_ratio")
+    if isinstance(current_ratio, (int, float)) and isinstance(recommended_ratio, (int, float)):
+        delta = round(float(recommended_ratio) - float(current_ratio), 4)
+    else:
+        delta = None
+    return {
+        "status": "ok",
+        "current_focus_mode": current_payload.get("focus_mode", ""),
+        "current_skeleton_density": current_payload.get("skeleton_density", ""),
+        "current_token_ratio": current_ratio,
+        "current_skeleton_char_count": current_payload.get("skeleton_char_count", 0),
+        "recommended_focus_mode": recommended_payload.get("focus_mode", ""),
+        "recommended_skeleton_density": recommended_payload.get("skeleton_density", ""),
+        "recommended_token_ratio": recommended_ratio,
+        "recommended_skeleton_char_count": recommended_payload.get("skeleton_char_count", 0),
+        "estimated_token_ratio_delta": delta,
+        "recommended_warning_count": len(recommended_payload.get("compression_warnings") or []),
+    }
 
 
 def _build_context_install_hook_payload(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
@@ -492,6 +549,11 @@ def _build_context_config_payload(args: argparse.Namespace) -> tuple[dict[str, A
             "skeleton_density": recommended.get("skeleton_density") or compression_payload.get("skeleton_density") or "adaptive",
             "exclude": suggested_excludes,
         }
+        comparison = _build_config_recommendation_comparison(
+            args=args,
+            current_payload=compression_payload,
+            recommended_config=recommended_config,
+        )
         written_path, written = _write_context_config_file(output_file, recommended_config, force=force)
         payload = {
             "status": "ok",
@@ -514,6 +576,7 @@ def _build_context_config_payload(args: argparse.Namespace) -> tuple[dict[str, A
                 "compression_recommendations": compression_payload.get("compression_recommendations") or [],
                 "recommended_config": compression_payload.get("recommended_config") or {},
             },
+            "comparison": comparison,
             "supported": supported,
         }
         report_text = _render_context_config_recommend_report(payload)

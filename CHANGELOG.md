@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- added current-vs-recommended token estimate comparison to `context config --recommend`
 - added source scale details to `context config --recommend` JSON and onboarding reports
 - added source scale profiling and large-directory filter/focus recommendations to `context compress`
 - added `.mcp-skeleton.yaml` and `.mcp-skeleton.yml` config discovery and validation

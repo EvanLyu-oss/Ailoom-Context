@@ -67,6 +67,81 @@ def _write_cli_output_file(path: Path, payload: str | dict[str, Any], *, as_json
         path.write_text(str(payload), encoding="utf-8")
 
 
+def _load_context_config(args: argparse.Namespace) -> tuple[Path | None, dict[str, Any]]:
+    explicit = _opt_path(args, "config_file")
+    candidates: list[Path] = []
+    if explicit is not None:
+        candidates.append(explicit)
+    else:
+        for attr in ["input_dir", "input_file", "text_file"]:
+            path = _opt_path(args, attr)
+            if path is None:
+                continue
+            candidates.append((path if path.is_dir() else path.parent) / ".mcp-skeleton.json")
+            break
+        candidates.append(Path.cwd() / ".mcp-skeleton.json")
+
+    for path in candidates:
+        if not path.exists():
+            if explicit is not None:
+                raise FileNotFoundError(str(path))
+            continue
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError as exc:
+            raise ValueError(f"invalid JSON config file {path}: {exc}") from exc
+        if not isinstance(payload, dict):
+            raise ValueError(f"config file must contain a JSON object: {path}")
+        context_payload = payload.get("context", payload)
+        if not isinstance(context_payload, dict):
+            raise ValueError(f"config field 'context' must be an object: {path}")
+        return path, context_payload
+    return None, {}
+
+
+def _config_string(config: dict[str, Any], *keys: str) -> str | None:
+    for key in keys:
+        value = config.get(key)
+        if value is None:
+            continue
+        if not isinstance(value, str):
+            raise ValueError(f"config field '{key}' must be a string")
+        stripped = value.strip()
+        return stripped or None
+    return None
+
+
+def _config_list(config: dict[str, Any], *keys: str) -> list[str]:
+    for key in keys:
+        value = config.get(key)
+        if value is None:
+            continue
+        if isinstance(value, str):
+            return [value]
+        if isinstance(value, list) and all(isinstance(item, str) for item in value):
+            return list(value)
+        raise ValueError(f"config field '{key}' must be a string or list of strings")
+    return []
+
+
+def _resolve_context_defaults(args: argparse.Namespace) -> tuple[Path | None, dict[str, Any], dict[str, Any]]:
+    config_file, config = _load_context_config(args)
+    cli_excludes = list(getattr(args, "exclude_patterns", None) or [])
+    config_excludes = _config_list(config, "exclude", "excludes", "exclude_patterns")
+    values = {
+        "preset_id": getattr(args, "preset_id", None) or _config_string(config, "preset", "preset_id"),
+        "focus_mode": getattr(args, "focus_mode", None) or _config_string(config, "focus_mode"),
+        "skeleton_density": getattr(args, "skeleton_density", None) or _config_string(config, "skeleton_density", "density"),
+        "exclude_patterns": [*config_excludes, *cli_excludes],
+    }
+    config_values = {
+        key: config[key]
+        for key in ["preset", "preset_id", "focus_mode", "skeleton_density", "density", "exclude", "excludes", "exclude_patterns"]
+        if key in config
+    }
+    return config_file, config_values, values
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = _build_parser()
     args = parser.parse_args(argv)
@@ -96,20 +171,23 @@ def cmd_context(args: argparse.Namespace) -> int:
         return _emit_simple_result(args, payload)
 
     if command == "compress":
+        config_file, config_values, context_defaults = _resolve_context_defaults(args)
         payload = build_context_compress_payload(
             inline_text=_inline_text(args),
             text_file=_opt_path(args, "text_file"),
             input_file=_opt_path(args, "input_file"),
             input_dir=_opt_path(args, "input_dir"),
-            preset_id=getattr(args, "preset_id", None),
+            preset_id=context_defaults["preset_id"],
             output_dir=_opt_path(args, "output_dir"),
             tokenizer_backend=getattr(args, "tokenizer_backend", None),
             tokenizer_model=getattr(args, "tokenizer_model", None),
             incremental=bool(getattr(args, "incremental", False)),
             base_commit=getattr(args, "base_commit", None),
-            focus_mode=getattr(args, "focus_mode", None),
-            skeleton_density=getattr(args, "skeleton_density", None),
-            exclude_patterns=list(getattr(args, "exclude_patterns", None) or []),
+            focus_mode=context_defaults["focus_mode"],
+            skeleton_density=context_defaults["skeleton_density"],
+            exclude_patterns=context_defaults["exclude_patterns"],
+            config_file=config_file,
+            config_values=config_values,
         )
         output_file = getattr(args, "output_file", None)
         if getattr(args, "emit_skeleton", False):
@@ -120,12 +198,13 @@ def cmd_context(args: argparse.Namespace) -> int:
         return _emit_simple_result(args, payload, text=str(payload.get("summary_text", "")))
 
     if command == "bundle":
+        config_file, config_values, context_defaults = _resolve_context_defaults(args)
         payload = build_context_bundle_payload(
             inline_text=_inline_text(args),
             text_file=_opt_path(args, "text_file"),
             input_file=_opt_path(args, "input_file"),
             input_dir=_opt_path(args, "input_dir"),
-            preset_id=getattr(args, "preset_id", None),
+            preset_id=context_defaults["preset_id"],
             output_dir=_opt_path(args, "output_dir"),
             make_zip=bool(getattr(args, "zip_bundle", False)),
             candidate_inline_text=_candidate_inline_text(args),
@@ -136,9 +215,11 @@ def cmd_context(args: argparse.Namespace) -> int:
             tokenizer_model=getattr(args, "tokenizer_model", None),
             incremental=bool(getattr(args, "incremental", False)),
             base_commit=getattr(args, "base_commit", None),
-            focus_mode=getattr(args, "focus_mode", None),
-            skeleton_density=getattr(args, "skeleton_density", None),
-            exclude_patterns=list(getattr(args, "exclude_patterns", None) or []),
+            focus_mode=context_defaults["focus_mode"],
+            skeleton_density=context_defaults["skeleton_density"],
+            exclude_patterns=context_defaults["exclude_patterns"],
+            config_file=config_file,
+            config_values=config_values,
         )
         exit_code = EXIT_OK if (payload.get("apply_check") is None or bool((payload.get("apply_check") or {}).get("apply_check_passed"))) else EXIT_VALIDATION
         if getattr(args, "emit_summary", False):
@@ -375,9 +456,10 @@ def _build_parser() -> argparse.ArgumentParser:
     compress.add_argument("--text-file", dest="text_file")
     compress.add_argument("--input-file", dest="input_file")
     compress.add_argument("--input-dir", dest="input_dir")
-    compress.add_argument("--preset", dest="preset_id", default="generic")
-    compress.add_argument("--focus-mode", dest="focus_mode", default="full", choices=["full", "tree", "imports", "symbols", "writing-outline"])
-    compress.add_argument("--skeleton-density", dest="skeleton_density", default="adaptive", choices=["adaptive", "standard", "compact"])
+    compress.add_argument("--config", dest="config_file", help="Read context defaults from a .mcp-skeleton.json file")
+    compress.add_argument("--preset", dest="preset_id")
+    compress.add_argument("--focus-mode", dest="focus_mode", choices=["full", "tree", "imports", "symbols", "writing-outline"])
+    compress.add_argument("--skeleton-density", dest="skeleton_density", choices=["adaptive", "standard", "compact"])
     compress.add_argument("--exclude", dest="exclude_patterns", action="append", help="Exclude a relative path or glob from directory compression; can be repeated")
     compress.add_argument("--incremental", action="store_true")
     compress.add_argument("--base-commit", dest="base_commit")
@@ -422,9 +504,10 @@ def _build_parser() -> argparse.ArgumentParser:
     bundle.add_argument("--text-file", dest="text_file")
     bundle.add_argument("--input-file", dest="input_file")
     bundle.add_argument("--input-dir", dest="input_dir")
-    bundle.add_argument("--preset", dest="preset_id", default="generic")
-    bundle.add_argument("--focus-mode", dest="focus_mode", default="full", choices=["full", "tree", "imports", "symbols", "writing-outline"])
-    bundle.add_argument("--skeleton-density", dest="skeleton_density", default="adaptive", choices=["adaptive", "standard", "compact"])
+    bundle.add_argument("--config", dest="config_file", help="Read context defaults from a .mcp-skeleton.json file")
+    bundle.add_argument("--preset", dest="preset_id")
+    bundle.add_argument("--focus-mode", dest="focus_mode", choices=["full", "tree", "imports", "symbols", "writing-outline"])
+    bundle.add_argument("--skeleton-density", dest="skeleton_density", choices=["adaptive", "standard", "compact"])
     bundle.add_argument("--exclude", dest="exclude_patterns", action="append", help="Exclude a relative path or glob from directory compression; can be repeated")
     bundle.add_argument("--incremental", action="store_true")
     bundle.add_argument("--base-commit", dest="base_commit")

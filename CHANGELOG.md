@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- added `.mcp-skeleton.json` config defaults for `context compress` and `context bundle`, with CLI flags still taking precedence
 - added smart compression warnings and recommended config hints to `context compress` JSON and summary output
 - documented the final Windows v0.1.3 quick smoke and stress benchmark validation results
 

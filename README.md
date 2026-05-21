@@ -266,6 +266,19 @@ This Python runner covers key text, writing-outline, text-density, directory, bu
 
 `context compress --json` also emits `compression_warnings`, `compression_recommendations`, and `recommended_config` so users can spot token expansion or low-savings configurations and switch to a better focus/density without changing restore fidelity.
 
+Project defaults can live in `.mcp-skeleton.json` next to the input directory, or be passed explicitly with `--config`:
+
+```json
+{
+  "preset": "codebase",
+  "focus_mode": "imports",
+  "skeleton_density": "adaptive",
+  "exclude": ["node_modules/", "dist/", "*.map"]
+}
+```
+
+CLI flags override config values, while config and CLI `--exclude` patterns are combined.
+
 Repo-scale benchmark:
 
 ```bash

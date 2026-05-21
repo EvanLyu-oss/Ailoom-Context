@@ -196,6 +196,8 @@ def build_context_compress_payload(
     focus_mode: str | None = None,
     skeleton_density: str | None = None,
     exclude_patterns: list[str] | None = None,
+    config_file: Path | None = None,
+    config_values: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     preset = resolve_context_preset(preset_id)
     resolved_focus_mode = _normalize_context_focus_mode(focus_mode)
@@ -256,6 +258,8 @@ def build_context_compress_payload(
         "preset_best_for": list(preset["best_for"]),
         "preset_skeleton_strategy": list(preset.get("skeleton_strategy") or []),
         "preset_suggested_excludes": list(preset.get("suggested_excludes") or []),
+        "config_file": str(config_file.resolve()) if config_file is not None else "",
+        "config_values": dict(config_values or {}),
         "focus_mode": resolved_focus_mode,
         "skeleton_density": resolved_skeleton_density,
         "compression_mode": source["compression_mode"],
@@ -419,6 +423,8 @@ def build_context_bundle_payload(
     focus_mode: str | None = None,
     skeleton_density: str | None = None,
     exclude_patterns: list[str] | None = None,
+    config_file: Path | None = None,
+    config_values: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     compression_payload = build_context_compress_payload(
         inline_text=inline_text,
@@ -434,6 +440,8 @@ def build_context_bundle_payload(
         focus_mode=focus_mode,
         skeleton_density=skeleton_density,
         exclude_patterns=exclude_patterns,
+        config_file=config_file,
+        config_values=config_values,
     )
     inspect_payload = inspect_context_package(
         compression_payload,

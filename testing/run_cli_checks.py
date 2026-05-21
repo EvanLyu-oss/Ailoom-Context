@@ -293,6 +293,66 @@ def _build_simple_project(workspace: Path, *, name: str = "simple_project", with
     return project
 
 
+def _check_context_config_json(workspace: Path) -> None:
+    project = workspace / "configured_project"
+    (project / "src").mkdir(parents=True)
+    (project / "docs").mkdir()
+    (project / "src" / "app.py").write_text(
+        "import json\n\n"
+        "def run() -> str:\n"
+        "    return json.dumps({'ok': True})\n",
+        encoding="utf-8",
+    )
+    (project / "docs" / "guide.md").write_text("# Guide\n\nThis should be included.\n", encoding="utf-8")
+    (project / "ignored.txt").write_text("ignore me\n", encoding="utf-8")
+    (project / ".mcp-skeleton.json").write_text(
+        json.dumps(
+            {
+                "preset": "codebase",
+                "focus_mode": "imports",
+                "skeleton_density": "compact",
+                "exclude": ["ignored.txt"],
+            },
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+    payload = _run_cli_json(["context", "compress", "--input-dir", str(project), "--json"])
+    entries = {item["relative_path"] for item in payload["source_summary"]["entries"]}
+    assert payload["status"] == "ok"
+    assert payload["preset_id"] == "codebase"
+    assert payload["focus_mode"] == "imports"
+    assert payload["skeleton_density"] == "compact"
+    assert payload["config_file"].endswith(".mcp-skeleton.json")
+    assert payload["config_values"]["focus_mode"] == "imports"
+    assert "ignored.txt" not in entries
+
+    overridden = _run_cli_json(
+        [
+            "context",
+            "compress",
+            "--input-dir",
+            str(project),
+            "--focus-mode",
+            "symbols",
+            "--skeleton-density",
+            "adaptive",
+            "--json",
+        ]
+    )
+    assert overridden["focus_mode"] == "symbols"
+    assert overridden["skeleton_density"] == "adaptive"
+
+    bundle_dir = workspace / "configured_bundle"
+    bundle = _run_cli_json(
+        ["context", "bundle", "--input-dir", str(project), "--output-dir", str(bundle_dir), "--json"]
+    )
+    assert bundle["status"] == "ok"
+    assert bundle["focus_mode"] == "imports"
+    assert bundle["skeleton_density"] == "compact"
+    assert bundle["compression"]["config_file"].endswith(".mcp-skeleton.json")
+
+
 def _check_bundle_outputs(workspace: Path) -> None:
     project = _build_simple_project(workspace, name="bundle_project", with_git=True)
     (project / "src" / "app.py").write_text(
@@ -1355,6 +1415,7 @@ CHECKS: list[tuple[str, Callable[[Path], None]]] = [
     ("context_compress_text_density_json_ok", _check_text_density),
     ("context_non_utf8_text_restore_json_ok", _check_non_utf8_text_restore),
     ("context_restore_directory_json_ok", _check_directory_restore),
+    ("context_config_json_ok", _check_context_config_json),
     ("context_bundle_json_ok", _check_bundle_outputs),
     ("context_compress_incremental_clean_diagnostics_json_ok", _check_clean_incremental_diagnostics),
     ("context_apply_check_drift_json_ok", _check_apply_check_drift),

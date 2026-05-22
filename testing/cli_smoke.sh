@@ -4,6 +4,7 @@ set -euo pipefail
 ROOT="${AIL_REPO_ROOT:-$(cd -- "$(dirname -- "$0")/.." && pwd)}"
 export AIL_REPO_ROOT="$ROOT"
 export PYTHONPATH="$ROOT"
+export MCP_SKELETON_IGNORE_CWD_CONFIG="${MCP_SKELETON_IGNORE_CWD_CONFIG:-1}"
 RESULTS_DIR="$ROOT/testing/results"
 RESULTS_JSON="$RESULTS_DIR/cli_smoke_results.json"
 TMP_ROOT="$(mktemp -d /tmp/mcp_skeleton_smoke.XXXXXX)"

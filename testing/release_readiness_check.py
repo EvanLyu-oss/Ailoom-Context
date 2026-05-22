@@ -17,6 +17,7 @@ DEFAULT_RESULTS_JSON = RESULTS_DIR / "release_readiness_check.json"
 def _run(args: list[str], *, cwd: Path = ROOT) -> dict[str, Any]:
     env = os.environ.copy()
     env["PYTHONPATH"] = str(ROOT)
+    env["MCP_SKELETON_IGNORE_CWD_CONFIG"] = "1"
     proc = subprocess.run(
         args,
         cwd=str(cwd),
@@ -85,6 +86,14 @@ def build_release_readiness_payload() -> dict[str, Any]:
             "codebase",
             "--exclude",
             "testing/results/",
+            "--exclude",
+            ".mcp-skeleton.json",
+            "--exclude",
+            ".mcp-skeleton.yaml",
+            "--exclude",
+            ".mcp-skeleton.yml",
+            "--exclude",
+            "mcp-skeleton-onboarding.md",
             "--json",
         ]
     )

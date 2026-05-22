@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import sys
 import tempfile
 from pathlib import Path
@@ -49,6 +50,7 @@ CONTEXT_CONFIG_TEMPLATE = {
     "exclude": ["node_modules/", "dist/", "build/", "*.map"],
 }
 CONTEXT_CONFIG_FILENAMES = [".mcp-skeleton.json", ".mcp-skeleton.yaml", ".mcp-skeleton.yml"]
+IGNORE_CWD_CONFIG_ENV = "MCP_SKELETON_IGNORE_CWD_CONFIG"
 CODELIKE_EXTENSIONS = {
     ".py", ".js", ".ts", ".tsx", ".jsx", ".go", ".rs", ".java", ".c", ".cpp", ".h", ".hpp",
     ".css", ".scss", ".html", ".vue", ".sql", ".sh", ".rb", ".php", ".swift", ".kt",
@@ -203,7 +205,8 @@ def _load_context_config(args: argparse.Namespace) -> tuple[Path | None, dict[st
             config_dir = path if path.is_dir() else path.parent
             candidates.extend(config_dir / filename for filename in CONTEXT_CONFIG_FILENAMES)
             break
-        candidates.extend(Path.cwd() / filename for filename in CONTEXT_CONFIG_FILENAMES)
+        if os.environ.get(IGNORE_CWD_CONFIG_ENV) not in {"1", "true", "TRUE", "yes", "YES"}:
+            candidates.extend(Path.cwd() / filename for filename in CONTEXT_CONFIG_FILENAMES)
 
     for path in candidates:
         if not path.exists():

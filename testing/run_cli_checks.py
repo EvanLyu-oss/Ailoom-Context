@@ -24,6 +24,7 @@ class SmokeFailure(AssertionError):
 def _run(args: list[str], *, cwd: Path = ROOT, expect: int = 0) -> subprocess.CompletedProcess[str]:
     env = os.environ.copy()
     env["PYTHONPATH"] = str(ROOT)
+    env["MCP_SKELETON_IGNORE_CWD_CONFIG"] = "1"
     proc = subprocess.run(
         args,
         cwd=str(cwd),

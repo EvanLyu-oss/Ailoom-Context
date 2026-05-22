@@ -21,7 +21,13 @@ CONFIG_FILE = DOGFOOD_ROOT / ".mcp-skeleton.json"
 ONBOARDING_REPORT = DOGFOOD_ROOT / "mcp-skeleton-onboarding.md"
 
 SKIP_DIR_NAMES = {".git", "__pycache__", ".pytest_cache"}
-EXCLUDED_PREFIXES = {"testing/results"}
+DOGFOOD_LOCAL_ARTIFACTS = {
+    ".mcp-skeleton.json",
+    ".mcp-skeleton.yaml",
+    ".mcp-skeleton.yml",
+    "mcp-skeleton-onboarding.md",
+}
+EXCLUDED_PREFIXES = {"testing/results", *DOGFOOD_LOCAL_ARTIFACTS}
 
 
 def _run_cli_json(args: list[str], *, output_file: Path) -> dict[str, Any]:
@@ -82,6 +88,14 @@ def run_dogfood_self_check() -> dict[str, Any]:
             "codebase",
             "--exclude",
             "testing/results/",
+            "--exclude",
+            ".mcp-skeleton.json",
+            "--exclude",
+            ".mcp-skeleton.yaml",
+            "--exclude",
+            ".mcp-skeleton.yml",
+            "--exclude",
+            "mcp-skeleton-onboarding.md",
             "--output-config-file",
             str(CONFIG_FILE),
             "--output-report-file",

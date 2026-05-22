@@ -982,6 +982,91 @@ def _build_context_quick_payload(args: argparse.Namespace) -> tuple[dict[str, An
     return payload, EXIT_OK
 
 
+def _build_explain_action_plan(*, package_file: Path | None, inspect_payload: dict[str, Any]) -> list[dict[str, str]]:
+    restore_args = ["context", "restore"]
+    if package_file is not None:
+        restore_args.extend(["--package-file", str(package_file.resolve())])
+    mode = str(inspect_payload.get("compression_mode") or inspect_payload.get("restore_mode") or "")
+    if mode == "text":
+        restore_args.extend(["--output-file", str(Path.cwd() / str(inspect_payload.get("source_label") or "restored.txt"))])
+    else:
+        restore_args.extend(["--output-dir", str(Path.cwd() / "mcp-skeleton-restore")])
+    return [
+        {
+            "step": "use_skeleton_for_ai_context",
+            "status": "ready",
+            "message": "use context_skeleton.mcp or skeleton_text as the AI-facing compressed context",
+        },
+        {
+            "step": "keep_manifest_for_restore",
+            "status": "ready",
+            "message": "keep context_manifest.json with the restore package for byte-exact recovery",
+        },
+        {
+            "step": "restore_when_needed",
+            "status": "ready",
+            "message": f"restore later with: {_format_cli_command(restore_args)}",
+        },
+    ]
+
+
+def _render_context_explain_summary(payload: dict[str, Any]) -> str:
+    inspect_payload = payload.get("inspect") or {}
+    metrics = inspect_payload.get("metrics") or {}
+    source_summary = inspect_payload.get("source_summary") or {}
+    lines = [
+        "MCP-Skeleton Explain",
+        "",
+        f"Status: {payload.get('explain_status', '')}",
+        f"Safe to restore: {'yes' if payload.get('restore_available') else 'no'}",
+        "",
+        "What this is:",
+        f"- Source: {inspect_payload.get('source_label', '')}",
+        f"- Kind: {inspect_payload.get('source_kind', '')}",
+        f"- Compression mode: {inspect_payload.get('compression_mode', '')}",
+        f"- Focus/density: {inspect_payload.get('focus_mode', '')} / {inspect_payload.get('skeleton_density', '')}",
+        "",
+        "Why it is useful:",
+        f"- Skeleton chars: {inspect_payload.get('skeleton_char_count', 0)}",
+        f"- Restore bytes: {inspect_payload.get('restore_raw_byte_count', 0)}",
+        f"- Estimated token direction: {metrics.get('estimated_token_direction', '')}",
+        f"- Estimated tokens saved: {metrics.get('estimated_tokens_saved', '')}",
+        "",
+        "Source shape:",
+        f"- Files: {source_summary.get('total_files', 0)}",
+        f"- Text/code/binary: {source_summary.get('text_files', 0)} / {source_summary.get('code_files', 0)} / {source_summary.get('binary_files', 0)}",
+        f"- Total chars: {source_summary.get('total_chars', 0)}",
+        "",
+        "Next steps:",
+    ]
+    action_plan = list(payload.get("action_plan") or [])
+    lines.extend(f"- {item.get('message', '')}" for item in action_plan)
+    return "\n".join(lines)
+
+
+def _build_context_explain_payload(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
+    package_file = _required_path(args, "package_file", "context explain requires --package-file")
+    package_payload = load_context_package(package_file)
+    inspect_payload = inspect_context_package(
+        package_payload,
+        tokenizer_backend=getattr(args, "tokenizer_backend", None),
+        tokenizer_model=getattr(args, "tokenizer_model", None),
+    )
+    action_plan = _build_explain_action_plan(package_file=package_file, inspect_payload=inspect_payload)
+    payload = {
+        "status": "ok",
+        "entrypoint": "context-explain",
+        "explain_status": "ready" if inspect_payload.get("has_restore_package") else "watch",
+        "package_file": str(package_file.resolve()),
+        "restore_available": bool(inspect_payload.get("has_restore_package")),
+        "inspect": inspect_payload,
+        "action_plan": action_plan,
+        "next_steps": [item["message"] for item in action_plan],
+    }
+    payload["summary_text"] = _render_context_explain_summary(payload)
+    return payload, EXIT_OK
+
+
 def _clone_args(args: argparse.Namespace, **updates: Any) -> argparse.Namespace:
     values = dict(vars(args))
     values.update(updates)
@@ -1511,9 +1596,9 @@ def main(argv: list[str] | None = None) -> int:
 
 def cmd_context(args: argparse.Namespace) -> int:
     command = getattr(args, "context_command", None)
-    supported = {"compress", "restore", "inspect", "apply-check", "preset", "config", "init", "install-hook", "doctor", "start", "quick", "bundle", "patch", "patch-apply"}
+    supported = {"compress", "restore", "inspect", "explain", "apply-check", "preset", "config", "init", "install-hook", "doctor", "start", "quick", "bundle", "patch", "patch-apply"}
     if command not in supported:
-        return _emit_command_error(args, EXIT_USAGE, "invalid_usage", "supported context subcommands: compress, restore, inspect, apply-check, preset, config, init, install-hook, doctor, start, quick, bundle, patch, patch-apply")
+        return _emit_command_error(args, EXIT_USAGE, "invalid_usage", "supported context subcommands: compress, restore, inspect, explain, apply-check, preset, config, init, install-hook, doctor, start, quick, bundle, patch, patch-apply")
 
     if command == "preset":
         payload = build_context_preset_payload(getattr(args, "preset_id", None))
@@ -1543,6 +1628,10 @@ def cmd_context(args: argparse.Namespace) -> int:
 
     if command == "quick":
         payload, exit_code = _build_context_quick_payload(args)
+        return _emit_simple_result(args, payload, text=str(payload.get("summary_text", "")), exit_code=exit_code)
+
+    if command == "explain":
+        payload, exit_code = _build_context_explain_payload(args)
         return _emit_simple_result(args, payload, text=str(payload.get("summary_text", "")), exit_code=exit_code)
 
     if command == "compress":
@@ -1859,6 +1948,13 @@ def _build_parser() -> argparse.ArgumentParser:
     inspect.add_argument("--emit-summary", action="store_true")
     inspect.add_argument("--output-file", dest="output_file")
     inspect.add_argument("--json", action="store_true")
+
+    explain = context_subparsers.add_parser("explain", help="Explain one context bundle in human terms with next-step guidance")
+    explain.add_argument("--package-file", dest="package_file", required=True)
+    explain.add_argument("--tokenizer-backend", dest="tokenizer_backend", default="auto", choices=["auto", "heuristic", "tiktoken"])
+    explain.add_argument("--tokenizer-model", dest="tokenizer_model")
+    explain.add_argument("--output-file", dest="output_file")
+    explain.add_argument("--json", action="store_true")
 
     apply_check = context_subparsers.add_parser("apply-check", help="Validate that edited text, a file, or a directory still stays inside the original context skeleton boundary")
     apply_check.add_argument("--package-file", dest="package_file", required=True)

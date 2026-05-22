@@ -677,6 +677,48 @@ def _check_context_quick_json(workspace: Path) -> None:
     assert inspect["status"] == "ok"
 
 
+def _check_context_explain_json(workspace: Path) -> None:
+    project = workspace / "explain_project"
+    (project / "src").mkdir(parents=True)
+    (project / "docs").mkdir()
+    (project / "src" / "app.py").write_text("def run() -> str:\n    return 'explain'\n", encoding="utf-8")
+    (project / "docs" / "guide.md").write_text("# Guide\n\nExplain this bundle.\n", encoding="utf-8")
+    bundle_dir = workspace / "explain_bundle"
+    quick = _run_cli_json(
+        [
+            "context",
+            "quick",
+            "--input-dir",
+            str(project),
+            "--output-dir",
+            str(bundle_dir),
+            "--json",
+        ]
+    )
+    payload = _run_cli_json(
+        [
+            "context",
+            "explain",
+            "--package-file",
+            quick["manifest_file"],
+            "--json",
+        ]
+    )
+    assert payload["status"] == "ok"
+    assert payload["entrypoint"] == "context-explain"
+    assert payload["explain_status"] == "ready"
+    assert payload["restore_available"] is True
+    assert payload["inspect"]["entrypoint"] == "context-inspect"
+    assert payload["inspect"]["source_label"] == project.name
+    assert payload["action_plan"]
+    assert payload["next_steps"] == [item["message"] for item in payload["action_plan"]]
+    assert any("context restore" in item["message"] for item in payload["action_plan"])
+    assert "MCP-Skeleton Explain" in payload["summary_text"]
+    assert "What this is:" in payload["summary_text"]
+    assert "Why it is useful:" in payload["summary_text"]
+    assert "Next steps:" in payload["summary_text"]
+
+
 def _check_context_auto_defaults_json(workspace: Path) -> None:
     project = workspace / "auto_defaults_project"
     (project / "src").mkdir(parents=True)
@@ -1835,6 +1877,7 @@ CHECKS: list[tuple[str, Callable[[Path], None]]] = [
     ("context_doctor_json_ok", _check_context_doctor_json),
     ("context_start_json_ok", _check_context_start_json),
     ("context_quick_json_ok", _check_context_quick_json),
+    ("context_explain_json_ok", _check_context_explain_json),
     ("context_auto_defaults_json_ok", _check_context_auto_defaults_json),
     ("context_bundle_json_ok", _check_bundle_outputs),
     ("context_compress_incremental_clean_diagnostics_json_ok", _check_clean_incremental_diagnostics),

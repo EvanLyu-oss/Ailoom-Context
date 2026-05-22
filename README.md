@@ -116,6 +116,15 @@ PYTHONPATH="$PWD" python3 -m cli context quick --input-dir .
 
 `context quick` runs the zero-friction setup, checks restore safety, writes a full bundle, and prints the bundle path plus inspect/restore commands. Use it when you want the shortest safe path from “I have a project” to “I have a shareable MCP-Skeleton bundle.”
 
+Explain a bundle in plain language:
+
+```bash
+PYTHONPATH="$PWD" python3 -m cli context explain \
+  --package-file /absolute/path/to/context-bundle/context_manifest.json
+```
+
+`context explain` translates a bundle into “what this is”, “why it is useful”, and “what to do next”, including restore guidance. It is the fastest way to hand a bundle to another AI, IDE, or teammate without making them learn the manifest shape.
+
 Compress a directory:
 
 ```bash

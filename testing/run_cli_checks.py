@@ -1646,6 +1646,46 @@ def _check_invalid_input_dir(workspace: Path) -> None:
     )
     assert payload["status"] == "error"
     assert payload["error"]["code"] == "invalid_usage"
+    assert payload["error"]["details"]["recovery_steps"]
+
+
+def _check_error_recovery_guidance_json(workspace: Path) -> None:
+    config_file = workspace / ".mcp-skeleton.json"
+    config_file.write_text("{}\n", encoding="utf-8")
+    existing = _run_cli_json(
+        ["context", "config", "init", "--output-file", str(config_file), "--json"],
+        expect=2,
+    )
+    assert existing["status"] == "error"
+    assert existing["error"]["code"] == "invalid_usage"
+    assert existing["error"]["details"]["recovery_steps"]
+    assert existing["error"]["details"]["fix_command_text"].endswith("--force")
+
+    project = workspace / "quick_conflict_project"
+    (project / "src").mkdir(parents=True)
+    (project / "src" / "app.py").write_text("VALUE = 1\n", encoding="utf-8")
+    output_dir = workspace / "occupied_bundle"
+    output_dir.mkdir()
+    (output_dir / "keep.txt").write_text("existing data\n", encoding="utf-8")
+    conflict = _run_cli_json(
+        [
+            "context",
+            "quick",
+            "--input-dir",
+            str(project),
+            "--output-dir",
+            str(output_dir),
+            "--json",
+        ],
+        expect=2,
+    )
+    assert conflict["status"] == "error"
+    assert conflict["entrypoint"] == "context-quick"
+    assert conflict["quick_status"] == "blocked"
+    assert conflict["error"]["code"] == "output_dir_not_empty"
+    assert conflict["error"]["details"]["recovery_steps"]
+    assert "context quick" in conflict["error"]["details"]["fix_command_text"]
+    assert not (output_dir / "context_manifest.json").exists()
 
 
 def _check_restore_invalid_relpath(workspace: Path) -> None:
@@ -1808,6 +1848,7 @@ CHECKS: list[tuple[str, Callable[[Path], None]]] = [
     ("context_patch_apply_incremental_reports_json_ok", _check_incremental_patch_apply_reports),
     ("context_patch_apply_policy_template_json_ok", _check_policy_template_json),
     ("context_invalid_input_dir_json_ok", _check_invalid_input_dir),
+    ("context_error_recovery_guidance_json_ok", _check_error_recovery_guidance_json),
     ("context_restore_invalid_relpath_json_ok", _check_restore_invalid_relpath),
     ("context_scale_benchmark_quick_json_ok", _check_scale_benchmark_quick),
 ]

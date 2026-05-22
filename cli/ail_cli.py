@@ -80,11 +80,59 @@ def _json_enabled(args: argparse.Namespace) -> bool:
     return bool(getattr(args, "json", False))
 
 
+def _current_command_text(extra_args: list[str] | None = None) -> str:
+    args = [*sys.argv[1:], *(extra_args or [])]
+    return _format_cli_command(args)
+
+
+def _build_error_guidance(code: str, message: str) -> dict[str, Any]:
+    lower = message.lower()
+    recovery_steps: list[str] = []
+    fix_command_text = ""
+    if "already exists; use --force" in lower:
+        recovery_steps = [
+            "rerun the same command with --force if overwriting is intentional",
+            "or choose a different output/config/report path to keep the existing file",
+        ]
+        if "--force" not in sys.argv[1:]:
+            fix_command_text = _current_command_text(["--force"])
+    elif "does not exist" in lower or "must be a file" in lower or "must be a directory" in lower:
+        recovery_steps = [
+            "check that the input path exists on this machine",
+            "use --input-dir for directories, --input-file for one file, or --text-file for prose/text files",
+        ]
+    elif "requires exactly one input source" in lower or "did not receive a usable input source" in lower:
+        recovery_steps = [
+            "provide exactly one source: --input-dir, --input-file, --text-file, or --text",
+            "for the current repository, try: python3 -m cli context quick --input-dir .",
+        ]
+        fix_command_text = "python3 -m cli context quick --input-dir ."
+    elif "requires --output-dir" in lower:
+        recovery_steps = [
+            "add --output-dir with a safe empty directory for restored or replayed files",
+            "avoid using the original source directory as the output target",
+        ]
+    else:
+        recovery_steps = [
+            "review the command arguments and paths, then rerun with --json for machine-readable diagnostics",
+        ]
+    return {
+        "recovery_steps": recovery_steps,
+        "fix_command_text": fix_command_text,
+        "error_category": code,
+    }
+
+
 def _emit_command_error(args: argparse.Namespace, exit_code: int, code: str, message: str) -> int:
+    guidance = _build_error_guidance(code, message)
     if _json_enabled(args):
-        _print_json_error(code, message, exit_code=exit_code)
+        _print_json_error(code, message, exit_code=exit_code, details=guidance)
     else:
         print(f"error: {message}", file=sys.stderr)
+        for step in guidance.get("recovery_steps", []):
+            print(f"recovery: {step}", file=sys.stderr)
+        if guidance.get("fix_command_text"):
+            print(f"try: {guidance['fix_command_text']}", file=sys.stderr)
     return exit_code
 
 
@@ -767,7 +815,57 @@ def _render_context_quick_summary(payload: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
+def _quick_output_dir_conflict_payload(output_dir: Path) -> dict[str, Any] | None:
+    target = output_dir.expanduser()
+    if not target.is_absolute():
+        target = (Path.cwd() / target).resolve()
+    if not target.exists() or not target.is_dir() or not any(target.iterdir()):
+        return None
+    fix_command = _current_command_text(["--output-dir", str(target.parent / f"{target.name}-new")])
+    payload = {
+        "status": "error",
+        "entrypoint": "context-quick",
+        "quick_status": "blocked",
+        "error": {
+            "code": "output_dir_not_empty",
+            "message": f"context quick output directory already exists and is not empty: {target}",
+            "exit_code": EXIT_USAGE,
+            "details": {
+                "output_dir": str(target),
+                "recovery_steps": [
+                    "choose a new --output-dir for this quick bundle",
+                    "or move/delete the existing directory after confirming it is no longer needed",
+                ],
+                "fix_command_text": fix_command,
+                "error_category": "invalid_usage",
+            },
+        },
+        "restore_safe": False,
+        "doctor_readiness_status": "",
+        "start": {},
+        "bundle": {},
+        "bundle_root": "",
+        "manifest_file": "",
+        "inspect_command_args": [],
+        "inspect_command_text": "",
+        "restore_command_args": [],
+        "restore_command_text": "",
+        "next_steps": [
+            "choose a new --output-dir for this quick bundle",
+            "rerun context quick after the output path is empty or changed",
+        ],
+    }
+    payload["summary_text"] = _render_context_quick_summary(payload)
+    return payload
+
+
 def _build_context_quick_payload(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
+    output_dir = _opt_path(args, "output_dir")
+    if output_dir is not None:
+        conflict_payload = _quick_output_dir_conflict_payload(output_dir)
+        if conflict_payload is not None:
+            return conflict_payload, EXIT_USAGE
+
     start_args = _clone_args(args, context_command="start", output_file=None)
     start_payload, start_exit = _build_context_start_payload(start_args)
     restore_safe = bool(start_payload.get("restore_safe"))

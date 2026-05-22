@@ -236,6 +236,14 @@ python3 -m cli context doctor --input-dir . --preset codebase --write-report mcp
 
 `context doctor` resolves config defaults, runs compression analysis, emits warnings/recommendations/explanations, restores into a temporary sandbox, and verifies the restored files against the original included hashes. It reports `readiness_status` as `ready`, `watch`, or `blocked`, plus `recommended_command_text` and `action_plan` so users know exactly what to do next.
 
+If something goes wrong:
+
+```bash
+python3 -m cli context quick --input-dir ./missing --json
+```
+
+Error JSON includes `recovery_steps` and, when MCP-Skeleton can suggest one safely, `fix_command_text`. Human-readable errors print the same recovery hints. `context quick` also refuses to write into a non-empty `--output-dir`, so an existing bundle is not overwritten by accident.
+
 Validate one edited incremental surface:
 
 ```bash

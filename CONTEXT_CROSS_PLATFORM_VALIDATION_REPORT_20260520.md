@@ -273,6 +273,31 @@ Windows validation for commit `4175af0` reported:
 - `best_large_directory_savings_percent`: `92.62`
 - `best_long_text_savings_percent`: `54.53`
 
+## v0.1.5 macOS Readiness Snapshot
+
+v0.1.5 adds a release-readiness workflow around `context doctor`, structured compression explanations, recommended command args, explicit benchmark baseline saving, and stronger dogfood self-use.
+
+macOS validation for this release-hardening snapshot reported:
+
+- release readiness runner: `6/6`
+- Python smoke runner: `32/32`
+- Python dogfood self-check: `33/33` files restored with matching SHA256
+- dogfood recommended trial compression: `ok`
+- `context doctor.restore_check.status`: `ok`
+- `context doctor.readiness_status`: `watch` because the full-repo default focus produces advisory recommendations, not blocking restore failures
+- Bash smoke runner: `36/36`
+- quick benchmark release readiness: `ready`
+- quick benchmark restore verification: `93/93`
+- quick benchmark scale health: `ok`
+- quick benchmark regression trends: `no-baseline`
+- quick benchmark baseline saved: `testing/results/release_quick_baseline.json`
+- `monorepo_max_token_ratio`: `0.6559`
+- `realistic_directory_max_token_ratio`: `0.0821`
+- `best_large_directory_savings_percent`: `93.06`
+- `best_long_text_savings_percent`: `54.41`
+
+Windows v0.1.5 validation should run `python testing/release_readiness_check.py` after pulling the release candidate. Bash smoke may be skipped automatically on Windows, but Python smoke, dogfood, doctor, quick benchmark, and baseline save should all pass.
+
 ## Release Readiness
 
 The v0.1.3 candidate has no known blocking restore failures in the validated surfaces.

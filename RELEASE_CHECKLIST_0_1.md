@@ -37,8 +37,10 @@ git log --oneline --decorate -n 10
 python3 -m py_compile cli/ail_cli.py cli/context_compression.py testing/context_scale_benchmark.py testing/run_cli_checks.py testing/dogfood_self_check.py
 python3 testing/run_cli_checks.py
 python3 testing/dogfood_self_check.py
+python3 -m cli context doctor --input-dir . --preset codebase --exclude testing/results/ --json
 bash testing/run_cli_checks.sh
-python3 testing/context_scale_benchmark.py --quick --output-json testing/results/release_quick_benchmark.json --output-md testing/results/release_quick_benchmark.md
+python3 testing/context_scale_benchmark.py --scale-profile quick --output-json testing/results/release_quick_benchmark.json --output-md testing/results/release_quick_benchmark.md --save-baseline-json testing/results/release_quick_baseline.json
+python3 testing/release_readiness_check.py
 ```
 
 On Windows or other environments without Bash, run:
@@ -47,7 +49,9 @@ On Windows or other environments without Bash, run:
 python -m py_compile cli/ail_cli.py cli/context_compression.py testing/context_scale_benchmark.py testing/run_cli_checks.py testing/dogfood_self_check.py
 python testing/run_cli_checks.py
 python testing/dogfood_self_check.py
-python testing/context_scale_benchmark.py --quick --output-json testing/results/windows_release_quick_benchmark.json --output-md testing/results/windows_release_quick_benchmark.md
+python -m cli context doctor --input-dir . --preset codebase --exclude testing/results/ --json
+python testing/context_scale_benchmark.py --scale-profile quick --output-json testing/results/windows_release_quick_benchmark.json --output-md testing/results/windows_release_quick_benchmark.md --save-baseline-json testing/results/windows_release_quick_baseline.json
+python testing/release_readiness_check.py
 ```
 
 Optional fuller benchmark:
@@ -63,8 +67,10 @@ python3 testing/context_scale_benchmark.py \
 Expected minimum result:
 
 - `testing/run_cli_checks.py` reports `status: ok`
-- Python smoke coverage reports `28/28` passing or better
+- Python smoke coverage reports `32/32` passing or better
 - `testing/dogfood_self_check.py` reports `status: ok`, `missing_count: 0`, and `mismatched_count: 0`
+- `context doctor` reports `restore_check.status: ok` and no blocking checks
+- `testing/release_readiness_check.py` reports `status: ok`
 - `run_cli_checks.sh` reports `status: ok` on Unix-like environments
 - Bash smoke coverage reports `36/36` passing or better on Unix-like environments
 - realistic directory and realistic text benchmark cases are present

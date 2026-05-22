@@ -27,6 +27,7 @@ python3 testing/run_cli_checks.py
 python3 testing/dogfood_self_check.py
 bash testing/run_cli_checks.sh
 python3 testing/context_scale_benchmark.py --scale-profile quick --save-baseline-json testing/results/context_scale_baseline.json
+python3 testing/release_readiness_check.py
 ```
 
 ## Windows Handoff

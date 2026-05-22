@@ -275,6 +275,12 @@ Cross-platform smoke checks, including Windows environments without Bash:
 python3 testing/run_cli_checks.py
 ```
 
+Release readiness check before tagging:
+
+```bash
+python3 testing/release_readiness_check.py
+```
+
 For repeatable test-machine prompts, stress benchmark commands, and result reporting templates, see [CROSS_PLATFORM_TESTING.md](CROSS_PLATFORM_TESTING.md).
 
 This Python runner covers key text, writing-outline, text-density, directory, bundle, filtering, focus/density, directory symbols/aggregation, incremental, clean incremental diagnostics, apply-check drift, text and incremental patch manifests, incremental patch replay, patch/replay, merge-conflict, dry-run report, policy template/block, invalid-input, invalid-restore-path, and benchmark readiness paths.

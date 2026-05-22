@@ -315,6 +315,7 @@ def _render_context_config_recommend_report(payload: dict[str, Any]) -> str:
     config = payload.get("config") or {}
     analysis = payload.get("analysis") or {}
     comparison = payload.get("comparison") or {}
+    recommended_command_args = list(payload.get("recommended_command_args") or [])
     warnings = list(analysis.get("compression_warnings") or [])
     recommendations = list(analysis.get("compression_recommendations") or [])
     exclude_patterns = list(config.get("exclude") or [])
@@ -354,6 +355,9 @@ def _render_context_config_recommend_report(payload: dict[str, Any]) -> str:
             f"- estimated_token_ratio_delta: {comparison.get('estimated_token_ratio_delta', '')}",
             f"- recommended_skeleton_char_count: {comparison.get('recommended_skeleton_char_count', '')}",
             "",
+            "## Recommended Command Args",
+            json.dumps(recommended_command_args, ensure_ascii=False),
+            "",
             "## Warnings",
         ]
     )
@@ -373,11 +377,47 @@ def _render_context_config_recommend_report(payload: dict[str, Any]) -> str:
             "## Next Steps",
             "1. Review the generated `.mcp-skeleton.json` before committing it.",
             "2. Run `python3 -m cli context config --validate --config .mcp-skeleton.json --json`.",
-            "3. Run `python3 -m cli context compress --input-dir . --json` and confirm the reported config file is used.",
+            "3. Reuse `recommended_command_args` for a direct trial compression, or run `python3 -m cli context compress --input-dir . --json` and confirm the reported config file is used.",
             "",
         ]
     )
     return "\n".join(lines)
+
+
+def _build_config_recommended_command_args(args: argparse.Namespace, recommended_config: dict[str, Any]) -> list[str]:
+    command_args = ["context", "compress"]
+    if _inline_text(args) is not None:
+        return []
+    if _opt_path(args, "input_dir") is not None:
+        command_args.extend(["--input-dir", str(_opt_path(args, "input_dir").resolve())])
+    elif _opt_path(args, "input_file") is not None:
+        command_args.extend(["--input-file", str(_opt_path(args, "input_file").resolve())])
+    elif _opt_path(args, "text_file") is not None:
+        command_args.extend(["--text-file", str(_opt_path(args, "text_file").resolve())])
+    else:
+        return []
+
+    preset = str(recommended_config.get("preset") or "")
+    focus_mode = str(recommended_config.get("focus_mode") or "")
+    skeleton_density = str(recommended_config.get("skeleton_density") or "")
+    if preset:
+        command_args.extend(["--preset", preset])
+    if focus_mode:
+        command_args.extend(["--focus-mode", focus_mode])
+    if skeleton_density:
+        command_args.extend(["--skeleton-density", skeleton_density])
+    for pattern in recommended_config.get("exclude") or []:
+        pattern_text = str(pattern).strip()
+        if pattern_text:
+            command_args.extend(["--exclude", pattern_text])
+    tokenizer_backend = str(getattr(args, "tokenizer_backend", "") or "")
+    tokenizer_model = str(getattr(args, "tokenizer_model", "") or "")
+    if tokenizer_backend and tokenizer_backend != "auto":
+        command_args.extend(["--tokenizer-backend", tokenizer_backend])
+    if tokenizer_model:
+        command_args.extend(["--tokenizer-model", tokenizer_model])
+    command_args.append("--json")
+    return command_args
 
 
 def _build_config_recommendation_comparison(
@@ -554,6 +594,7 @@ def _build_context_config_payload(args: argparse.Namespace) -> tuple[dict[str, A
             current_payload=compression_payload,
             recommended_config=recommended_config,
         )
+        recommended_command_args = _build_config_recommended_command_args(args, recommended_config)
         written_path, written = _write_context_config_file(output_file, recommended_config, force=force)
         payload = {
             "status": "ok",
@@ -577,6 +618,7 @@ def _build_context_config_payload(args: argparse.Namespace) -> tuple[dict[str, A
                 "recommended_config": compression_payload.get("recommended_config") or {},
             },
             "comparison": comparison,
+            "recommended_command_args": recommended_command_args,
             "supported": supported,
         }
         report_text = _render_context_config_recommend_report(payload)

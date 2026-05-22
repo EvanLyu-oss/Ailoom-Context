@@ -504,10 +504,18 @@ def _check_context_config_recommend_json(workspace: Path) -> None:
     assert recommended["comparison"]["status"] == "ok"
     assert isinstance(recommended["comparison"]["current_token_ratio"], float)
     assert isinstance(recommended["comparison"]["recommended_token_ratio"], float)
+    recommended_args = recommended["recommended_command_args"]
+    assert recommended_args[:3] == ["context", "compress", "--input-dir"]
+    assert Path(recommended_args[3]) == project.resolve()
+    assert "--focus-mode" in recommended_args
+    assert "--skeleton-density" in recommended_args
+    assert "--exclude" in recommended_args
+    assert recommended_args[-1] == "--json"
     report_text = report_file.read_text(encoding="utf-8")
     assert "# MCP-Skeleton Config Recommendation" in report_text
     assert "## Recommended Config" in report_text
     assert "## Recommendation Estimate" in report_text
+    assert "## Recommended Command Args" in report_text
     assert "source_scale_class:" in report_text
     assert "node_modules/" in report_text
 

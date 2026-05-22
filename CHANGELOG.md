@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- added `recommended_command_args` to `context config --recommend` JSON and Markdown reports for direct trial compression
 - added machine-readable `recommended_command_args` to `context compress --json` so scripts can apply recommended focus, density, and exclude settings
 - added scale class and compression advice counts to benchmark summaries and recommendation previews
 - added current-vs-recommended token estimate comparison to `context config --recommend`

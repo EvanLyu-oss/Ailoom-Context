@@ -303,7 +303,7 @@ compress = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
 restore = json.loads(Path(sys.argv[2]).read_text(encoding="utf-8"))
 original = Path(sys.argv[3])
 restored = Path(sys.argv[4])
-skip_names = {".git", "__pycache__", ".pytest_cache"}
+skip_names = {".git", "__pycache__", ".pytest_cache", ".workspace_ail"}
 
 assert compress["status"] == "ok"
 assert restore["status"] == "ok"

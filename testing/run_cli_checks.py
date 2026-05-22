@@ -464,6 +464,7 @@ def _check_context_config_recommend_json(workspace: Path) -> None:
     project = workspace / "config_recommend_project"
     (project / "src").mkdir(parents=True)
     (project / "node_modules").mkdir()
+    (project / ".workspace_ail" / "context_bundles" / "old").mkdir(parents=True)
     (project / "src" / "app.py").write_text(
         "import pathlib\n\n"
         "class Runner:\n"
@@ -472,6 +473,10 @@ def _check_context_config_recommend_json(workspace: Path) -> None:
         encoding="utf-8",
     )
     (project / "node_modules" / "ignored.js").write_text("console.log('large dependency');\n", encoding="utf-8")
+    (project / ".workspace_ail" / "context_bundles" / "old" / "context_manifest.json").write_text(
+        json.dumps({"generated": True, "payload": "x" * 2000}),
+        encoding="utf-8",
+    )
     config_file = project / ".mcp-skeleton.json"
     report_file = project / "mcp-skeleton-onboarding.md"
 
@@ -500,6 +505,7 @@ def _check_context_config_recommend_json(workspace: Path) -> None:
     assert recommended["config"]["focus_mode"] in {"imports", "tree", "symbols", "full"}
     assert recommended["config"]["skeleton_density"] in {"adaptive", "compact", "standard"}
     assert "node_modules/" in recommended["config"]["exclude"]
+    assert ".workspace_ail/" in recommended["config"]["exclude"]
     assert recommended["analysis"]["source_kind"] in {"directory", "mixed_project", "codebase"}
     assert isinstance(recommended["analysis"]["estimated_token_reduction_ratio"], float)
     assert recommended["analysis"]["source_scale_profile"]["scale_class"] == "small"
@@ -527,6 +533,8 @@ def _check_context_config_recommend_json(workspace: Path) -> None:
     assert compressed["config_file"].endswith(".mcp-skeleton.json")
     entries = {item["relative_path"] for item in compressed["source_summary"]["entries"]}
     assert "node_modules/ignored.js" not in entries
+    assert ".workspace_ail/context_bundles/old/context_manifest.json" not in entries
+    assert ".workspace_ail" in compressed["source_summary"]["skip_dir_names"]
 
 
 def _check_context_doctor_json(workspace: Path) -> None:

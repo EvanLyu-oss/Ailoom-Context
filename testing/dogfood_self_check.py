@@ -20,12 +20,13 @@ SUMMARY_JSON = DOGFOOD_ROOT / "dogfood_self_check.json"
 CONFIG_FILE = DOGFOOD_ROOT / ".mcp-skeleton.json"
 ONBOARDING_REPORT = DOGFOOD_ROOT / "mcp-skeleton-onboarding.md"
 
-SKIP_DIR_NAMES = {".git", "__pycache__", ".pytest_cache"}
+SKIP_DIR_NAMES = {".git", "__pycache__", ".pytest_cache", ".workspace_ail"}
 DOGFOOD_LOCAL_ARTIFACTS = {
     ".mcp-skeleton.json",
     ".mcp-skeleton.yaml",
     ".mcp-skeleton.yml",
     "mcp-skeleton-onboarding.md",
+    ".workspace_ail",
 }
 EXCLUDED_PREFIXES = {"testing/results", *DOGFOOD_LOCAL_ARTIFACTS}
 
@@ -96,6 +97,8 @@ def run_dogfood_self_check() -> dict[str, Any]:
             ".mcp-skeleton.yml",
             "--exclude",
             "mcp-skeleton-onboarding.md",
+            "--exclude",
+            ".workspace_ail/",
             "--output-config-file",
             str(CONFIG_FILE),
             "--output-report-file",

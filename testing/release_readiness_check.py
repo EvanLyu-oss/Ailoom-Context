@@ -94,6 +94,8 @@ def build_release_readiness_payload() -> dict[str, Any]:
             ".mcp-skeleton.yml",
             "--exclude",
             "mcp-skeleton-onboarding.md",
+            "--exclude",
+            ".workspace_ail/",
             "--json",
         ]
     )

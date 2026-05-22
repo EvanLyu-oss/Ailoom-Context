@@ -18,7 +18,7 @@ from typing import Any
 
 MANIFEST_VERSION = "mcp_context_bundle.v1"
 SKELETON_LANGUAGE = "MCP-SKL.v1"
-SKIP_DIR_NAMES = {".git", "__pycache__", ".pytest_cache"}
+SKIP_DIR_NAMES = {".git", "__pycache__", ".pytest_cache", ".workspace_ail"}
 CODE_EXTENSIONS = {
     ".py", ".js", ".ts", ".tsx", ".jsx", ".vue", ".go", ".rs", ".java", ".c", ".cpp", ".h", ".hpp",
     ".css", ".scss", ".html", ".json", ".yaml", ".yml", ".toml", ".sh", ".bash", ".zsh", ".rb", ".php",
@@ -116,7 +116,7 @@ CONTEXT_PRESETS: dict[str, dict[str, Any]] = {
             "balanced ordering across code, prose, tree, and relationship signals",
             "moderate budgets for directory entries, headings, symbols, and top terms",
         ],
-        "suggested_excludes": ["dist/", "build/", "node_modules/", "__pycache__/", "*.pyc"],
+        "suggested_excludes": ["dist/", "build/", "node_modules/", "__pycache__/", ".workspace_ail/", "*.pyc"],
     },
     "codebase": {
         "preset_id": "codebase",
@@ -131,7 +131,7 @@ CONTEXT_PRESETS: dict[str, dict[str, Any]] = {
             "spend more skeleton budget on imports, symbols, routes, and code-bearing hot subtrees",
             "prefer code entries over prose entries when large directories must be folded",
         ],
-        "suggested_excludes": ["node_modules/", "dist/", "build/", "coverage/", ".next/", ".venv/", "__pycache__/", "*.pyc", "*.map"],
+        "suggested_excludes": ["node_modules/", "dist/", "build/", "coverage/", ".next/", ".venv/", "__pycache__/", ".workspace_ail/", "*.pyc", "*.map"],
     },
     "writing": {
         "preset_id": "writing",
@@ -161,7 +161,7 @@ CONTEXT_PRESETS: dict[str, dict[str, Any]] = {
             "spend more skeleton budget on routes, page structure, components, and managed content boundaries",
             "prefer frontend source and content files over generated assets when directories must be folded",
         ],
-        "suggested_excludes": ["node_modules/", "dist/", "build/", ".next/", "public/assets/generated/", "*.map"],
+        "suggested_excludes": ["node_modules/", "dist/", "build/", ".next/", ".workspace_ail/", "public/assets/generated/", "*.map"],
     },
     "ecommerce": {
         "preset_id": "ecommerce",
@@ -176,7 +176,7 @@ CONTEXT_PRESETS: dict[str, dict[str, Any]] = {
             "spend more skeleton budget on catalog, cart, checkout, account, and transaction-adjacent flows",
             "prefer route and state-flow files over generated assets when directories must be folded",
         ],
-        "suggested_excludes": ["node_modules/", "dist/", "build/", "coverage/", "product-images/generated/", "*.map"],
+        "suggested_excludes": ["node_modules/", "dist/", "build/", "coverage/", ".workspace_ail/", "product-images/generated/", "*.map"],
     },
 }
 

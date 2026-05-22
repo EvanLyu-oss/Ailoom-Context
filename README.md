@@ -116,6 +116,8 @@ PYTHONPATH="$PWD" python3 -m cli context quick --input-dir .
 
 `context quick` runs the zero-friction setup, checks restore safety, writes a full bundle, and prints the bundle path plus inspect/restore commands. Use it when you want the shortest safe path from “I have a project” to “I have a shareable MCP-Skeleton bundle.”
 
+Generated MCP-Skeleton work artifacts under `.workspace_ail/` are skipped by default so repeated `context quick` or dogfood runs do not pollute later compression or benchmark results.
+
 Explain a bundle in plain language:
 
 ```bash

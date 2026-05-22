@@ -48,7 +48,7 @@ CONTEXT_CONFIG_TEMPLATE = {
     "preset": "codebase",
     "focus_mode": "imports",
     "skeleton_density": "adaptive",
-    "exclude": ["node_modules/", "dist/", "build/", "*.map"],
+    "exclude": ["node_modules/", "dist/", "build/", ".workspace_ail/", "*.map"],
 }
 CONTEXT_CONFIG_FILENAMES = [".mcp-skeleton.json", ".mcp-skeleton.yaml", ".mcp-skeleton.yml"]
 IGNORE_CWD_CONFIG_ENV = "MCP_SKELETON_IGNORE_CWD_CONFIG"

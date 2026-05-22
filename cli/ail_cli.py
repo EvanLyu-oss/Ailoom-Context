@@ -4,6 +4,7 @@ import argparse
 import hashlib
 import json
 import os
+import shlex
 import sys
 import tempfile
 from pathlib import Path
@@ -350,6 +351,63 @@ def _write_text_report_file(output_file: Path | None, report_text: str, *, force
     return str(target), True
 
 
+def _format_cli_command(command_args: list[Any]) -> str:
+    if not command_args:
+        return ""
+    quoted = " ".join(shlex.quote(str(item)) for item in command_args)
+    return f"python3 -m cli {quoted}"
+
+
+def _build_readiness_action_plan(
+    *,
+    readiness_status: str,
+    restore_check: dict[str, Any],
+    warnings: list[dict[str, Any]],
+    recommended_command_args: list[Any],
+) -> list[dict[str, str]]:
+    if readiness_status == "ready":
+        return [
+            {
+                "step": "use_recommended_command",
+                "status": "ready",
+                "message": "copy the recommended command to create a compressed context bundle",
+            },
+            {
+                "step": "keep_restore_package",
+                "status": "ready",
+                "message": "keep the generated manifest/package with the skeleton so exact restore remains available",
+            },
+        ]
+    if readiness_status == "watch":
+        warning_text = warnings[0].get("message", "review compression warnings") if warnings else "review watch-level checks"
+        return [
+            {
+                "step": "review_warnings",
+                "status": "watch",
+                "message": warning_text,
+            },
+            {
+                "step": "try_recommended_command",
+                "status": "watch",
+                "message": "run the recommended command after reviewing warnings and expected token savings",
+            },
+        ]
+    missing = int(restore_check.get("missing_count") or 0)
+    mismatched = int(restore_check.get("mismatched_count") or 0)
+    return [
+        {
+            "step": "do_not_rely_on_bundle_yet",
+            "status": "blocked",
+            "message": "restore verification did not pass, so do not use this skeleton as a source of truth yet",
+        },
+        {
+            "step": "inspect_restore_failures",
+            "status": "blocked",
+            "message": f"missing={missing}, mismatched={mismatched}; rerun doctor after fixing input/config issues",
+        },
+    ]
+
+
 def _sha256_path(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
@@ -483,6 +541,13 @@ def _build_context_doctor_payload(args: argparse.Namespace) -> tuple[dict[str, A
     failed_blocks = [item for item in blocking_checks if not item["passed"]]
     failed_watches = [item for item in watch_checks if not item["passed"]]
     readiness = "blocked" if failed_blocks else "watch" if failed_watches or warnings else "ready"
+    recommended_command_args = list(compression_payload.get("recommended_command_args") or [])
+    action_plan = _build_readiness_action_plan(
+        readiness_status=readiness,
+        restore_check=restore_check,
+        warnings=warnings,
+        recommended_command_args=recommended_command_args,
+    )
     payload = {
         "status": "ok" if not failed_blocks else "error",
         "entrypoint": "context-doctor",
@@ -500,13 +565,13 @@ def _build_context_doctor_payload(args: argparse.Namespace) -> tuple[dict[str, A
         "compression_recommendations": recommendations,
         "compression_explanations": compression_payload.get("compression_explanations") or [],
         "recommended_config": compression_payload.get("recommended_config") or {},
-        "recommended_command_args": compression_payload.get("recommended_command_args") or [],
+        "recommended_command_args": recommended_command_args,
+        "recommended_command_text": _format_cli_command(recommended_command_args),
         "restore_check": restore_check,
         "checks": blocking_checks + watch_checks,
+        "action_plan": action_plan,
         "next_steps": [
-            "if readiness_status is ready, this source is safe to use with MCP-Skeleton compression/restore",
-            "if readiness_status is watch, review compression_warnings and recommended_command_args before long-running work",
-            "if readiness_status is blocked, fix restore/config errors before relying on this bundle",
+            item["message"] for item in action_plan
         ],
     }
     report_path, report_written = _write_text_report_file(
@@ -527,6 +592,7 @@ def _render_context_doctor_report(payload: dict[str, Any]) -> str:
     warnings = list(payload.get("compression_warnings") or [])
     explanations = list(payload.get("compression_explanations") or [])
     command_args = list(payload.get("recommended_command_args") or [])
+    action_plan = list(payload.get("action_plan") or [])
     lines = [
         "# MCP-Skeleton Doctor Report",
         "",
@@ -559,6 +625,9 @@ def _render_context_doctor_report(payload: dict[str, Any]) -> str:
         "## Recommended Command Args",
         json.dumps(command_args, ensure_ascii=False),
         "",
+        "## Recommended Command",
+        payload.get("recommended_command_text", "") or "(not available)",
+        "",
         "## Warnings",
     ]
     if warnings:
@@ -575,36 +644,75 @@ def _render_context_doctor_report(payload: dict[str, Any]) -> str:
         [
             "",
             "## Next Steps",
-            "- If restore_status is ok, the restore package is byte-safe for included files.",
-            "- If readiness_status is watch, review warnings before long-running work.",
-            "- Use the recommended command args for the next compression run.",
-            "",
         ]
     )
+    if action_plan:
+        lines.extend(f"- {item.get('status', '')}: {item.get('message', '')}" for item in action_plan)
+    else:
+        lines.append("- Use the recommended command args for the next compression run.")
+    lines.append("")
+    return "\n".join(lines)
+
+
+def _render_context_doctor_summary(payload: dict[str, Any]) -> str:
+    restore_check = payload.get("restore_check") or {}
+    action_plan = list(payload.get("action_plan") or [])
+    lines = [
+        "MCP-Skeleton Doctor",
+        "",
+        f"Readiness: {payload.get('readiness_status', '')}",
+        f"Restore status: {restore_check.get('status', '')}",
+        f"Missing files: {restore_check.get('missing_count', 0)}",
+        f"Mismatched files: {restore_check.get('mismatched_count', 0)}",
+        f"Recommended command: {payload.get('recommended_command_text', '') or '(not available)'}",
+        "",
+        "Next steps:",
+    ]
+    if action_plan:
+        lines.extend(f"- {item.get('message', '')}" for item in action_plan)
+    else:
+        lines.append("- Use the recommended command args for the next compression run.")
     return "\n".join(lines)
 
 
 def _render_context_start_summary(payload: dict[str, Any]) -> str:
     metrics = payload.get("metrics") or {}
+    readiness = str(payload.get("doctor_readiness_status") or "")
     restore_safe = "OK" if payload.get("restore_safe") else "BLOCKED"
+    status_label = "READY TO USE" if readiness == "ready" and payload.get("restore_safe") else "REVIEW FIRST" if readiness == "watch" else "BLOCKED"
     command = str(payload.get("next_command") or "")
+    action_plan = list(payload.get("action_plan") or [])
+    config_state = "written" if payload.get("config_written") else "already exists"
+    report_state = "written" if payload.get("report_written") else "already exists"
+    scale_profile = payload.get("source_scale_profile") or {}
     lines = [
         "MCP-Skeleton Start",
         "",
-        f"Restore safety: {restore_safe}",
-        f"Readiness: {payload.get('doctor_readiness_status', '')}",
-        f"Recommended mode: {payload.get('recommended_mode', '')}",
-        f"Config file: {payload.get('config_file', '') or '(not written)'}",
-        f"Report file: {payload.get('report_file', '') or '(not written)'}",
-        f"Files included: {(payload.get('source_scale_profile') or {}).get('total_files', 0)}",
-        f"Estimated token savings: {metrics.get('estimated_savings_percent', 0)}%",
+        f"Status: {status_label}",
         "",
-        "Next:",
-        command,
+        "What happened:",
+        f"- Restore safety: {restore_safe}",
+        f"- Readiness: {readiness}",
+        f"- Config file ({config_state}): {payload.get('config_file', '') or '(not written)'}",
+        f"- Report file ({report_state}): {payload.get('report_file', '') or '(not written)'}",
+        "",
+        "Recommended setup:",
+        f"- Mode: {payload.get('recommended_mode', '')}",
+        f"- Files included: {scale_profile.get('total_files', 0)}",
+        f"- Estimated token savings: {metrics.get('estimated_savings_percent', 0)}%",
+        "",
+        "Copy/paste this command:",
+        command or "(not available)",
+        "",
+        "Next steps:",
     ]
+    if action_plan:
+        lines.extend(f"- {item.get('message', '')}" for item in action_plan)
+    else:
+        lines.extend(str(item) for item in payload.get("next_steps") or [])
     warnings = list(payload.get("warnings") or [])
     if warnings:
-        lines.extend(["", "Notes:"])
+        lines.extend(["", "Warnings:"])
         lines.extend(f"- {item.get('message', '')}" for item in warnings[:3])
     return "\n".join(lines)
 
@@ -733,9 +841,15 @@ def _build_context_start_payload(args: argparse.Namespace) -> tuple[dict[str, An
     recommended_command_args = _build_start_next_command_args(args, config_path=config_path)
     if not recommended_command_args:
         recommended_command_args = list(recommend_payload.get("recommended_command_args") or doctor_payload.get("recommended_command_args") or [])
-    next_command = " ".join(recommended_command_args)
+    next_command = _format_cli_command(recommended_command_args)
     restore_check = doctor_payload.get("restore_check") or {}
     restore_safe = restore_check.get("status") == "ok"
+    action_plan = _build_readiness_action_plan(
+        readiness_status=str(doctor_payload.get("readiness_status") or ""),
+        restore_check=restore_check,
+        warnings=list(doctor_payload.get("compression_warnings") or []),
+        recommended_command_args=recommended_command_args,
+    )
     payload = {
         "status": "ok" if doctor_exit == EXIT_OK else "error",
         "entrypoint": "context-start",
@@ -755,6 +869,7 @@ def _build_context_start_payload(args: argparse.Namespace) -> tuple[dict[str, An
             ] if item
         ),
         "recommended_command_args": recommended_command_args,
+        "recommended_command_text": next_command,
         "next_command": next_command,
         "doctor_readiness_status": doctor_payload.get("readiness_status", ""),
         "restore_safe": restore_safe,
@@ -765,10 +880,9 @@ def _build_context_start_payload(args: argparse.Namespace) -> tuple[dict[str, An
         "explanations": list(doctor_payload.get("compression_explanations") or []),
         "recommendation": recommend_payload,
         "doctor": doctor_payload,
+        "action_plan": action_plan,
         "next_steps": [
-            "review the generated config and onboarding report",
-            "run next_command to create a compressed context bundle",
-            "keep the restore package with the skeleton so exact restore remains available",
+            item["message"] for item in action_plan
         ],
     }
     payload["summary_text"] = _render_context_start_summary(payload)
@@ -1156,9 +1270,7 @@ def cmd_context(args: argparse.Namespace) -> int:
 
     if command == "doctor":
         payload, exit_code = _build_context_doctor_payload(args)
-        return _emit_simple_result(args, payload, text=_render_simple_summary(payload, [
-            "readiness_status", "compression_mode", "source_label", "skeleton_char_count"
-        ]), exit_code=exit_code)
+        return _emit_simple_result(args, payload, text=_render_context_doctor_summary(payload), exit_code=exit_code)
 
     if command == "start":
         payload, exit_code = _build_context_start_payload(args)

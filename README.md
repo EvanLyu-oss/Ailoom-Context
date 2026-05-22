@@ -105,7 +105,7 @@ Zero-learning project setup:
 PYTHONPATH="$PWD" python3 -m cli context start --input-dir .
 ```
 
-`context start` recommends a config, writes `.mcp-skeleton.json`, writes `mcp-skeleton-onboarding.md`, runs a restore-safety doctor check, and prints the next compression command.
+`context start` recommends a config, writes `.mcp-skeleton.json`, writes `mcp-skeleton-onboarding.md`, runs a restore-safety doctor check, and prints a copy/paste-ready command plus plain next steps. JSON output also includes `recommended_command_text` and `action_plan` for wrappers or test machines.
 If you do not pass `--preset`, `--focus-mode`, or `--skeleton-density`, MCP-Skeleton now chooses practical defaults from the input type: code directories use codebase/imports/adaptive, prose files use writing/writing-outline/adaptive, and explicit CLI/config choices still win.
 
 Compress a directory:
@@ -226,7 +226,7 @@ python3 -m cli context doctor --input-dir . --preset codebase --json
 python3 -m cli context doctor --input-dir . --preset codebase --write-report mcp-skeleton-readiness.md --json
 ```
 
-`context doctor` resolves config defaults, runs compression analysis, emits warnings/recommendations/explanations, restores into a temporary sandbox, and verifies the restored files against the original included hashes. It reports `readiness_status` as `ready`, `watch`, or `blocked`.
+`context doctor` resolves config defaults, runs compression analysis, emits warnings/recommendations/explanations, restores into a temporary sandbox, and verifies the restored files against the original included hashes. It reports `readiness_status` as `ready`, `watch`, or `blocked`, plus `recommended_command_text` and `action_plan` so users know exactly what to do next.
 
 Validate one edited incremental surface:
 

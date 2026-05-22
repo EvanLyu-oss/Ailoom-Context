@@ -563,6 +563,9 @@ def _check_context_doctor_json(workspace: Path) -> None:
     assert payload["restore_check"]["missing_count"] == 0
     assert payload["restore_check"]["mismatched_count"] == 0
     assert payload["recommended_command_args"][-1] == "--json"
+    assert payload["recommended_command_text"].startswith("python3 -m cli context compress")
+    assert payload["action_plan"]
+    assert payload["next_steps"] == [item["message"] for item in payload["action_plan"]]
     assert payload["compression_explanations"]
     assert any(item["name"] == "restore_roundtrip_ok" and item["passed"] for item in payload["checks"])
 
@@ -587,6 +590,8 @@ def _check_context_doctor_json(workspace: Path) -> None:
     assert "# MCP-Skeleton Doctor Report" in report_text
     assert "## Verdict" in report_text
     assert "restore_status: ok" in report_text
+    assert "## Recommended Command" in report_text
+    assert "## Next Steps" in report_text
 
 
 def _check_context_start_json(workspace: Path) -> None:
@@ -611,7 +616,13 @@ def _check_context_start_json(workspace: Path) -> None:
     assert payload["recommended_command_args"][:3] == ["context", "compress", "--input-dir"]
     assert "--config" in payload["recommended_command_args"]
     assert payload["recommended_command_args"][-1] == "--json"
+    assert payload["recommended_command_text"].startswith("python3 -m cli context compress")
+    assert payload["next_command"].startswith("python3 -m cli context compress")
     assert "Restore safety: OK" in payload["summary_text"]
+    assert "Status:" in payload["summary_text"]
+    assert "Copy/paste this command:" in payload["summary_text"]
+    assert payload["action_plan"]
+    assert payload["next_steps"] == [item["message"] for item in payload["action_plan"]]
     assert payload["restore_check"]["status"] == "ok"
     assert payload["restore_check"]["missing_count"] == 0
     assert payload["restore_check"]["mismatched_count"] == 0

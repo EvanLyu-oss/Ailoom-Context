@@ -6,6 +6,7 @@
 - added `context doctor --write-report` for Markdown readiness reports
 - added automatic preset/focus/density defaults for common directory, code-file, and prose-file inputs
 - hardened dogfood, smoke, and release readiness checks against local `context start` onboarding artifacts in the repository root
+- added copy/paste-ready command text and plain action plans to `context start` and `context doctor` for lower-learning-curve onboarding
 - updated dogfood self-check to use `context start` before recommended trial compression and byte-exact restore verification
 
 ## 0.1.5

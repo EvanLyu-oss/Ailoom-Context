@@ -39,6 +39,18 @@ DEFAULT_SCALE_HEALTH_THRESHOLDS = {
     "monorepo_best_size_ratio_vs_standard": 0.45,
     "realistic_directory_best_size_ratio_vs_standard": 0.25,
 }
+REALISTIC_DIRECTORY_EXCLUDES = [
+    "testing/results/",
+    ".workspace_ail/",
+    ".mcp-skeleton.json",
+    ".mcp-skeleton.yaml",
+    ".mcp-skeleton.yml",
+    "mcp-skeleton-onboarding.md",
+    "MCP-Skeleton-main/",
+    "MCP-Skeleton-*/",
+    "explain_test_bundle/",
+    "occupied_bundle/",
+]
 SCALE_PROFILE_DEFAULTS = {
     "quick": {
         "iterations": 1,
@@ -1925,6 +1937,7 @@ def _benchmark_directory_case(
     workspace: Path,
     focus_mode: str = "full",
     skeleton_density: str = "adaptive",
+    exclude_patterns: list[str] | None = None,
 ) -> dict[str, Any]:
     compress_times: list[float] = []
     inspect_times: list[float] = []
@@ -1933,6 +1946,9 @@ def _benchmark_directory_case(
     inspect_payload: dict[str, Any] | None = None
     for idx in range(iterations):
         out_dir = workspace / f"{label}_{backend}_bundle_{idx}"
+        exclude_args: list[str] = []
+        for pattern in exclude_patterns or ["testing/results/"]:
+            exclude_args.extend(["--exclude", pattern])
         compress_result = _run_cli_json(
             [
                 "context",
@@ -1945,8 +1961,7 @@ def _benchmark_directory_case(
                 skeleton_density,
                 "--input-dir",
                 str(source_dir),
-                "--exclude",
-                "testing/results/",
+                *exclude_args,
                 "--output-dir",
                 str(out_dir),
                 "--tokenizer-backend",
@@ -2362,8 +2377,10 @@ def main() -> int:
                         workspace=workspace,
                         focus_mode=focus_mode,
                         skeleton_density=skeleton_density,
+                        exclude_patterns=REALISTIC_DIRECTORY_EXCLUDES,
                     )
                     case["sample_type"] = "realistic"
+                    case["fixture_metadata"] = {"exclude_patterns": REALISTIC_DIRECTORY_EXCLUDES}
                     realistic_directory_cases.append(case)
         monorepo_directory_cases = []
         for backend in backends:
@@ -2507,6 +2524,7 @@ def main() -> int:
                 "realistic_directory": str(real_directory_path),
                 "monorepo_directory": str(monorepo_path),
                 "monorepo_fixture": monorepo_fixture,
+                "realistic_directory_excludes": REALISTIC_DIRECTORY_EXCLUDES,
                 "realistic_text_fixture": realistic_text_fixture,
                 "text_target_chars": text_targets,
                 "baseline_json": str(Path(args.baseline_json).expanduser().resolve()) if args.baseline_json else "",

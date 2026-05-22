@@ -49,6 +49,11 @@ CONTEXT_CONFIG_TEMPLATE = {
     "exclude": ["node_modules/", "dist/", "build/", "*.map"],
 }
 CONTEXT_CONFIG_FILENAMES = [".mcp-skeleton.json", ".mcp-skeleton.yaml", ".mcp-skeleton.yml"]
+CODELIKE_EXTENSIONS = {
+    ".py", ".js", ".ts", ".tsx", ".jsx", ".go", ".rs", ".java", ".c", ".cpp", ".h", ".hpp",
+    ".css", ".scss", ".html", ".vue", ".sql", ".sh", ".rb", ".php", ".swift", ".kt",
+}
+PROSE_EXTENSIONS = {".md", ".txt", ".rst", ".adoc"}
 
 
 def _print_json_payload(payload: Any, *, file: Any = sys.stdout) -> None:
@@ -248,16 +253,45 @@ def _normalize_config_choice(value: str | None, *, field: str, supported: set[st
     return normalized
 
 
+def _infer_context_preset(args: argparse.Namespace) -> str:
+    if _opt_path(args, "input_dir") is not None:
+        return "codebase"
+    if _inline_text(args) is not None:
+        return "writing"
+    source_file = _opt_path(args, "text_file") or _opt_path(args, "input_file")
+    if source_file is not None:
+        suffix = source_file.suffix.lower()
+        if suffix in PROSE_EXTENSIONS:
+            return "writing"
+        if suffix in CODELIKE_EXTENSIONS:
+            return "codebase"
+    return "generic"
+
+
+def _infer_context_focus_mode(args: argparse.Namespace, *, preset_id: str | None) -> str:
+    if preset_id == "writing":
+        return "writing-outline"
+    if _opt_path(args, "input_dir") is not None:
+        return "imports" if preset_id == "codebase" else "tree"
+    return "full"
+
+
 def _resolve_context_defaults(args: argparse.Namespace) -> tuple[Path | None, dict[str, Any], dict[str, Any]]:
     config_file, config = _load_context_config(args)
     cli_excludes = list(getattr(args, "exclude_patterns", None) or [])
     config_excludes = _config_list(config, "exclude", "excludes", "exclude_patterns")
     preset_id = getattr(args, "preset_id", None) or _config_string(config, "preset", "preset_id")
+    if preset_id is None:
+        preset_id = _infer_context_preset(args)
     if preset_id is not None:
         preset_id = resolve_context_preset(preset_id)["preset_id"]
     focus_mode = getattr(args, "focus_mode", None) or _config_string(config, "focus_mode")
+    if focus_mode is None:
+        focus_mode = _infer_context_focus_mode(args, preset_id=preset_id)
     focus_mode = _normalize_config_choice(focus_mode, field="focus_mode", supported=CONTEXT_FOCUS_MODES)
     skeleton_density = getattr(args, "skeleton_density", None) or _config_string(config, "skeleton_density", "density")
+    if skeleton_density is None:
+        skeleton_density = "adaptive"
     skeleton_density = _normalize_config_choice(skeleton_density, field="skeleton_density", supported=SKELETON_DENSITY_MODES)
     values = {
         "preset_id": preset_id,

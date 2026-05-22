@@ -106,6 +106,7 @@ PYTHONPATH="$PWD" python3 -m cli context start --input-dir .
 ```
 
 `context start` recommends a config, writes `.mcp-skeleton.json`, writes `mcp-skeleton-onboarding.md`, runs a restore-safety doctor check, and prints the next compression command.
+If you do not pass `--preset`, `--focus-mode`, or `--skeleton-density`, MCP-Skeleton now chooses practical defaults from the input type: code directories use codebase/imports/adaptive, prose files use writing/writing-outline/adaptive, and explicit CLI/config choices still win.
 
 Compress a directory:
 

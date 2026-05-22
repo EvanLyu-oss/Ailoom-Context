@@ -623,6 +623,25 @@ def _check_context_start_json(workspace: Path) -> None:
     assert "mcp-skeleton-onboarding.md" not in entries
 
 
+def _check_context_auto_defaults_json(workspace: Path) -> None:
+    project = workspace / "auto_defaults_project"
+    (project / "src").mkdir(parents=True)
+    (project / "src" / "app.py").write_text("def run() -> str:\n    return 'auto'\n", encoding="utf-8")
+    directory_payload = _run_cli_json(["context", "compress", "--input-dir", str(project), "--json"])
+    assert directory_payload["status"] == "ok"
+    assert directory_payload["preset_id"] == "codebase"
+    assert directory_payload["focus_mode"] == "imports"
+    assert directory_payload["skeleton_density"] == "adaptive"
+
+    text_file = workspace / "draft.md"
+    text_file.write_text("# Draft\n\nA long-form project note for automatic defaults.\n", encoding="utf-8")
+    text_payload = _run_cli_json(["context", "compress", "--text-file", str(text_file), "--json"])
+    assert text_payload["status"] == "ok"
+    assert text_payload["preset_id"] == "writing"
+    assert text_payload["focus_mode"] == "writing-outline"
+    assert text_payload["skeleton_density"] == "adaptive"
+
+
 def _check_bundle_outputs(workspace: Path) -> None:
     project = _build_simple_project(workspace, name="bundle_project", with_git=True)
     (project / "src" / "app.py").write_text(
@@ -1717,6 +1736,7 @@ CHECKS: list[tuple[str, Callable[[Path], None]]] = [
     ("context_config_recommend_json_ok", _check_context_config_recommend_json),
     ("context_doctor_json_ok", _check_context_doctor_json),
     ("context_start_json_ok", _check_context_start_json),
+    ("context_auto_defaults_json_ok", _check_context_auto_defaults_json),
     ("context_bundle_json_ok", _check_bundle_outputs),
     ("context_compress_incremental_clean_diagnostics_json_ok", _check_clean_incremental_diagnostics),
     ("context_apply_check_drift_json_ok", _check_apply_check_drift),

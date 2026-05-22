@@ -4,6 +4,7 @@
 
 - added `context start` as a zero-friction onboarding command that writes config/report files, runs doctor, and prints the next compression command
 - added `context doctor --write-report` for Markdown readiness reports
+- added automatic preset/focus/density defaults for common directory, code-file, and prose-file inputs
 - updated dogfood self-check to use `context start` before recommended trial compression and byte-exact restore verification
 
 ## 0.1.5

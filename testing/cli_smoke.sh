@@ -178,7 +178,7 @@ non_utf8_text_restore="$TMP_ROOT/non_utf8_restored.md"
 python3 -m cli context compress --text-file "$non_utf8_root/gbk_notes.md" --output-dir "$non_utf8_text_bundle" --json > "$non_utf8_text_json"
 python3 -m cli context restore --package-file "$non_utf8_text_bundle/context_manifest.json" --output-file "$non_utf8_text_restore" --json > /dev/null
 non_utf8_dir_json="$TMP_ROOT/non_utf8_dir.json"
-python3 -m cli context compress --input-dir "$non_utf8_root/project" --json > "$non_utf8_dir_json"
+python3 -m cli context compress --input-dir "$non_utf8_root/project" --focus-mode full --json > "$non_utf8_dir_json"
 python3 - "$non_utf8_text_json" "$non_utf8_root/gbk_notes.md" "$non_utf8_text_restore" "$non_utf8_dir_json" <<'PY'
 import hashlib
 import json
@@ -468,8 +468,8 @@ for idx in range(1, 46):
 PY
 preset_codebase_json="$TMP_ROOT/preset_codebase.json"
 preset_writing_json="$TMP_ROOT/preset_writing.json"
-python3 -m cli context compress --preset codebase --input-dir "$preset_strategy_dir" --skeleton-density compact --json > "$preset_codebase_json"
-python3 -m cli context compress --preset writing --input-dir "$preset_strategy_dir" --skeleton-density compact --json > "$preset_writing_json"
+python3 -m cli context compress --preset codebase --focus-mode full --input-dir "$preset_strategy_dir" --skeleton-density compact --json > "$preset_codebase_json"
+python3 -m cli context compress --preset writing --focus-mode full --input-dir "$preset_strategy_dir" --skeleton-density compact --json > "$preset_writing_json"
 python3 - "$preset_codebase_json" "$preset_writing_json" <<'PY'
 import json
 import re

@@ -635,6 +635,48 @@ def _check_context_start_json(workspace: Path) -> None:
     assert "mcp-skeleton-onboarding.md" not in entries
 
 
+def _check_context_quick_json(workspace: Path) -> None:
+    project = workspace / "quick_project"
+    (project / "src").mkdir(parents=True)
+    (project / "src" / "app.py").write_text(
+        "def run() -> str:\n"
+        "    return 'quick-ready'\n",
+        encoding="utf-8",
+    )
+    bundle_dir = workspace / "quick_bundle"
+    payload = _run_cli_json(
+        [
+            "context",
+            "quick",
+            "--input-dir",
+            str(project),
+            "--output-dir",
+            str(bundle_dir),
+            "--json",
+        ]
+    )
+    assert payload["status"] == "ok"
+    assert payload["entrypoint"] == "context-quick"
+    assert payload["quick_status"] == "ready"
+    assert payload["restore_safe"] is True
+    assert payload["doctor_readiness_status"] in {"ready", "watch"}
+    assert Path(payload["config_file"]).exists()
+    assert Path(payload["report_file"]).exists()
+    assert Path(payload["bundle_root"]).exists()
+    assert Path(payload["manifest_file"]).exists()
+    assert payload["bundle"]["entrypoint"] == "context-bundle"
+    assert payload["start"]["entrypoint"] == "context-start"
+    assert payload["inspect_command_args"][:3] == ["context", "inspect", "--package-file"]
+    assert payload["restore_command_args"][:3] == ["context", "restore", "--package-file"]
+    assert payload["inspect_command_text"].startswith("python3 -m cli context inspect")
+    assert payload["restore_command_text"].startswith("python3 -m cli context restore")
+    assert "MCP-Skeleton Quick" in payload["summary_text"]
+    assert "Bundle:" in payload["summary_text"]
+    assert "Next commands:" in payload["summary_text"]
+    inspect = _run_cli_json(payload["inspect_command_args"])
+    assert inspect["status"] == "ok"
+
+
 def _check_context_auto_defaults_json(workspace: Path) -> None:
     project = workspace / "auto_defaults_project"
     (project / "src").mkdir(parents=True)
@@ -1748,6 +1790,7 @@ CHECKS: list[tuple[str, Callable[[Path], None]]] = [
     ("context_config_recommend_json_ok", _check_context_config_recommend_json),
     ("context_doctor_json_ok", _check_context_doctor_json),
     ("context_start_json_ok", _check_context_start_json),
+    ("context_quick_json_ok", _check_context_quick_json),
     ("context_auto_defaults_json_ok", _check_context_auto_defaults_json),
     ("context_bundle_json_ok", _check_bundle_outputs),
     ("context_compress_incremental_clean_diagnostics_json_ok", _check_clean_incremental_diagnostics),

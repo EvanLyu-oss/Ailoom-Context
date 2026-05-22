@@ -3,6 +3,7 @@
 ## Unreleased
 
 - added `context start` as a zero-friction onboarding command that writes config/report files, runs doctor, and prints the next compression command
+- added `context quick` as a one-command start + restore-safety check + bundle workflow for zero-learning bundle creation
 - added `context doctor --write-report` for Markdown readiness reports
 - added automatic preset/focus/density defaults for common directory, code-file, and prose-file inputs
 - hardened dogfood, smoke, and release readiness checks against local `context start` onboarding artifacts in the repository root

@@ -717,6 +717,149 @@ def _render_context_start_summary(payload: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
+def _quick_restore_command_args(bundle_payload: dict[str, Any]) -> list[str]:
+    manifest_file = str(Path(str(bundle_payload.get("bundle_root") or "")) / "context_manifest.json")
+    mode = str(bundle_payload.get("compression_mode") or "")
+    args = ["context", "restore", "--package-file", manifest_file]
+    if mode == "text":
+        source_label = str(bundle_payload.get("source_label") or "restored.txt")
+        args.extend(["--output-file", str(Path.cwd() / source_label)])
+    else:
+        args.extend(["--output-dir", str(Path.cwd() / "mcp-skeleton-restore")])
+    return args
+
+
+def _render_context_quick_summary(payload: dict[str, Any]) -> str:
+    start = payload.get("start") or {}
+    bundle = payload.get("bundle") or {}
+    restore_safe = "OK" if payload.get("restore_safe") else "BLOCKED"
+    lines = [
+        "MCP-Skeleton Quick",
+        "",
+        f"Status: {payload.get('quick_status', '')}",
+        f"Restore safety: {restore_safe}",
+        f"Readiness: {payload.get('doctor_readiness_status', '')}",
+        "",
+        "Created:",
+        f"- Config: {payload.get('config_file', '') or '(not written)'}",
+        f"- Onboarding report: {payload.get('report_file', '') or '(not written)'}",
+        f"- Bundle: {payload.get('bundle_root', '') or '(not created)'}",
+        f"- Manifest: {payload.get('manifest_file', '') or '(not created)'}",
+        "",
+        "Recommended setup:",
+        f"- Mode: {start.get('recommended_mode', '')}",
+        f"- Files included: {(start.get('source_scale_profile') or {}).get('total_files', 0)}",
+        f"- Estimated token savings: {(start.get('metrics') or {}).get('estimated_savings_percent', 0)}%",
+        "",
+        "Next commands:",
+        f"- Inspect bundle: {payload.get('inspect_command_text', '') or '(not available)'}",
+        f"- Restore later: {payload.get('restore_command_text', '') or '(not available)'}",
+        "",
+        "Next steps:",
+    ]
+    lines.extend(f"- {item}" for item in payload.get("next_steps") or [])
+    warnings = list(start.get("warnings") or [])
+    if warnings:
+        lines.extend(["", "Warnings:"])
+        lines.extend(f"- {item.get('message', '')}" for item in warnings[:3])
+    if bundle.get("archive_path"):
+        lines.extend(["", f"Zip archive: {bundle.get('archive_path')}"])
+    return "\n".join(lines)
+
+
+def _build_context_quick_payload(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
+    start_args = _clone_args(args, context_command="start", output_file=None)
+    start_payload, start_exit = _build_context_start_payload(start_args)
+    restore_safe = bool(start_payload.get("restore_safe"))
+    if start_exit != EXIT_OK or not restore_safe:
+        payload = {
+            "status": "error",
+            "entrypoint": "context-quick",
+            "quick_status": "blocked",
+            "restore_safe": restore_safe,
+            "doctor_readiness_status": start_payload.get("doctor_readiness_status", ""),
+            "start": start_payload,
+            "bundle": {},
+            "bundle_root": "",
+            "manifest_file": "",
+            "inspect_command_args": [],
+            "inspect_command_text": "",
+            "restore_command_args": [],
+            "restore_command_text": "",
+            "next_steps": [
+                "quick stopped before creating a bundle because restore safety is not ok",
+                "review start.doctor.restore_check and rerun context quick after fixing the input/config",
+            ],
+        }
+        payload["summary_text"] = _render_context_quick_summary(payload)
+        return payload, start_exit if start_exit != EXIT_OK else EXIT_VALIDATION
+
+    bundle_args = _clone_args(
+        args,
+        context_command="bundle",
+        config_file=Path(str(start_payload.get("config_file"))) if start_payload.get("config_file") else getattr(args, "config_file", None),
+        preset_id=None,
+        focus_mode=None,
+        skeleton_density=None,
+        exclude_patterns=None,
+        output_file=None,
+    )
+    config_file, config_values, context_defaults = _resolve_context_defaults(bundle_args)
+    bundle_payload = build_context_bundle_payload(
+        inline_text=_inline_text(bundle_args),
+        text_file=_opt_path(bundle_args, "text_file"),
+        input_file=_opt_path(bundle_args, "input_file"),
+        input_dir=_opt_path(bundle_args, "input_dir"),
+        preset_id=context_defaults["preset_id"],
+        output_dir=_opt_path(bundle_args, "output_dir"),
+        make_zip=bool(getattr(bundle_args, "zip_bundle", False)),
+        candidate_inline_text=_candidate_inline_text(bundle_args),
+        candidate_text_file=_opt_path(bundle_args, "candidate_text_file"),
+        candidate_input_file=_opt_path(bundle_args, "candidate_input_file"),
+        candidate_input_dir=_opt_path(bundle_args, "candidate_input_dir"),
+        tokenizer_backend=getattr(bundle_args, "tokenizer_backend", None),
+        tokenizer_model=getattr(bundle_args, "tokenizer_model", None),
+        incremental=bool(getattr(bundle_args, "incremental", False)),
+        base_commit=getattr(bundle_args, "base_commit", None),
+        focus_mode=context_defaults["focus_mode"],
+        skeleton_density=context_defaults["skeleton_density"],
+        exclude_patterns=context_defaults["exclude_patterns"],
+        config_file=config_file,
+        config_values=config_values,
+    )
+    bundle_root = str(bundle_payload.get("bundle_root") or "")
+    manifest_file = str(Path(bundle_root) / "context_manifest.json") if bundle_root else ""
+    inspect_args = ["context", "inspect", "--package-file", manifest_file, "--json"] if manifest_file else []
+    restore_args = _quick_restore_command_args(bundle_payload) if manifest_file else []
+    payload = {
+        "status": "ok",
+        "entrypoint": "context-quick",
+        "quick_status": "ready",
+        "restore_safe": restore_safe,
+        "doctor_readiness_status": start_payload.get("doctor_readiness_status", ""),
+        "config_file": start_payload.get("config_file", ""),
+        "config_written": bool(start_payload.get("config_written")),
+        "report_file": start_payload.get("report_file", ""),
+        "report_written": bool(start_payload.get("report_written")),
+        "bundle_root": bundle_root,
+        "manifest_file": manifest_file,
+        "archive_path": bundle_payload.get("archive_path", ""),
+        "inspect_command_args": inspect_args,
+        "inspect_command_text": _format_cli_command(inspect_args),
+        "restore_command_args": restore_args,
+        "restore_command_text": _format_cli_command(restore_args),
+        "start": start_payload,
+        "bundle": bundle_payload,
+        "next_steps": [
+            "share the bundle directory or zip with the downstream AI/IDE",
+            "keep the manifest file so exact restore remains available",
+            "use the restore command if you need to reconstruct the original input later",
+        ],
+    }
+    payload["summary_text"] = _render_context_quick_summary(payload)
+    return payload, EXIT_OK
+
+
 def _clone_args(args: argparse.Namespace, **updates: Any) -> argparse.Namespace:
     values = dict(vars(args))
     values.update(updates)
@@ -1246,9 +1389,9 @@ def main(argv: list[str] | None = None) -> int:
 
 def cmd_context(args: argparse.Namespace) -> int:
     command = getattr(args, "context_command", None)
-    supported = {"compress", "restore", "inspect", "apply-check", "preset", "config", "init", "install-hook", "doctor", "start", "bundle", "patch", "patch-apply"}
+    supported = {"compress", "restore", "inspect", "apply-check", "preset", "config", "init", "install-hook", "doctor", "start", "quick", "bundle", "patch", "patch-apply"}
     if command not in supported:
-        return _emit_command_error(args, EXIT_USAGE, "invalid_usage", "supported context subcommands: compress, restore, inspect, apply-check, preset, config, init, install-hook, doctor, start, bundle, patch, patch-apply")
+        return _emit_command_error(args, EXIT_USAGE, "invalid_usage", "supported context subcommands: compress, restore, inspect, apply-check, preset, config, init, install-hook, doctor, start, quick, bundle, patch, patch-apply")
 
     if command == "preset":
         payload = build_context_preset_payload(getattr(args, "preset_id", None))
@@ -1274,6 +1417,10 @@ def cmd_context(args: argparse.Namespace) -> int:
 
     if command == "start":
         payload, exit_code = _build_context_start_payload(args)
+        return _emit_simple_result(args, payload, text=str(payload.get("summary_text", "")), exit_code=exit_code)
+
+    if command == "quick":
+        payload, exit_code = _build_context_quick_payload(args)
         return _emit_simple_result(args, payload, text=str(payload.get("summary_text", "")), exit_code=exit_code)
 
     if command == "compress":
@@ -1670,6 +1817,32 @@ def _build_parser() -> argparse.ArgumentParser:
     start.add_argument("--output-report-file", dest="output_report_file", help="Markdown onboarding report path; defaults to mcp-skeleton-onboarding.md near the config")
     start.add_argument("--force", action="store_true", help="Overwrite generated config/report files if they already exist")
     start.add_argument("--json", action="store_true")
+
+    quick = context_subparsers.add_parser("quick", help="One-command start + doctor + bundle workflow for zero-friction use")
+    quick.add_argument("--text", dest="context_text")
+    quick.add_argument("--text-file", dest="text_file")
+    quick.add_argument("--input-file", dest="input_file")
+    quick.add_argument("--input-dir", dest="input_dir")
+    quick.add_argument("--config", dest="config_file", help="Read existing context defaults before recommending")
+    quick.add_argument("--preset", dest="preset_id")
+    quick.add_argument("--focus-mode", dest="focus_mode", choices=["full", "tree", "imports", "symbols", "writing-outline"])
+    quick.add_argument("--skeleton-density", dest="skeleton_density", choices=["adaptive", "standard", "compact"])
+    quick.add_argument("--exclude", dest="exclude_patterns", action="append", help="Exclude a relative path or glob from directory compression; can be repeated")
+    quick.add_argument("--incremental", action="store_true")
+    quick.add_argument("--base-commit", dest="base_commit")
+    quick.add_argument("--candidate-text", dest="candidate_text")
+    quick.add_argument("--candidate-text-file", dest="candidate_text_file")
+    quick.add_argument("--candidate-input-file", dest="candidate_input_file")
+    quick.add_argument("--candidate-input-dir", dest="candidate_input_dir")
+    quick.add_argument("--tokenizer-backend", dest="tokenizer_backend", default="auto", choices=["auto", "heuristic", "tiktoken"])
+    quick.add_argument("--tokenizer-model", dest="tokenizer_model")
+    quick.add_argument("--zip", dest="zip_bundle", action="store_true")
+    quick.add_argument("--output-config-file", dest="output_config_file", help="Config path to write; defaults to .mcp-skeleton.json near the input")
+    quick.add_argument("--output-report-file", dest="output_report_file", help="Markdown onboarding report path; defaults to mcp-skeleton-onboarding.md near the config")
+    quick.add_argument("--output-dir", dest="output_dir", help="Bundle directory to create; defaults under .workspace_ail/context_bundles")
+    quick.add_argument("--output-file", dest="output_file", help="Write JSON or human summary to a file")
+    quick.add_argument("--force", action="store_true", help="Overwrite generated config/report files if they already exist")
+    quick.add_argument("--json", action="store_true")
 
     bundle = context_subparsers.add_parser("bundle", help="Export a full context bundle with compression, inspect, and optional apply-check artifacts")
     bundle.add_argument("--text", dest="context_text")

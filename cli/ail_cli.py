@@ -987,6 +987,30 @@ def _maybe_open_quick_bundle(args: argparse.Namespace, *, bundle_root: str) -> t
     return True, ""
 
 
+def _quick_copy_command_text(skeleton_file: str) -> str:
+    if not skeleton_file:
+        return ""
+    return f"cat {shlex.quote(skeleton_file)} | pbcopy"
+
+
+def _maybe_copy_quick_skeleton(args: argparse.Namespace, *, skeleton_file: str) -> tuple[bool, str]:
+    if not bool(getattr(args, "copy_command", False)):
+        return False, ""
+    if not skeleton_file:
+        return False, "skeleton file is not available"
+    if sys.platform != "darwin":
+        return False, "--copy-command currently uses pbcopy only on macOS"
+    try:
+        content = Path(skeleton_file).read_text(encoding="utf-8")
+    except OSError as exc:
+        return False, str(exc)
+    proc = subprocess.run(["pbcopy"], input=content, text=True, capture_output=True)
+    if proc.returncode != 0:
+        detail = (proc.stderr or proc.stdout or "pbcopy command failed").strip()
+        return False, detail
+    return True, ""
+
+
 def _build_quick_speed_tip(args: argparse.Namespace, *, start_payload: dict[str, Any], timings_ms: dict[str, Any], fast_path: bool) -> dict[str, Any]:
     if fast_path:
         return {}
@@ -1018,6 +1042,7 @@ def _render_context_quick_summary(payload: dict[str, Any]) -> str:
     timings = payload.get("timings_ms") or {}
     handoff = payload.get("handoff") or {}
     open_error = str(payload.get("open_error") or "")
+    copy_error = str(payload.get("copy_error") or "")
     quick_mode = "fast" if payload.get("fast_path") else "standard"
     scale_profile = start.get("source_scale_profile") or {}
     token_direction = str(metrics.get("estimated_token_direction") or "")
@@ -1061,6 +1086,12 @@ def _render_context_quick_summary(payload: dict[str, Any]) -> str:
         f"- Auto-open requested: {payload.get('open_requested', False)}",
         f"- Auto-open performed: {payload.get('open_performed', False)}",
         *( [f"- Open error: {open_error}"] if open_error else [] ),
+        "",
+        "Copy skeleton to clipboard:",
+        payload.get("copy_command_text") or "(not available)",
+        f"- Auto-copy requested: {payload.get('copy_requested', False)}",
+        f"- Auto-copy performed: {payload.get('copy_performed', False)}",
+        *( [f"- Copy error: {copy_error}"] if copy_error else [] ),
         "",
         "Recommended setup:",
         f"- Mode: {start.get('recommended_mode', '')}",
@@ -1268,6 +1299,10 @@ def _build_context_quick_payload(args: argparse.Namespace) -> tuple[dict[str, An
             "open_requested": bool(getattr(args, "open_bundle", False)),
             "open_performed": False,
             "open_error": "quick stopped before creating a bundle",
+            "copy_command_text": "",
+            "copy_requested": bool(getattr(args, "copy_command", False)),
+            "copy_performed": False,
+            "copy_error": "quick stopped before creating a bundle",
             "inspect_command_args": [],
             "inspect_command_text": "",
             "restore_command_args": [],
@@ -1326,6 +1361,8 @@ def _build_context_quick_payload(args: argparse.Namespace) -> tuple[dict[str, An
     handoff = _build_quick_handoff_payload(bundle_payload, bundle_root=bundle_root, manifest_file=manifest_file)
     open_command_text = _quick_open_command_text(bundle_root)
     open_performed, open_error = _maybe_open_quick_bundle(args, bundle_root=bundle_root)
+    copy_command_text = _quick_copy_command_text(str(handoff.get("skeleton_file") or ""))
+    copy_performed, copy_error = _maybe_copy_quick_skeleton(args, skeleton_file=str(handoff.get("skeleton_file") or ""))
     inspect_args = ["context", "inspect", "--package-file", manifest_file, "--json"] if manifest_file else []
     restore_args = _quick_restore_command_args(bundle_payload) if manifest_file else []
     timings_ms = {
@@ -1353,6 +1390,10 @@ def _build_context_quick_payload(args: argparse.Namespace) -> tuple[dict[str, An
         "open_requested": bool(getattr(args, "open_bundle", False)),
         "open_performed": open_performed,
         "open_error": open_error,
+        "copy_command_text": copy_command_text,
+        "copy_requested": bool(getattr(args, "copy_command", False)),
+        "copy_performed": copy_performed,
+        "copy_error": copy_error,
         "archive_path": bundle_payload.get("archive_path", ""),
         "inspect_command_args": inspect_args,
         "inspect_command_text": _format_cli_command(inspect_args),
@@ -2693,6 +2734,7 @@ def _build_parser() -> argparse.ArgumentParser:
     quick.add_argument("--tokenizer-model", dest="tokenizer_model")
     quick.add_argument("--fast", action="store_true", help="Skip config recommendation/onboarding generation while keeping restore safety checks enabled")
     quick.add_argument("--open", dest="open_bundle", action="store_true", help="Open the created bundle folder in Finder on macOS")
+    quick.add_argument("--copy-command", dest="copy_command", action="store_true", help="Copy the generated skeleton text to the macOS clipboard with pbcopy")
     quick.add_argument("--zip", dest="zip_bundle", action="store_true")
     quick.add_argument("--output-config-file", dest="output_config_file", help="Config path to write; defaults to .mcp-skeleton.json near the input")
     quick.add_argument("--output-report-file", dest="output_report_file", help="Markdown onboarding report path; defaults to mcp-skeleton-onboarding.md near the config")

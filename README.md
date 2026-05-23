@@ -166,6 +166,12 @@ To open the bundle folder automatically on macOS after creation:
 mcp-skeleton quick --input-dir . --open
 ```
 
+To copy the generated skeleton text directly to the macOS clipboard:
+
+```bash
+mcp-skeleton quick --input-dir . --copy-command
+```
+
 For very large directories where you want the fastest safe bundle path, use:
 
 ```bash

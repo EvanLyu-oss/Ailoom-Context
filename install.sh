@@ -5,6 +5,63 @@ ROOT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 INSTALL_DIR="${MCP_SKELETON_HOME:-$HOME/.mcp-skeleton}"
 VENV_DIR="$INSTALL_DIR/venv"
 BIN_DIR="$HOME/.local/bin"
+COMMAND_PATH="$BIN_DIR/mcp-skeleton"
+MARKER_FILE="$INSTALL_DIR/.mcp-skeleton-install"
+MODE="install"
+
+case "${1:-}" in
+  "")
+    MODE="install"
+    ;;
+  --update)
+    MODE="update"
+    ;;
+  --uninstall)
+    MODE="uninstall"
+    ;;
+  -h|--help)
+    echo "MCP-Skeleton macOS installer"
+    echo ""
+    echo "Usage:"
+    echo "  sh install.sh             install MCP-Skeleton"
+    echo "  sh install.sh --update    refresh the installed command from this checkout"
+    echo "  sh install.sh --uninstall remove the installed command and managed venv"
+    exit 0
+    ;;
+  *)
+    echo "error: unknown installer option: $1" >&2
+    echo "try: sh install.sh --help" >&2
+    exit 2
+    ;;
+esac
+
+if [ "$MODE" = "uninstall" ]; then
+  echo "MCP-Skeleton uninstaller"
+  echo ""
+  echo "Command:     $COMMAND_PATH"
+  echo "Install dir: $INSTALL_DIR"
+  echo ""
+  if [ -L "$COMMAND_PATH" ] || [ -f "$COMMAND_PATH" ]; then
+    rm -f "$COMMAND_PATH"
+    echo "Removed command: $COMMAND_PATH"
+  else
+    echo "Command already absent: $COMMAND_PATH"
+  fi
+  if [ -f "$MARKER_FILE" ]; then
+    rm -rf "$INSTALL_DIR"
+    echo "Removed managed install dir: $INSTALL_DIR"
+  elif [ -d "$VENV_DIR" ] && [ -f "$VENV_DIR/pyvenv.cfg" ]; then
+    rm -rf "$VENV_DIR"
+    rmdir "$INSTALL_DIR" 2>/dev/null || true
+    echo "Removed managed virtual environment: $VENV_DIR"
+  else
+    echo "Install dir was not removed because it is not marked as MCP-Skeleton-managed."
+  fi
+  echo ""
+  echo "Uninstalled successfully."
+  exit 0
+fi
+
 if [ "${PYTHON:-}" ]; then
   PYTHON_BIN="$PYTHON"
 else
@@ -23,10 +80,14 @@ PY
   done
 fi
 
-echo "MCP-Skeleton macOS installer"
+if [ "$MODE" = "update" ]; then
+  echo "MCP-Skeleton macOS updater"
+else
+  echo "MCP-Skeleton macOS installer"
+fi
 echo ""
 echo "Install dir: $INSTALL_DIR"
-echo "Command:     $BIN_DIR/mcp-skeleton"
+echo "Command:     $COMMAND_PATH"
 echo ""
 
 if [ -z "$PYTHON_BIN" ] || ! command -v "$PYTHON_BIN" >/dev/null 2>&1; then
@@ -42,21 +103,36 @@ PY
 
 mkdir -p "$INSTALL_DIR" "$BIN_DIR"
 
-echo "Creating virtual environment..."
+if [ "$MODE" = "update" ] && [ -d "$VENV_DIR" ]; then
+  echo "Refreshing virtual environment..."
+  rm -rf "$VENV_DIR"
+else
+  echo "Creating virtual environment..."
+fi
 echo "Using Python: $PYTHON_BIN"
 "$PYTHON_BIN" -m venv "$VENV_DIR"
 
-echo "Installing MCP-Skeleton..."
+if [ "$MODE" = "update" ]; then
+  echo "Updating MCP-Skeleton..."
+else
+  echo "Installing MCP-Skeleton..."
+fi
 "$VENV_DIR/bin/python" -m pip install --upgrade pip >/dev/null
 "$VENV_DIR/bin/python" -m pip install "$ROOT_DIR[context-metrics]" >/dev/null
 
-ln -sf "$VENV_DIR/bin/mcp-skeleton" "$BIN_DIR/mcp-skeleton"
+printf '%s\n' "managed-by=mcp-skeleton" "source=$ROOT_DIR" > "$MARKER_FILE"
+ln -sf "$VENV_DIR/bin/mcp-skeleton" "$COMMAND_PATH"
 
 echo ""
-echo "Installed successfully."
+if [ "$MODE" = "update" ]; then
+  echo "Updated successfully."
+else
+  echo "Installed successfully."
+fi
 echo ""
 echo "Try it now:"
-echo "  $BIN_DIR/mcp-skeleton quick --input-dir ."
+echo "  $COMMAND_PATH quick --input-dir ."
+echo "  $COMMAND_PATH version"
 echo ""
 if ! printf '%s' "$PATH" | grep -q "$BIN_DIR"; then
   echo "Note: $BIN_DIR is not currently in PATH."

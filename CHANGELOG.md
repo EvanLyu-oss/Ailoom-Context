@@ -11,6 +11,7 @@
 - added `context quick --fast` for large inputs that need the fastest safe bundle path without config recommendation/onboarding generation
 - added standard `context quick` speed tips that suggest a copy/paste `--fast` command for large or noticeably slow inputs
 - added `context demo` / `mcp-skeleton demo` so new users can run a complete sample compression and restore-safety flow without preparing a project
+- added `mcp-skeleton version`, doctor install-path hints, and `install.sh --update/--uninstall` for simpler install lifecycle management
 - hardened dogfood expectations against nested MCP-Skeleton onboarding artifacts created during local self-use
 - added `context doctor --write-report` for Markdown readiness reports
 - added automatic preset/focus/density defaults for common directory, code-file, and prose-file inputs

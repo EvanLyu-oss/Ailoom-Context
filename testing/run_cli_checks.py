@@ -57,6 +57,26 @@ def _run_top_level_cli_json(args: list[str], *, cwd: Path = ROOT, expect: int = 
         raise SmokeFailure(f"top-level command did not emit JSON: {' '.join(args)}\nSTDOUT:\n{proc.stdout}") from exc
 
 
+def _python310_plus() -> str:
+    candidates = [sys.executable, "python3.12", "python3.11", "python3.10", "python3"]
+    for candidate in candidates:
+        try:
+            proc = subprocess.run(
+                [
+                    candidate,
+                    "-c",
+                    "import sys; raise SystemExit(0 if sys.version_info >= (3, 10) else 1)",
+                ],
+                text=True,
+                capture_output=True,
+            )
+        except FileNotFoundError:
+            continue
+        if proc.returncode == 0:
+            return candidate
+    raise SmokeFailure("Python 3.10+ is required for installer lifecycle smoke checks")
+
+
 def _sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
@@ -583,6 +603,8 @@ def _check_context_doctor_json(workspace: Path) -> None:
     assert payload["timings_ms"]["total"] >= payload["timings_ms"]["compress"] >= 0
     assert payload["timings_ms"]["restore_check"] >= 0
     assert "Total time:" in payload["summary_text"]
+    assert payload["install"]["entrypoint"] == "mcp-skeleton-version"
+    assert "Command:" in payload["summary_text"]
     assert payload["action_plan"]
     assert payload["next_steps"] == [item["message"] for item in payload["action_plan"]]
     assert payload["compression_explanations"]
@@ -801,6 +823,61 @@ def _check_context_demo_json(workspace: Path) -> None:
     assert inspect["status"] == "ok"
     restore = _run_cli_json([*quick["restore_command_args"], "--json"])
     assert restore["status"] == "ok"
+
+
+def _check_top_level_version_json(workspace: Path) -> None:
+    del workspace
+    payload = _run_top_level_cli_json(["version", "--json"])
+    assert payload["status"] == "ok"
+    assert payload["entrypoint"] == "mcp-skeleton-version"
+    assert payload["package_name"] == "mcp-skeleton"
+    assert payload["version"]
+    assert payload["python_version"]
+    assert payload["executable"]
+    assert "mcp-skeleton version" in payload["summary_text"]
+
+
+def _check_installer_lifecycle_json(workspace: Path) -> None:
+    home = workspace / "installer_home"
+    home.mkdir()
+    env = os.environ.copy()
+    env["HOME"] = str(home)
+    env["MCP_SKELETON_HOME"] = str(home / ".mcp-skeleton")
+    env["PYTHON"] = _python310_plus()
+    install = subprocess.run(
+        ["sh", str(ROOT / "install.sh")],
+        cwd=str(ROOT),
+        env=env,
+        text=True,
+        capture_output=True,
+    )
+    assert install.returncode == 0, install.stderr + install.stdout
+    command = home / ".local" / "bin" / "mcp-skeleton"
+    assert command.exists()
+    assert "Installed successfully." in install.stdout
+
+    update = subprocess.run(
+        ["sh", str(ROOT / "install.sh"), "--update"],
+        cwd=str(ROOT),
+        env=env,
+        text=True,
+        capture_output=True,
+    )
+    assert update.returncode == 0, update.stderr + update.stdout
+    assert command.exists()
+    assert "Updated successfully." in update.stdout
+
+    uninstall = subprocess.run(
+        ["sh", str(ROOT / "install.sh"), "--uninstall"],
+        cwd=str(ROOT),
+        env=env,
+        text=True,
+        capture_output=True,
+    )
+    assert uninstall.returncode == 0, uninstall.stderr + uninstall.stdout
+    assert not command.exists()
+    assert not (home / ".mcp-skeleton").exists()
+    assert "Uninstalled successfully." in uninstall.stdout
 
 
 def _check_context_explain_json(workspace: Path) -> None:
@@ -2019,6 +2096,8 @@ CHECKS: list[tuple[str, Callable[[Path], None]]] = [
     ("context_quick_fast_json_ok", _check_context_quick_fast_json),
     ("context_quick_speed_tip_json_ok", _check_context_quick_speed_tip_json),
     ("context_demo_json_ok", _check_context_demo_json),
+    ("top_level_version_json_ok", _check_top_level_version_json),
+    ("installer_lifecycle_json_ok", _check_installer_lifecycle_json),
     ("context_explain_json_ok", _check_context_explain_json),
     ("top_level_cli_alias_json_ok", _check_top_level_cli_alias_json),
     ("context_auto_defaults_json_ok", _check_context_auto_defaults_json),

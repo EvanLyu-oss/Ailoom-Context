@@ -89,6 +89,24 @@ sh install.sh
 
 This creates an isolated virtual environment under `~/.mcp-skeleton`, installs tokenizer-backed metrics, and links the `mcp-skeleton` command into `~/.local/bin`.
 
+Check the installed command:
+
+```bash
+mcp-skeleton version
+```
+
+Update from a newer downloaded checkout:
+
+```bash
+sh install.sh --update
+```
+
+Uninstall the managed command and virtual environment:
+
+```bash
+sh install.sh --uninstall
+```
+
 If `~/.local/bin` is not on your PATH, add:
 
 ```bash

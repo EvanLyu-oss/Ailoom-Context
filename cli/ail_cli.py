@@ -4,6 +4,7 @@ import argparse
 import hashlib
 import json
 import os
+import shutil
 import shlex
 import sys
 import tempfile
@@ -34,6 +35,8 @@ EXIT_OK = 0
 EXIT_GENERAL_ERROR = 1
 EXIT_USAGE = 2
 EXIT_VALIDATION = 3
+PACKAGE_NAME = "mcp-skeleton"
+FALLBACK_VERSION = "0.1.0"
 
 CONTEXT_CONFIG_KEYS = [
     "preset",
@@ -80,6 +83,67 @@ PROSE_EXTENSIONS = {".md", ".txt", ".rst", ".adoc"}
 
 def _print_json_payload(payload: Any, *, file: Any = sys.stdout) -> None:
     print(json.dumps(payload, indent=2, ensure_ascii=False), file=file)
+
+
+def _project_root() -> Path:
+    return Path(__file__).resolve().parents[1]
+
+
+def _read_project_version() -> str:
+    try:
+        from importlib.metadata import version
+
+        return version(PACKAGE_NAME)
+    except Exception:
+        pass
+    pyproject = _project_root() / "pyproject.toml"
+    if pyproject.exists():
+        for line in pyproject.read_text(encoding="utf-8").splitlines():
+            stripped = line.strip()
+            if stripped.startswith("version"):
+                _, value = stripped.split("=", 1)
+                return value.strip().strip('"').strip("'")
+    return FALLBACK_VERSION
+
+
+def _build_version_payload() -> dict[str, Any]:
+    command_path = shutil.which("mcp-skeleton") or ""
+    executable = command_path or sys.executable
+    payload = {
+        "status": "ok",
+        "entrypoint": "mcp-skeleton-version",
+        "package_name": PACKAGE_NAME,
+        "version": _read_project_version(),
+        "python_version": sys.version.split()[0],
+        "python_executable": sys.executable,
+        "executable": executable,
+        "command_path": command_path,
+        "project_root": str(_project_root()),
+        "install_home": os.environ.get("MCP_SKELETON_HOME", str(Path.home() / ".mcp-skeleton")),
+        "path_hint": "ok" if command_path else "mcp-skeleton command was not found on PATH; use python3 -m cli or run sh install.sh",
+    }
+    payload["summary_text"] = "\n".join(
+        [
+            "mcp-skeleton version",
+            "",
+            f"Version: {payload['version']}",
+            f"Python: {payload['python_version']} ({payload['python_executable']})",
+            f"Command: {payload['command_path'] or '(not found on PATH)'}",
+            f"Install home: {payload['install_home']}",
+            f"Project root: {payload['project_root']}",
+            f"PATH status: {payload['path_hint']}",
+        ]
+    )
+    return payload
+
+
+def _emit_version_result(args: argparse.Namespace) -> int:
+    payload = _build_version_payload()
+    if bool(getattr(args, "json", False)):
+        _print_json_payload(payload)
+    else:
+        print(payload["summary_text"])
+    return EXIT_OK
 
 
 def _print_json_error(
@@ -681,6 +745,7 @@ def _build_context_doctor_payload(
         "recommended_command_args": recommended_command_args,
         "recommended_command_text": _format_cli_command(recommended_command_args),
         "restore_check": restore_check,
+        "install": _build_version_payload(),
         "timings_ms": {
             "compress": compress_ms,
             "restore_check": restore_check_ms,
@@ -781,6 +846,7 @@ def _render_context_doctor_summary(payload: dict[str, Any]) -> str:
     action_plan = list(payload.get("action_plan") or [])
     timings = payload.get("timings_ms") or {}
     metrics = payload.get("metrics") or {}
+    install = payload.get("install") or {}
     lines = [
         "MCP-Skeleton Doctor",
         "",
@@ -790,6 +856,7 @@ def _render_context_doctor_summary(payload: dict[str, Any]) -> str:
         f"Mismatched files: {restore_check.get('mismatched_count', 0)}",
         f"Estimated token savings: {metrics.get('estimated_tokens_saved', '')}",
         f"Total time: {timings.get('total', '')} ms",
+        f"Command: {install.get('executable', '') or '(not found on PATH)'}",
         f"Recommended command: {payload.get('recommended_command_text', '') or '(not available)'}",
         "",
         "Next steps:",
@@ -2050,8 +2117,10 @@ def main(argv: list[str] | None = None) -> int:
     if not getattr(args, "command", None):
         parser.print_help()
         return EXIT_USAGE
+    if args.command == "version":
+        return _emit_version_result(args)
     if args.command != "context":
-        return _emit_command_error(args, EXIT_USAGE, "invalid_usage", "supported top-level command: context")
+        return _emit_command_error(args, EXIT_USAGE, "invalid_usage", "supported top-level commands: context, version")
     try:
         return cmd_context(args)
     except FileNotFoundError as exc:
@@ -2392,6 +2461,9 @@ def _build_parser() -> argparse.ArgumentParser:
         ),
     )
     subparsers = parser.add_subparsers(dest="command")
+
+    version_parser = subparsers.add_parser("version", help="Show MCP-Skeleton version, Python, and install path details")
+    version_parser.add_argument("--json", action="store_true")
 
     context_parser = subparsers.add_parser("context", help="Compress long code or text context into an MCP skeleton and restore it later")
     context_subparsers = context_parser.add_subparsers(dest="context_command")

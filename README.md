@@ -179,6 +179,7 @@ mcp-skeleton recent --input-dir .
 ```
 
 `recent` reads `.workspace_ail/recent_quick.json` and prints the last bundle path, skeleton file, manifest, open command, clipboard command, inspect command, and restore command.
+It also checks whether the project appears to have changed since the last quick bundle; if the bundle may be stale, it prints a copy/paste refresh command.
 
 For very large directories where you want the fastest safe bundle path, use:
 

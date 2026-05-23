@@ -1026,13 +1026,53 @@ def _recent_file_from_args(args: argparse.Namespace) -> Path:
     return _recent_root_from_args(args) / ".workspace_ail" / "recent_quick.json"
 
 
+def _recent_source_fingerprint(root: Path) -> str:
+    digest = hashlib.sha256()
+    if root.is_file():
+        stat = root.stat()
+        digest.update(str(root.name).encode("utf-8", errors="surrogateescape"))
+        digest.update(str(stat.st_size).encode("ascii"))
+        digest.update(str(stat.st_mtime_ns).encode("ascii"))
+        return digest.hexdigest()
+    ignored_dirs = {".git", ".workspace_ail", "__pycache__", "node_modules", "dist", "build", "coverage", ".venv", ".next"}
+    for path in sorted(root.rglob("*")):
+        rel = path.relative_to(root)
+        if any(part in ignored_dirs for part in rel.parts):
+            continue
+        if not path.is_file():
+            continue
+        stat = path.stat()
+        digest.update(str(rel).encode("utf-8", errors="surrogateescape"))
+        digest.update(str(stat.st_size).encode("ascii"))
+        digest.update(str(stat.st_mtime_ns).encode("ascii"))
+    return digest.hexdigest()
+
+
+def _recent_refresh_command_text(args: argparse.Namespace) -> str:
+    command_args: list[Any] = ["context", "quick"]
+    input_dir = _opt_path(args, "input_dir")
+    input_file = _opt_path(args, "input_file")
+    text_file = _opt_path(args, "text_file")
+    if input_dir is not None:
+        command_args.extend(["--input-dir", str(input_dir.resolve())])
+    elif input_file is not None:
+        command_args.extend(["--input-file", str(input_file.resolve())])
+    elif text_file is not None:
+        command_args.extend(["--text-file", str(text_file.resolve())])
+    else:
+        command_args.extend(["--input-dir", str(Path.cwd().resolve())])
+    return _format_cli_command(command_args)
+
+
 def _build_recent_record(args: argparse.Namespace, payload: dict[str, Any]) -> dict[str, Any]:
     metrics = ((payload.get("start") or {}).get("metrics") or {})
+    recent_root = _recent_root_from_args(args)
     return {
         "status": "ok",
         "entrypoint": "context-recent-record",
         "created_at": time.strftime("%Y-%m-%dT%H:%M:%S%z", time.localtime()),
-        "source_root": str(_recent_root_from_args(args)),
+        "source_root": str(recent_root),
+        "source_fingerprint": _recent_source_fingerprint(recent_root),
         "bundle_root": payload.get("bundle_root", ""),
         "manifest_file": payload.get("manifest_file", ""),
         "skeleton_file": (payload.get("handoff") or {}).get("skeleton_file", ""),
@@ -1040,6 +1080,7 @@ def _build_recent_record(args: argparse.Namespace, payload: dict[str, Any]) -> d
         "restore_command_text": payload.get("restore_command_text", ""),
         "open_command_text": payload.get("open_command_text", ""),
         "copy_command_text": payload.get("copy_command_text", ""),
+        "refresh_command_text": _recent_refresh_command_text(args),
         "estimated_tokens_saved": metrics.get("estimated_tokens_saved", 0),
         "estimated_savings_percent": metrics.get("estimated_savings_percent", 0),
         "experience": payload.get("experience") or {},
@@ -1066,6 +1107,18 @@ def _render_context_recent_summary(payload: dict[str, Any]) -> str:
         f"- Manifest: {payload.get('manifest_file', '') or '(not available)'}",
         f"- Estimated tokens saved: {payload.get('estimated_tokens_saved', 0)}",
         f"- Estimated token savings: {payload.get('estimated_savings_percent', 0)}%",
+        f"- Freshness: {payload.get('freshness_status', 'unknown')}",
+    ]
+    if payload.get("freshness_status") == "stale":
+        lines.extend([
+            "",
+            "Bundle may be stale:",
+            "Your project has changed since this quick bundle was created.",
+            "",
+            "Refresh bundle:",
+            payload.get("refresh_command_text") or "(not available)",
+        ])
+    lines.extend([
         "",
         "Open bundle:",
         payload.get("open_command_text") or "(not available)",
@@ -1076,7 +1129,7 @@ def _render_context_recent_summary(payload: dict[str, Any]) -> str:
         "Next commands:",
         f"- Inspect: {payload.get('inspect_command_text', '') or '(not available)'}",
         f"- Restore: {payload.get('restore_command_text', '') or '(not available)'}",
-    ]
+    ])
     return "\n".join(lines)
 
 
@@ -1093,10 +1146,15 @@ def _build_context_recent_payload(args: argparse.Namespace) -> tuple[dict[str, A
         payload["summary_text"] = _render_context_recent_summary(payload)
         return payload, EXIT_VALIDATION
     record = json.loads(recent_file.read_text(encoding="utf-8"))
+    recent_root = _recent_root_from_args(args)
+    source_fingerprint = _recent_source_fingerprint(recent_root)
+    recorded_source_fingerprint = str(record.get("source_fingerprint") or "")
+    freshness_status = "fresh" if recorded_source_fingerprint and source_fingerprint == recorded_source_fingerprint else "stale"
     payload = {
         "status": "ok",
         "entrypoint": "context-recent",
         "recent_status": "ready",
+        "freshness_status": freshness_status,
         "recent_file": str(recent_file),
         **{key: record.get(key, "") for key in [
             "source_root",
@@ -1107,7 +1165,10 @@ def _build_context_recent_payload(args: argparse.Namespace) -> tuple[dict[str, A
             "restore_command_text",
             "open_command_text",
             "copy_command_text",
+            "refresh_command_text",
         ]},
+        "source_fingerprint": source_fingerprint,
+        "recorded_source_fingerprint": recorded_source_fingerprint,
         "estimated_tokens_saved": record.get("estimated_tokens_saved", 0),
         "estimated_savings_percent": record.get("estimated_savings_percent", 0),
         "experience": record.get("experience") or {},

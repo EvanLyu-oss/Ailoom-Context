@@ -772,6 +772,7 @@ def _check_context_recent_json(workspace: Path) -> None:
     assert recent["status"] == "ok"
     assert recent["entrypoint"] == "context-recent"
     assert recent["recent_status"] == "ready"
+    assert recent["freshness_status"] == "fresh"
     assert recent["bundle_root"] == quick["bundle_root"]
     assert recent["manifest_file"] == quick["manifest_file"]
     assert recent["skeleton_file"] == quick["handoff"]["skeleton_file"]
@@ -782,6 +783,20 @@ def _check_context_recent_json(workspace: Path) -> None:
     assert "MCP-Skeleton Recent" in recent["summary_text"]
     assert "Last bundle:" in recent["summary_text"]
     assert "Copy skeleton:" in recent["summary_text"]
+
+    (project / "src" / "app.py").write_text(
+        "def run() -> str:\n"
+        "    return 'recent-stale'\n",
+        encoding="utf-8",
+    )
+    stale = _run_top_level_cli_json(["recent", "--input-dir", str(project), "--json"])
+    assert stale["status"] == "ok"
+    assert stale["recent_status"] == "ready"
+    assert stale["freshness_status"] == "stale"
+    assert stale["source_fingerprint"] != stale["recorded_source_fingerprint"]
+    assert stale["refresh_command_text"].startswith("mcp-skeleton quick --input-dir")
+    assert "Bundle may be stale:" in stale["summary_text"]
+    assert "Refresh bundle:" in stale["summary_text"]
 
 
 def _check_context_quick_fast_json(workspace: Path) -> None:

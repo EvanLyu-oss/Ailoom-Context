@@ -869,10 +869,12 @@ def _render_context_quick_summary(payload: dict[str, Any]) -> str:
     restore_safe = "OK" if payload.get("restore_safe") else "BLOCKED"
     metrics = start.get("metrics") or {}
     timings = payload.get("timings_ms") or {}
+    quick_mode = "fast" if payload.get("fast_path") else "standard"
     lines = [
         "MCP-Skeleton Quick",
         "",
         f"Status: {payload.get('quick_status', '')}",
+        f"Mode: {quick_mode}",
         f"Restore safety: {restore_safe}",
         f"Readiness: {payload.get('doctor_readiness_status', '')}",
         "",
@@ -902,6 +904,15 @@ def _render_context_quick_summary(payload: dict[str, Any]) -> str:
         "Next steps:",
     ]
     lines.extend(f"- {item}" for item in payload.get("next_steps") or [])
+    if payload.get("fast_path"):
+        lines.extend(
+            [
+                "",
+                "Fast path:",
+                "- skipped config recommendation/onboarding generation",
+                "- kept sandbox restore safety verification enabled",
+            ]
+        )
     warnings = list(start.get("warnings") or [])
     if warnings:
         lines.extend(["", "Warnings:"])
@@ -955,6 +966,79 @@ def _quick_output_dir_conflict_payload(output_dir: Path) -> dict[str, Any] | Non
     return payload
 
 
+def _build_quick_fast_start_payload(args: argparse.Namespace) -> tuple[dict[str, Any], dict[str, Any], float, int]:
+    doctor_args = _clone_args(
+        args,
+        context_command="doctor",
+        output_report_file=None,
+        force=False,
+    )
+    doctor_started = time.perf_counter()
+    doctor_payload, doctor_exit = _build_context_doctor_payload(
+        doctor_args,
+        include_compression_payload=True,
+    )
+    doctor_ms = _elapsed_ms(doctor_started)
+    reusable_compression_payload = doctor_payload.pop("_compression_payload", None)
+    metrics = dict(doctor_payload.get("metrics") or {})
+    source_tokens = int(metrics.get("estimated_token_count_source") or 0)
+    saved_tokens = int(metrics.get("estimated_tokens_saved") or 0)
+    metrics["estimated_savings_percent"] = round((saved_tokens / source_tokens) * 100, 2) if source_tokens else 0.0
+    recommended_config = dict(doctor_payload.get("recommended_config") or {})
+    recommended_mode = " / ".join(
+        str(item) for item in [
+            doctor_payload.get("preset_id") or recommended_config.get("preset_id"),
+            doctor_payload.get("focus_mode") or recommended_config.get("focus_mode"),
+            doctor_payload.get("skeleton_density") or recommended_config.get("skeleton_density"),
+        ] if item
+    )
+    restore_check = doctor_payload.get("restore_check") or {}
+    restore_safe = restore_check.get("status") == "ok"
+    action_plan = _build_readiness_action_plan(
+        readiness_status=str(doctor_payload.get("readiness_status") or ""),
+        restore_check=restore_check,
+        warnings=list(doctor_payload.get("compression_warnings") or []),
+        recommended_command_args=list(doctor_payload.get("recommended_command_args") or []),
+    )
+    start_payload = {
+        "status": "ok" if doctor_exit == EXIT_OK else "error",
+        "entrypoint": "context-start",
+        "mode": "fast",
+        "fast_path": True,
+        "config_file": doctor_payload.get("config_file", ""),
+        "config_written": False,
+        "config_already_exists": bool(doctor_payload.get("config_file")),
+        "report_file": "",
+        "report_written": False,
+        "report_already_exists": False,
+        "recommended_config": recommended_config,
+        "recommended_mode": recommended_mode,
+        "recommended_command_args": list(doctor_payload.get("recommended_command_args") or []),
+        "recommended_command_text": doctor_payload.get("recommended_command_text", ""),
+        "next_command": doctor_payload.get("recommended_command_text", ""),
+        "doctor_readiness_status": doctor_payload.get("readiness_status", ""),
+        "restore_safe": restore_safe,
+        "restore_check": restore_check,
+        "source_scale_profile": doctor_payload.get("source_scale_profile") or {},
+        "metrics": metrics,
+        "warnings": list(doctor_payload.get("compression_warnings") or []),
+        "explanations": list(doctor_payload.get("compression_explanations") or []),
+        "recommendation": {},
+        "doctor": doctor_payload,
+        "timings_ms": {
+            "config_recommend": 0.0,
+            "doctor": doctor_ms,
+            "doctor_compress": (doctor_payload.get("timings_ms") or {}).get("compress", 0.0),
+            "doctor_restore_check": (doctor_payload.get("timings_ms") or {}).get("restore_check", 0.0),
+            "total": doctor_ms,
+        },
+        "action_plan": action_plan,
+        "next_steps": [item["message"] for item in action_plan],
+    }
+    start_payload["summary_text"] = _render_context_start_summary(start_payload)
+    return start_payload, reusable_compression_payload if isinstance(reusable_compression_payload, dict) else {}, doctor_ms, doctor_exit
+
+
 def _build_context_quick_payload(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
     total_started = time.perf_counter()
     output_dir = _opt_path(args, "output_dir")
@@ -963,14 +1047,18 @@ def _build_context_quick_payload(args: argparse.Namespace) -> tuple[dict[str, An
         if conflict_payload is not None:
             return conflict_payload, EXIT_USAGE
 
-    start_args = _clone_args(args, context_command="start", output_file=None)
-    start_started = time.perf_counter()
-    start_payload, start_exit = _build_context_start_payload(
-        start_args,
-        include_doctor_compression_payload=True,
-    )
-    start_ms = _elapsed_ms(start_started)
-    reusable_compression_payload = start_payload.pop("_compression_payload", None)
+    fast_path = bool(getattr(args, "fast", False))
+    if fast_path:
+        start_payload, reusable_compression_payload, start_ms, start_exit = _build_quick_fast_start_payload(args)
+    else:
+        start_args = _clone_args(args, context_command="start", output_file=None)
+        start_started = time.perf_counter()
+        start_payload, start_exit = _build_context_start_payload(
+            start_args,
+            include_doctor_compression_payload=True,
+        )
+        start_ms = _elapsed_ms(start_started)
+        reusable_compression_payload = start_payload.pop("_compression_payload", None)
     restore_safe = bool(start_payload.get("restore_safe"))
     if start_exit != EXIT_OK or not restore_safe:
         payload = {
@@ -1044,6 +1132,7 @@ def _build_context_quick_payload(args: argparse.Namespace) -> tuple[dict[str, An
         "status": "ok",
         "entrypoint": "context-quick",
         "quick_status": "ready",
+        "fast_path": fast_path,
         "restore_safe": restore_safe,
         "doctor_readiness_status": start_payload.get("doctor_readiness_status", ""),
         "config_file": start_payload.get("config_file", ""),
@@ -2182,6 +2271,7 @@ def _build_parser() -> argparse.ArgumentParser:
     quick.add_argument("--candidate-input-dir", dest="candidate_input_dir")
     quick.add_argument("--tokenizer-backend", dest="tokenizer_backend", default="auto", choices=["auto", "heuristic", "tiktoken"])
     quick.add_argument("--tokenizer-model", dest="tokenizer_model")
+    quick.add_argument("--fast", action="store_true", help="Skip config recommendation/onboarding generation while keeping restore safety checks enabled")
     quick.add_argument("--zip", dest="zip_bundle", action="store_true")
     quick.add_argument("--output-config-file", dest="output_config_file", help="Config path to write; defaults to .mcp-skeleton.json near the input")
     quick.add_argument("--output-report-file", dest="output_report_file", help="Markdown onboarding report path; defaults to mcp-skeleton-onboarding.md near the config")

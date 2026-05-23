@@ -708,6 +708,47 @@ def _check_context_quick_json(workspace: Path) -> None:
     assert inspect["status"] == "ok"
 
 
+def _check_context_quick_fast_json(workspace: Path) -> None:
+    project = workspace / "quick_fast_project"
+    (project / "src").mkdir(parents=True)
+    (project / "src" / "app.py").write_text(
+        "def run() -> str:\n"
+        "    return 'quick-fast-ready'\n",
+        encoding="utf-8",
+    )
+    bundle_dir = workspace / "quick_fast_bundle"
+    payload = _run_cli_json(
+        [
+            "context",
+            "quick",
+            "--fast",
+            "--input-dir",
+            str(project),
+            "--output-dir",
+            str(bundle_dir),
+            "--json",
+        ]
+    )
+    assert payload["status"] == "ok"
+    assert payload["entrypoint"] == "context-quick"
+    assert payload["fast_path"] is True
+    assert payload["restore_safe"] is True
+    assert payload["start"]["mode"] == "fast"
+    assert payload["start"]["report_written"] is False
+    assert payload["start"]["config_written"] is False
+    assert Path(payload["bundle_root"]).exists()
+    assert Path(payload["manifest_file"]).exists()
+    assert payload["timings_ms"]["start_config_recommend"] == 0.0
+    assert payload["timings_ms"]["bundle"] < max(1000, payload["timings_ms"]["start"] * 2)
+    assert "Mode: fast" in payload["summary_text"]
+    assert "Fast path:" in payload["summary_text"]
+    assert "_compression_payload" not in payload
+    assert "_compression_payload" not in payload["start"]
+    assert "_compression_payload" not in payload["start"]["doctor"]
+    restore = _run_cli_json([*payload["restore_command_args"], "--json"])
+    assert restore["status"] == "ok"
+
+
 def _check_context_explain_json(workspace: Path) -> None:
     project = workspace / "explain_project"
     (project / "src").mkdir(parents=True)
@@ -1921,6 +1962,7 @@ CHECKS: list[tuple[str, Callable[[Path], None]]] = [
     ("context_doctor_json_ok", _check_context_doctor_json),
     ("context_start_json_ok", _check_context_start_json),
     ("context_quick_json_ok", _check_context_quick_json),
+    ("context_quick_fast_json_ok", _check_context_quick_fast_json),
     ("context_explain_json_ok", _check_context_explain_json),
     ("top_level_cli_alias_json_ok", _check_top_level_cli_alias_json),
     ("context_auto_defaults_json_ok", _check_context_auto_defaults_json),

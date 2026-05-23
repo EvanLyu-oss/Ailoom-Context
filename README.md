@@ -126,6 +126,16 @@ If you do not pass `--preset`, `--focus-mode`, or `--skeleton-density`, MCP-Skel
 
 One-command bundle creation:
 
+Try MCP-Skeleton without preparing your own project first:
+
+```bash
+mcp-skeleton demo
+```
+
+`demo` creates a lightweight sample project, builds a safe bundle, verifies restore safety, shows token impact, and prints inspect/restore commands.
+
+One-command bundle creation for your project:
+
 ```bash
 mcp-skeleton quick --input-dir .
 ```

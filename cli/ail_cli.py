@@ -66,6 +66,7 @@ CONTEXT_SUBCOMMANDS = {
     "doctor",
     "start",
     "quick",
+    "demo",
     "bundle",
     "patch",
     "patch-apply",
@@ -1311,6 +1312,205 @@ def _build_context_explain_payload(args: argparse.Namespace) -> tuple[dict[str, 
     return payload, EXIT_OK
 
 
+def _write_demo_project(source_dir: Path) -> None:
+    (source_dir / "src").mkdir(parents=True, exist_ok=True)
+    (source_dir / "docs").mkdir(parents=True, exist_ok=True)
+    (source_dir / "tests").mkdir(parents=True, exist_ok=True)
+    architecture_notes = "\n\n".join(
+        [
+            (
+                f"## Feature Slice {idx}\n\n"
+                "The product keeps a small public interface while preserving exact project state for later restore. "
+                "Each workflow records a manifest, an inspectable skeleton, and a restore package so an AI assistant can "
+                "reason over the project without receiving every raw byte up front. The important guarantee is simple: "
+                "the skeleton can be compact, but the restore path must remain lossless and auditable.\n\n"
+                "- Compress the relevant source tree before a long AI session.\n"
+                "- Share the generated skeleton with the assistant or IDE.\n"
+                "- Keep the manifest beside the bundle for exact restore.\n"
+                "- Use doctor or quick when the user wants safe defaults."
+            )
+            for idx in range(1, 9)
+        ]
+    )
+    handoff_notes = "\n".join(
+        [
+            f"- Task {idx}: keep the UX direct, explain the token impact, and verify restore safety before recommending the bundle."
+            for idx in range(1, 31)
+        ]
+    )
+    (source_dir / "README.md").write_text(
+        "# Demo Project\n\n"
+        "This demo project lets MCP-Skeleton show compression, restore safety, token impact, and next-step guidance "
+        "without needing your own files first.\n\n"
+        "It is intentionally larger than a hello-world example so the first run demonstrates useful token savings "
+        "instead of a misleading tiny-project expansion.\n",
+        encoding="utf-8",
+    )
+    (source_dir / "src" / "app.py").write_text(
+        "from dataclasses import dataclass\n\n"
+        "@dataclass\n"
+        "class Task:\n"
+        "    title: str\n"
+        "    done: bool = False\n\n"
+        "def summarize(tasks: list[Task]) -> str:\n"
+        "    complete = sum(1 for task in tasks if task.done)\n"
+        "    return f'{complete}/{len(tasks)} tasks complete'\n",
+        encoding="utf-8",
+    )
+    (source_dir / "src" / "pipeline.py").write_text(
+        "from __future__ import annotations\n\n"
+        "from dataclasses import dataclass\n"
+        "from pathlib import Path\n\n\n"
+        "@dataclass\n"
+        "class BundlePlan:\n"
+        "    input_dir: Path\n"
+        "    output_dir: Path\n"
+        "    focus_mode: str = 'imports'\n"
+        "    density: str = 'adaptive'\n\n\n"
+        "def build_steps(plan: BundlePlan) -> list[str]:\n"
+        "    return [\n"
+        "        'scan source tree',\n"
+        "        f'compress with {plan.focus_mode}/{plan.density}',\n"
+        "        'write manifest and skeleton',\n"
+        "        'verify restore in a sandbox',\n"
+        "    ]\n\n\n"
+        "def describe(plan: BundlePlan) -> str:\n"
+        "    steps = ', '.join(build_steps(plan))\n"
+        "    return f'Bundle {plan.input_dir} into {plan.output_dir}: {steps}'\n",
+        encoding="utf-8",
+    )
+    (source_dir / "src" / "restore.py").write_text(
+        "from __future__ import annotations\n\n"
+        "import hashlib\n"
+        "from pathlib import Path\n\n\n"
+        "def sha256_file(path: Path) -> str:\n"
+        "    digest = hashlib.sha256()\n"
+        "    with path.open('rb') as handle:\n"
+        "        for chunk in iter(lambda: handle.read(1024 * 1024), b''):\n"
+        "            digest.update(chunk)\n"
+        "    return digest.hexdigest()\n\n\n"
+        "def compare_files(left: Path, right: Path) -> bool:\n"
+        "    return sha256_file(left) == sha256_file(right)\n",
+        encoding="utf-8",
+    )
+    (source_dir / "docs" / "handoff.md").write_text(
+        "# Handoff Notes\n\n"
+        f"{handoff_notes}\n",
+        encoding="utf-8",
+    )
+    (source_dir / "docs" / "architecture.md").write_text(
+        "# Architecture Notes\n\n"
+        f"{architecture_notes}\n",
+        encoding="utf-8",
+    )
+    (source_dir / "tests" / "test_pipeline.py").write_text(
+        "from pathlib import Path\n\n"
+        "from src.pipeline import BundlePlan, build_steps\n\n\n"
+        "def test_build_steps_mentions_restore() -> None:\n"
+        "    plan = BundlePlan(input_dir=Path('src'), output_dir=Path('bundle'))\n"
+        "    assert any('restore' in step for step in build_steps(plan))\n",
+        encoding="utf-8",
+    )
+
+
+def _default_demo_root(args: argparse.Namespace) -> Path:
+    output_dir = _opt_path(args, "output_dir")
+    if output_dir is not None:
+        return output_dir.resolve() if output_dir.is_absolute() else (Path.cwd() / output_dir).resolve()
+    stamp = time.strftime("%Y%m%d-%H%M%S", time.localtime())
+    return Path.cwd().resolve() / ".workspace_ail" / "demo_runs" / f"mcp-skeleton-demo-{stamp}"
+
+
+def _render_context_demo_summary(payload: dict[str, Any]) -> str:
+    quick = payload.get("quick") or {}
+    start = quick.get("start") or {}
+    metrics = start.get("metrics") or {}
+    lines = [
+        "MCP-Skeleton Demo",
+        "",
+        f"Status: {payload.get('demo_status', '')}",
+        f"Demo root: {payload.get('demo_root', '')}",
+        f"Restore safety: {'OK' if quick.get('restore_safe') else 'BLOCKED'}",
+        "",
+        "What happened:",
+        f"- Created demo source: {payload.get('source_dir', '')}",
+        f"- Created bundle: {quick.get('bundle_root', '')}",
+        f"- Manifest: {quick.get('manifest_file', '')}",
+        "",
+        "Token impact:",
+        f"- Source tokens: {metrics.get('estimated_token_count_source', 0)}",
+        f"- Skeleton tokens: {metrics.get('estimated_token_count_skeleton', 0)}",
+        f"- Estimated tokens saved: {metrics.get('estimated_tokens_saved', 0)}",
+        f"- Estimated token savings: {metrics.get('estimated_savings_percent', 0)}%",
+        "",
+        "Try next:",
+        f"- Inspect: {quick.get('inspect_command_text', '')}",
+        f"- Restore: {quick.get('restore_command_text', '')}",
+        "",
+        "Use on your project:",
+        "mcp-skeleton quick --input-dir .",
+        "mcp-skeleton quick --fast --input-dir .",
+    ]
+    return "\n".join(lines)
+
+
+def _build_context_demo_payload(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
+    demo_root = _default_demo_root(args)
+    source_dir = demo_root / "source"
+    bundle_dir = demo_root / "bundle"
+    if demo_root.exists() and any(demo_root.iterdir()) and not bool(getattr(args, "force", False)):
+        raise ValueError(f"demo output directory already exists; use --force to overwrite: {demo_root}")
+    if demo_root.exists() and bool(getattr(args, "force", False)):
+        import shutil
+
+        shutil.rmtree(demo_root)
+    _write_demo_project(source_dir)
+    quick_args = _clone_args(
+        args,
+        context_command="quick",
+        fast=True,
+        input_dir=source_dir,
+        input_file=None,
+        text_file=None,
+        context_text=None,
+        output_dir=bundle_dir,
+        output_file=None,
+        output_config_file=None,
+        output_report_file=None,
+        force=False,
+    )
+    quick_payload, quick_exit = _build_context_quick_payload(quick_args)
+    manifest_file = str(quick_payload.get("manifest_file") or "")
+    if manifest_file:
+        demo_restore_args = [
+            "context",
+            "restore",
+            "--package-file",
+            manifest_file,
+            "--output-dir",
+            str(demo_root / "restore"),
+        ]
+        quick_payload["restore_command_args"] = demo_restore_args
+        quick_payload["restore_command_text"] = _format_cli_command(demo_restore_args)
+        quick_payload["summary_text"] = _render_context_quick_summary(quick_payload)
+    payload = {
+        "status": "ok" if quick_exit == EXIT_OK else "error",
+        "entrypoint": "context-demo",
+        "demo_status": "ready" if quick_exit == EXIT_OK else "blocked",
+        "demo_root": str(demo_root),
+        "source_dir": str(source_dir),
+        "bundle_dir": str(bundle_dir),
+        "quick": quick_payload,
+        "next_steps": [
+            "inspect the demo bundle",
+            "restore the demo bundle",
+            "run mcp-skeleton quick --input-dir . in your own project",
+        ],
+    }
+    payload["summary_text"] = _render_context_demo_summary(payload)
+    return payload, quick_exit
+
+
 def _clone_args(args: argparse.Namespace, **updates: Any) -> argparse.Namespace:
     values = dict(vars(args))
     values.update(updates)
@@ -1866,7 +2066,7 @@ def cmd_context(args: argparse.Namespace) -> int:
     command = getattr(args, "context_command", None)
     supported = CONTEXT_SUBCOMMANDS
     if command not in supported:
-        return _emit_command_error(args, EXIT_USAGE, "invalid_usage", "supported context subcommands: compress, restore, inspect, explain, apply-check, preset, config, init, install-hook, doctor, start, quick, bundle, patch, patch-apply")
+        return _emit_command_error(args, EXIT_USAGE, "invalid_usage", "supported context subcommands: compress, restore, inspect, explain, apply-check, preset, config, init, install-hook, doctor, start, quick, demo, bundle, patch, patch-apply")
 
     if command == "preset":
         payload = build_context_preset_payload(getattr(args, "preset_id", None))
@@ -1896,6 +2096,10 @@ def cmd_context(args: argparse.Namespace) -> int:
 
     if command == "quick":
         payload, exit_code = _build_context_quick_payload(args)
+        return _emit_simple_result(args, payload, text=str(payload.get("summary_text", "")), exit_code=exit_code)
+
+    if command == "demo":
+        payload, exit_code = _build_context_demo_payload(args)
         return _emit_simple_result(args, payload, text=str(payload.get("summary_text", "")), exit_code=exit_code)
 
     if command == "explain":
@@ -2339,6 +2543,11 @@ def _build_parser() -> argparse.ArgumentParser:
     quick.add_argument("--output-file", dest="output_file", help="Write JSON or human summary to a file")
     quick.add_argument("--force", action="store_true", help="Overwrite generated config/report files if they already exist")
     quick.add_argument("--json", action="store_true")
+
+    demo = context_subparsers.add_parser("demo", help="Run a one-command demo that creates a sample project, safe bundle, and restore guidance")
+    demo.add_argument("--output-dir", dest="output_dir", help="Demo root directory; defaults under .workspace_ail/demo_runs")
+    demo.add_argument("--force", action="store_true", help="Overwrite --output-dir if it already exists")
+    demo.add_argument("--json", action="store_true")
 
     bundle = context_subparsers.add_parser("bundle", help="Export a full context bundle with compression, inspect, and optional apply-check artifacts")
     bundle.add_argument("--text", dest="context_text")

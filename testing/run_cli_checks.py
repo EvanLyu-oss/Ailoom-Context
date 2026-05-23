@@ -781,6 +781,28 @@ def _check_context_quick_speed_tip_json(workspace: Path) -> None:
     assert "--fast" in payload["summary_text"]
 
 
+def _check_context_demo_json(workspace: Path) -> None:
+    demo_root = workspace / "demo_run"
+    payload = _run_top_level_cli_json(["demo", "--output-dir", str(demo_root), "--json"])
+    assert payload["status"] == "ok"
+    assert payload["entrypoint"] == "context-demo"
+    assert payload["demo_status"] == "ready"
+    assert Path(payload["source_dir"]).exists()
+    assert Path(payload["bundle_dir"]).exists()
+    quick = payload["quick"]
+    assert quick["entrypoint"] == "context-quick"
+    assert quick["fast_path"] is True
+    assert quick["restore_safe"] is True
+    assert Path(quick["manifest_file"]).exists()
+    assert "MCP-Skeleton Demo" in payload["summary_text"]
+    assert "Token impact:" in payload["summary_text"]
+    assert "Use on your project:" in payload["summary_text"]
+    inspect = _run_cli_json(quick["inspect_command_args"])
+    assert inspect["status"] == "ok"
+    restore = _run_cli_json([*quick["restore_command_args"], "--json"])
+    assert restore["status"] == "ok"
+
+
 def _check_context_explain_json(workspace: Path) -> None:
     project = workspace / "explain_project"
     (project / "src").mkdir(parents=True)
@@ -1996,6 +2018,7 @@ CHECKS: list[tuple[str, Callable[[Path], None]]] = [
     ("context_quick_json_ok", _check_context_quick_json),
     ("context_quick_fast_json_ok", _check_context_quick_fast_json),
     ("context_quick_speed_tip_json_ok", _check_context_quick_speed_tip_json),
+    ("context_demo_json_ok", _check_context_demo_json),
     ("context_explain_json_ok", _check_context_explain_json),
     ("top_level_cli_alias_json_ok", _check_top_level_cli_alias_json),
     ("context_auto_defaults_json_ok", _check_context_auto_defaults_json),

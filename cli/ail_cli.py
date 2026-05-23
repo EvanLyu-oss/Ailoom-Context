@@ -953,6 +953,30 @@ def _quick_fast_command_text(args: argparse.Namespace) -> str:
     return _format_cli_command(command_args)
 
 
+def _quick_run_command_text(args: argparse.Namespace) -> str:
+    command_args = ["context", "quick"]
+    if bool(getattr(args, "fast", False)):
+        command_args.append("--fast")
+    if bool(getattr(args, "reuse_if_fresh", False)):
+        command_args.append("--reuse-if-fresh")
+    if _inline_text(args) is not None:
+        return ""
+    if _opt_path(args, "input_dir") is not None:
+        command_args.extend(["--input-dir", str(_opt_path(args, "input_dir").resolve())])  # type: ignore[union-attr]
+    elif _opt_path(args, "input_file") is not None:
+        command_args.extend(["--input-file", str(_opt_path(args, "input_file").resolve())])  # type: ignore[union-attr]
+    elif _opt_path(args, "text_file") is not None:
+        command_args.extend(["--text-file", str(_opt_path(args, "text_file").resolve())])  # type: ignore[union-attr]
+    else:
+        return ""
+    output_dir = _opt_path(args, "output_dir")
+    if output_dir is not None:
+        command_args.extend(["--output-dir", str(output_dir.resolve() if output_dir.is_absolute() else (Path.cwd() / output_dir).resolve())])
+    if getattr(args, "zip_bundle", False):
+        command_args.append("--zip")
+    return _format_cli_command(command_args)
+
+
 def _build_quick_handoff_payload(bundle_payload: dict[str, Any], *, bundle_root: str, manifest_file: str) -> dict[str, Any]:
     files = bundle_payload.get("files") or {}
     skeleton_file = str(files.get("skeleton_file") or (str(Path(bundle_root) / "context_skeleton.mcp") if bundle_root else ""))
@@ -1332,6 +1356,35 @@ def _build_quick_experience_payload(*, start_payload: dict[str, Any], timings_ms
 
 
 def _render_context_quick_summary(payload: dict[str, Any]) -> str:
+    if payload.get("preview"):
+        start = payload.get("start") or {}
+        metrics = start.get("metrics") or {}
+        scale_profile = start.get("source_scale_profile") or {}
+        timings = payload.get("timings_ms") or {}
+        lines = [
+            "MCP-Skeleton Quick Preview",
+            "",
+            f"Status: {payload.get('quick_status', '')}",
+            f"Restore safety: {'OK' if payload.get('restore_safe') else 'BLOCKED'}",
+            "No files were written.",
+            "",
+            "What would happen:",
+            f"- Files included: {scale_profile.get('total_files', 0)}",
+            f"- Source tokens: {metrics.get('estimated_token_count_source', 0)}",
+            f"- Skeleton tokens: {metrics.get('estimated_token_count_skeleton', 0)}",
+            f"- Estimated savings: {metrics.get('estimated_tokens_saved', 0)} tokens ({metrics.get('estimated_savings_percent', 0)}%)",
+            f"- Recommended mode: {start.get('recommended_mode', '')}",
+            f"- Bundle output: {payload.get('bundle_root', '') or '(default)'}",
+            f"- Manifest output: {payload.get('manifest_file', '') or '(default)'}",
+            "",
+            "Run for real:",
+            payload.get("run_command_text") or "(not available)",
+            "",
+            "Timing:",
+            f"- Preview: {timings.get('total', 0)} ms",
+        ]
+        return "\n".join(lines)
+
     start = payload.get("start") or {}
     bundle = payload.get("bundle") or {}
     restore_safe = "OK" if payload.get("restore_safe") else "BLOCKED"
@@ -1642,6 +1695,45 @@ def _build_context_quick_payload(args: argparse.Namespace) -> tuple[dict[str, An
         }
         payload["summary_text"] = _render_context_quick_summary(payload)
         return payload, start_exit if start_exit != EXIT_OK else EXIT_VALIDATION
+
+    output_dir = _opt_path(args, "output_dir")
+    if output_dir is not None:
+        bundle_root_preview = str(output_dir.resolve() if output_dir.is_absolute() else (Path.cwd() / output_dir).resolve())
+    else:
+        source_label = str(start_payload.get("source_label") or (start_payload.get("doctor") or {}).get("source_label") or "context")
+        bundle_root_preview = str(Path.cwd().resolve() / ".workspace_ail" / "context_bundles" / f"{source_label}-preview")
+    manifest_file_preview = str(Path(bundle_root_preview) / "context_manifest.json")
+    if bool(getattr(args, "preview", False)):
+        timings_ms = {
+            "start": start_ms,
+            "start_config_recommend": (start_payload.get("timings_ms") or {}).get("config_recommend", 0.0),
+            "start_doctor": (start_payload.get("timings_ms") or {}).get("doctor", 0.0),
+            "bundle": 0.0,
+            "total": _elapsed_ms(total_started),
+        }
+        payload = {
+            "status": "ok",
+            "entrypoint": "context-quick",
+            "quick_status": "preview",
+            "preview": True,
+            "write_performed": False,
+            "fast_path": fast_path,
+            "restore_safe": restore_safe,
+            "doctor_readiness_status": start_payload.get("doctor_readiness_status", ""),
+            "bundle_root": bundle_root_preview,
+            "manifest_file": manifest_file_preview,
+            "recent_file": str(_recent_file_from_args(args)),
+            "run_command_text": _quick_run_command_text(args),
+            "start": start_payload,
+            "bundle": {},
+            "timings_ms": timings_ms,
+            "next_steps": [
+                "review the estimated savings and output path",
+                "run the suggested command without --preview to create the bundle",
+            ],
+        }
+        payload["summary_text"] = _render_context_quick_summary(payload)
+        return payload, EXIT_OK
 
     bundle_args = _clone_args(
         args,
@@ -3063,6 +3155,7 @@ def _build_parser() -> argparse.ArgumentParser:
     quick.add_argument("--tokenizer-model", dest="tokenizer_model")
     quick.add_argument("--fast", action="store_true", help="Skip config recommendation/onboarding generation while keeping restore safety checks enabled")
     quick.add_argument("--reuse-if-fresh", action="store_true", help="Reuse the most recent quick bundle when the project fingerprint is unchanged")
+    quick.add_argument("--preview", action="store_true", help="Preview restore safety, token savings, and output paths without writing a bundle")
     quick.add_argument("--open", dest="open_bundle", action="store_true", help="Open the created bundle folder in Finder on macOS")
     quick.add_argument("--copy-command", dest="copy_command", action="store_true", help="Copy the generated skeleton text to the macOS clipboard with pbcopy")
     quick.add_argument("--zip", dest="zip_bundle", action="store_true")

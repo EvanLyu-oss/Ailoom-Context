@@ -782,6 +782,41 @@ def _check_context_quick_json(workspace: Path) -> None:
     assert reused["timings_ms"]["bundle"] == 0.0
     assert "Reused previous bundle:" in reused["summary_text"]
 
+    preview_project = workspace / "quick_preview_project"
+    (preview_project / "src").mkdir(parents=True)
+    (preview_project / "src" / "app.py").write_text(
+        "def run() -> str:\n"
+        "    return 'quick-preview'\n",
+        encoding="utf-8",
+    )
+    preview_dir = workspace / "quick_preview_bundle"
+    preview = _run_cli_json(
+        [
+            "context",
+            "quick",
+            "--preview",
+            "--input-dir",
+            str(preview_project),
+            "--output-dir",
+            str(preview_dir),
+            "--json",
+        ]
+    )
+    assert preview["status"] == "ok"
+    assert preview["entrypoint"] == "context-quick"
+    assert preview["quick_status"] == "preview"
+    assert preview["preview"] is True
+    assert preview["restore_safe"] is True
+    assert Path(preview["bundle_root"]) == preview_dir.resolve()
+    assert preview["manifest_file"].endswith("context_manifest.json")
+    assert preview["write_performed"] is False
+    assert not preview_dir.exists()
+    assert not Path(preview["recent_file"]).exists()
+    assert preview["run_command_text"].startswith("mcp-skeleton quick --input-dir")
+    assert "MCP-Skeleton Quick Preview" in preview["summary_text"]
+    assert "No files were written." in preview["summary_text"]
+    assert "Run for real:" in preview["summary_text"]
+
 
 def _check_context_recent_json(workspace: Path) -> None:
     project = workspace / "recent_project"

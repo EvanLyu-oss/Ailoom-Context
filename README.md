@@ -158,7 +158,13 @@ One-command bundle creation for your project:
 mcp-skeleton quick --input-dir .
 ```
 
-`context quick` runs the zero-friction setup, checks restore safety, writes a full bundle, and prints the bundle path plus inspect/restore commands. Use it when you want the shortest safe path from “I have a project” to “I have a shareable MCP-Skeleton bundle.”
+`context quick` runs the zero-friction setup, checks restore safety, writes a full bundle, and prints the bundle path plus inspect/restore commands. It also points out the exact `context_skeleton.mcp` file to give to an AI or IDE, the bundle folder to keep, and a copy/paste `open <bundle>` command for locating the generated files on macOS.
+
+To open the bundle folder automatically on macOS after creation:
+
+```bash
+mcp-skeleton quick --input-dir . --open
+```
 
 For very large directories where you want the fastest safe bundle path, use:
 

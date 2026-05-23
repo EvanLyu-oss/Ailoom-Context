@@ -6,6 +6,7 @@ import json
 import os
 import shutil
 import shlex
+import subprocess
 import sys
 import tempfile
 import time
@@ -966,6 +967,26 @@ def _build_quick_handoff_payload(bundle_payload: dict[str, Any], *, bundle_root:
     }
 
 
+def _quick_open_command_text(bundle_root: str) -> str:
+    if not bundle_root:
+        return ""
+    return " ".join(["open", shlex.quote(bundle_root)])
+
+
+def _maybe_open_quick_bundle(args: argparse.Namespace, *, bundle_root: str) -> tuple[bool, str]:
+    if not bool(getattr(args, "open_bundle", False)):
+        return False, ""
+    if not bundle_root:
+        return False, "bundle folder is not available"
+    if sys.platform != "darwin":
+        return False, "--open currently opens Finder only on macOS"
+    proc = subprocess.run(["open", bundle_root], text=True, capture_output=True)
+    if proc.returncode != 0:
+        detail = (proc.stderr or proc.stdout or "open command failed").strip()
+        return False, detail
+    return True, ""
+
+
 def _build_quick_speed_tip(args: argparse.Namespace, *, start_payload: dict[str, Any], timings_ms: dict[str, Any], fast_path: bool) -> dict[str, Any]:
     if fast_path:
         return {}
@@ -996,6 +1017,7 @@ def _render_context_quick_summary(payload: dict[str, Any]) -> str:
     metrics = start.get("metrics") or {}
     timings = payload.get("timings_ms") or {}
     handoff = payload.get("handoff") or {}
+    open_error = str(payload.get("open_error") or "")
     quick_mode = "fast" if payload.get("fast_path") else "standard"
     scale_profile = start.get("source_scale_profile") or {}
     token_direction = str(metrics.get("estimated_token_direction") or "")
@@ -1033,6 +1055,12 @@ def _render_context_quick_summary(payload: dict[str, Any]) -> str:
         f"- Bundle folder to keep: {handoff.get('bundle_root', '') or '(not available)'}",
         f"- Manifest for restore: {handoff.get('manifest_file', '') or '(not available)'}",
         f"- Guidance: {handoff.get('message', '') or 'feed the skeleton file to your AI or IDE'}",
+        "",
+        "Open bundle folder:",
+        payload.get("open_command_text") or "(not available)",
+        f"- Auto-open requested: {payload.get('open_requested', False)}",
+        f"- Auto-open performed: {payload.get('open_performed', False)}",
+        *( [f"- Open error: {open_error}"] if open_error else [] ),
         "",
         "Recommended setup:",
         f"- Mode: {start.get('recommended_mode', '')}",
@@ -1236,6 +1264,10 @@ def _build_context_quick_payload(args: argparse.Namespace) -> tuple[dict[str, An
             "bundle_root": "",
             "manifest_file": "",
             "handoff": {},
+            "open_command_text": "",
+            "open_requested": bool(getattr(args, "open_bundle", False)),
+            "open_performed": False,
+            "open_error": "quick stopped before creating a bundle",
             "inspect_command_args": [],
             "inspect_command_text": "",
             "restore_command_args": [],
@@ -1292,6 +1324,8 @@ def _build_context_quick_payload(args: argparse.Namespace) -> tuple[dict[str, An
     bundle_root = str(bundle_payload.get("bundle_root") or "")
     manifest_file = str(Path(bundle_root) / "context_manifest.json") if bundle_root else ""
     handoff = _build_quick_handoff_payload(bundle_payload, bundle_root=bundle_root, manifest_file=manifest_file)
+    open_command_text = _quick_open_command_text(bundle_root)
+    open_performed, open_error = _maybe_open_quick_bundle(args, bundle_root=bundle_root)
     inspect_args = ["context", "inspect", "--package-file", manifest_file, "--json"] if manifest_file else []
     restore_args = _quick_restore_command_args(bundle_payload) if manifest_file else []
     timings_ms = {
@@ -1315,6 +1349,10 @@ def _build_context_quick_payload(args: argparse.Namespace) -> tuple[dict[str, An
         "bundle_root": bundle_root,
         "manifest_file": manifest_file,
         "handoff": handoff,
+        "open_command_text": open_command_text,
+        "open_requested": bool(getattr(args, "open_bundle", False)),
+        "open_performed": open_performed,
+        "open_error": open_error,
         "archive_path": bundle_payload.get("archive_path", ""),
         "inspect_command_args": inspect_args,
         "inspect_command_text": _format_cli_command(inspect_args),
@@ -2654,6 +2692,7 @@ def _build_parser() -> argparse.ArgumentParser:
     quick.add_argument("--tokenizer-backend", dest="tokenizer_backend", default="auto", choices=["auto", "heuristic", "tiktoken"])
     quick.add_argument("--tokenizer-model", dest="tokenizer_model")
     quick.add_argument("--fast", action="store_true", help="Skip config recommendation/onboarding generation while keeping restore safety checks enabled")
+    quick.add_argument("--open", dest="open_bundle", action="store_true", help="Open the created bundle folder in Finder on macOS")
     quick.add_argument("--zip", dest="zip_bundle", action="store_true")
     quick.add_argument("--output-config-file", dest="output_config_file", help="Config path to write; defaults to .mcp-skeleton.json near the input")
     quick.add_argument("--output-report-file", dest="output_report_file", help="Markdown onboarding report path; defaults to mcp-skeleton-onboarding.md near the config")

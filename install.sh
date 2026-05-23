@@ -130,9 +130,29 @@ else
   echo "Installed successfully."
 fi
 echo ""
-echo "Try it now:"
-echo "  $COMMAND_PATH quick --input-dir ."
-echo "  $COMMAND_PATH version"
+echo "MCP-Skeleton Install Ready"
+echo ""
+if "$COMMAND_PATH" version >/dev/null 2>&1; then
+  echo "Command check: OK"
+else
+  echo "Command check: unable to run $COMMAND_PATH version"
+fi
+if command -v mcp-skeleton >/dev/null 2>&1; then
+  echo "PATH status: ready - mcp-skeleton is available on PATH"
+  QUICK_COMMAND="mcp-skeleton quick --input-dir ."
+  VERSION_COMMAND="mcp-skeleton version"
+else
+  echo "PATH status: needs shell setup - $BIN_DIR is not currently on PATH"
+  QUICK_COMMAND="$COMMAND_PATH quick --input-dir ."
+  VERSION_COMMAND="$COMMAND_PATH version"
+fi
+echo ""
+echo "Copy/paste next:"
+echo "  $QUICK_COMMAND"
+echo ""
+echo "Useful checks:"
+echo "  $VERSION_COMMAND"
+echo "  $COMMAND_PATH doctor --input-dir ."
 echo ""
 if ! printf '%s' "$PATH" | grep -q "$BIN_DIR"; then
   echo "Note: $BIN_DIR is not currently in PATH."

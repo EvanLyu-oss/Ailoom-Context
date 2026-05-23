@@ -946,6 +946,11 @@ def _check_installer_lifecycle_json(workspace: Path) -> None:
     command = home / ".local" / "bin" / "mcp-skeleton"
     assert command.exists()
     assert "Installed successfully." in install.stdout
+    assert "MCP-Skeleton Install Ready" in install.stdout
+    assert "PATH status:" in install.stdout
+    assert "Command check:" in install.stdout
+    assert "Copy/paste next:" in install.stdout
+    assert "mcp-skeleton quick --input-dir ." in install.stdout
 
     update = subprocess.run(
         ["sh", str(ROOT / "install.sh"), "--update"],
@@ -957,6 +962,7 @@ def _check_installer_lifecycle_json(workspace: Path) -> None:
     assert update.returncode == 0, update.stderr + update.stdout
     assert command.exists()
     assert "Updated successfully." in update.stdout
+    assert "MCP-Skeleton Install Ready" in update.stdout
 
     uninstall = subprocess.run(
         ["sh", str(ROOT / "install.sh"), "--uninstall"],

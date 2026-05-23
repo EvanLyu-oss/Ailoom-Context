@@ -88,6 +88,7 @@ sh install.sh
 ```
 
 This creates an isolated virtual environment under `~/.mcp-skeleton`, installs tokenizer-backed metrics, and links the `mcp-skeleton` command into `~/.local/bin`.
+The installer finishes with a command check, PATH status, and a copy/paste `quick` command so you can start on the current project immediately.
 
 Check the installed command:
 

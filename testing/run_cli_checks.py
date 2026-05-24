@@ -963,8 +963,13 @@ def _check_context_quick_speed_tip_json(workspace: Path) -> None:
     assert payload["speed_tip"]["status"] == "available"
     assert payload["speed_tip"]["total_files"] >= 100
     assert "mcp-skeleton quick --fast" in payload["speed_tip"]["suggested_command_text"]
+    assert payload["performance_advice"]["dominant_phase"] in {"setup_and_doctor", "config_recommendation", "restore_safety_check", "bundle_write", "quick_total"}
+    assert payload["performance_advice"]["why_it_may_feel_slow"]
+    assert payload["performance_advice"]["next_best_command_text"].startswith("mcp-skeleton quick")
     assert "Speed tip:" in payload["summary_text"]
     assert "--fast" in payload["summary_text"]
+    assert "Why it may feel slow:" in payload["summary_text"]
+    assert "Best next command:" in payload["summary_text"]
 
 
 def _check_context_demo_json(workspace: Path) -> None:

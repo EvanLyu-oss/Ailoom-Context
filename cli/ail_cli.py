@@ -1371,6 +1371,7 @@ def _build_quick_experience_payload(*, start_payload: dict[str, Any], timings_ms
 
 def _build_quick_performance_advice(args: argparse.Namespace, *, start_payload: dict[str, Any], timings_ms: dict[str, Any], fast_path: bool) -> dict[str, Any]:
     total_ms = float(timings_ms.get("total") or 0.0)
+    total_files = int((start_payload.get("source_scale_profile") or {}).get("total_files") or 0)
     if total_ms < 500:
         speed_status = "fast"
         speed_message = "fast: under 500 ms"
@@ -1384,10 +1385,38 @@ def _build_quick_performance_advice(args: argparse.Namespace, *, start_payload: 
     fast_command_text = _quick_fast_command_text(args)
     reuse_args = _clone_args(args, reuse_if_fresh=True, preview=False)
     reuse_command_text = _quick_run_command_text(reuse_args)
+    phase_candidates = {
+        "config_recommendation": float(timings_ms.get("start_config_recommend") or 0.0),
+        "restore_safety_check": float(timings_ms.get("start_doctor") or 0.0),
+        "bundle_write": float(timings_ms.get("bundle") or 0.0),
+        "setup_and_doctor": float(timings_ms.get("start") or 0.0),
+    }
+    dominant_phase, dominant_phase_ms = max(phase_candidates.items(), key=lambda item: item[1])
+    if dominant_phase_ms <= 0:
+        dominant_phase = "quick_total"
+        dominant_phase_ms = total_ms
+    if fast_path:
+        next_best_command_text = reuse_command_text
+    elif speed_status == "slow" or total_files >= 100:
+        next_best_command_text = fast_command_text
+    else:
+        next_best_command_text = reuse_command_text
+    if dominant_phase == "restore_safety_check":
+        why_it_may_feel_slow = "restore safety verification is the largest visible step; it protects exact recovery"
+    elif dominant_phase == "config_recommendation":
+        why_it_may_feel_slow = "configuration recommendation is the largest visible step; --fast skips this after you trust defaults"
+    elif dominant_phase == "bundle_write":
+        why_it_may_feel_slow = "bundle writing is the largest visible step; --reuse-if-fresh avoids repeating it when unchanged"
+    elif dominant_phase == "setup_and_doctor":
+        why_it_may_feel_slow = "setup and doctor checks dominate this run; --fast trims onboarding work while keeping restore safety"
+    else:
+        why_it_may_feel_slow = "quick completed without a single dominant measured phase"
     if fast_path:
         recommendation = "you are already using --fast; use --reuse-if-fresh after the first bundle when the project has not changed"
     elif speed_status == "slow":
         recommendation = "use --fast for the first run, then --reuse-if-fresh for unchanged follow-up runs"
+    elif total_files >= 100:
+        recommendation = "large input detected; use --fast for a quicker first run or --reuse-if-fresh when unchanged"
     else:
         recommendation = "after this bundle, use --reuse-if-fresh to avoid recompressing unchanged projects"
     return {
@@ -1396,13 +1425,17 @@ def _build_quick_performance_advice(args: argparse.Namespace, *, start_payload: 
         "observed_total_ms": total_ms,
         "fast_command_text": fast_command_text,
         "reuse_command_text": reuse_command_text,
+        "next_best_command_text": next_best_command_text,
+        "dominant_phase": dominant_phase,
+        "dominant_phase_ms": dominant_phase_ms,
+        "why_it_may_feel_slow": why_it_may_feel_slow,
         "recommendation": recommendation,
         "thresholds_ms": {
             "fast_under": 500,
             "ok_under": 2500,
             "slow_at_or_above": 2500,
         },
-        "total_files": int((start_payload.get("source_scale_profile") or {}).get("total_files") or 0),
+        "total_files": total_files,
     }
 
 
@@ -1444,6 +1477,9 @@ def _render_context_quick_summary(payload: dict[str, Any]) -> str:
             "",
             "Performance advice:",
             f"- Speed: {performance_advice.get('speed_status', '')} - {performance_advice.get('speed_message', '')}",
+            f"- Why it may feel slow: {performance_advice.get('why_it_may_feel_slow', '')}",
+            f"- Slowest visible step: {performance_advice.get('dominant_phase', '')} ({performance_advice.get('dominant_phase_ms', 0)} ms)",
+            f"- Best next command: {performance_advice.get('next_best_command_text', '') or '(not available)'}",
             f"- Faster first run: {performance_advice.get('fast_command_text', '') or '(not available)'}",
             f"- Reuse unchanged bundle: {performance_advice.get('reuse_command_text', '') or '(not available)'}",
             f"- Recommendation: {performance_advice.get('recommendation', '')}",
@@ -1541,6 +1577,9 @@ def _render_context_quick_summary(payload: dict[str, Any]) -> str:
         "",
         "Performance advice:",
         f"- Speed: {performance_advice.get('speed_status', '')} - {performance_advice.get('speed_message', '')}",
+        f"- Why it may feel slow: {performance_advice.get('why_it_may_feel_slow', '')}",
+        f"- Slowest visible step: {performance_advice.get('dominant_phase', '')} ({performance_advice.get('dominant_phase_ms', 0)} ms)",
+        f"- Best next command: {performance_advice.get('next_best_command_text', '') or '(not available)'}",
         f"- Faster first run: {performance_advice.get('fast_command_text', '') or '(not available)'}",
         f"- Reuse unchanged bundle: {performance_advice.get('reuse_command_text', '') or '(not available)'}",
         f"- Recommendation: {performance_advice.get('recommendation', '')}",

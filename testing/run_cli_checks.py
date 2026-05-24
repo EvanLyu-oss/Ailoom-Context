@@ -753,7 +753,16 @@ def _check_context_quick_json(workspace: Path) -> None:
         assert "mcp-skeleton demo" in payload["experience"]["first_run_guidance"]["try_next_command_text"]
     assert payload["performance_advice"]["speed_status"] in {"fast", "ok", "slow"}
     assert payload["performance_advice"]["reuse_command_text"].startswith("mcp-skeleton quick --reuse-if-fresh")
+    assert payload["performance_profile"]["status"] == "available"
+    assert payload["performance_profile"]["phase_count"] >= 3
+    assert payload["performance_profile"]["dominant_phase"]["name"] in {"start_and_doctor", "config_recommendation", "restore_safety_check", "bundle_write", "quick_total"}
+    assert payload["performance_profile"]["default_noise_protection"]["status"] in {"active", "disabled"}
+    assert "reuse-if-fresh" in payload["performance_profile"]["next_run"]["reuse_command_text"]
+    assert "fast" in payload["performance_profile"]["next_run"]["fast_command_text"]
     assert "Performance advice:" in payload["summary_text"]
+    assert "Performance profile:" in payload["summary_text"]
+    assert "Default noise protection:" in payload["summary_text"]
+    assert "Next run:" in payload["summary_text"]
     assert "--reuse-if-fresh" in payload["summary_text"]
     assert Path(payload["recent_file"]).exists()
     assert payload["inspect_command_args"][:3] == ["context", "inspect", "--package-file"]

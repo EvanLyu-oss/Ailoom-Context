@@ -39,7 +39,7 @@ What these do:
 - `quick` creates a restore-safe bundle for the current directory and prints the skeleton, manifest, inspect, and restore commands.
 - `quick --reuse-if-fresh` reuses the last unchanged bundle instead of recompressing large projects.
 
-The human output for `quick`, `handoff`, `doctor`, and `recent` starts with an `At a glance` card so first-time users can immediately see status, restore safety, token savings, speed/freshness, and the next command to copy. `quick` / `handoff` also write `AI_HANDOFF.md` beside the bundle, separate the skeleton file to share with AI/IDE tools from the bundle, manifest, and restore files to keep locally, explain the slowest visible phase, suggest the best next command (`--fast` or `--reuse-if-fresh`) for large or slower runs, and explain why tiny projects may expand instead of saving tokens.
+The human output for `quick`, `handoff`, `doctor`, and `recent` starts with an `At a glance` card so first-time users can immediately see status, restore safety, token savings, speed/freshness, and the next command to copy. `quick` / `handoff` also write `AI_HANDOFF.md` beside the bundle, separate the skeleton file to share with AI/IDE tools from the bundle, manifest, and restore files to keep locally, explain the slowest visible phase, show a `Performance profile` with phase timing and default noise protection, suggest the best next command (`--fast` or `--reuse-if-fresh`) for large or slower runs, and explain why tiny projects may expand instead of saving tokens.
 
 ## What it does
 

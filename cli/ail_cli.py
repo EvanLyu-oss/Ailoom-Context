@@ -1005,14 +1005,23 @@ def _build_quick_handoff_payload(bundle_payload: dict[str, Any], *, bundle_root:
     files = bundle_payload.get("files") or {}
     skeleton_file = str(files.get("skeleton_file") or (str(Path(bundle_root) / "context_skeleton.mcp") if bundle_root else ""))
     inspect_summary = str(files.get("inspect_summary_txt") or (str(Path(bundle_root) / "inspect_summary.txt") if bundle_root else ""))
+    restore_package = str(files.get("restore_package") or files.get("restore_file") or "")
     return {
         "status": "ready" if skeleton_file and manifest_file else "unavailable",
-        "message": "feed the skeleton file to your AI or IDE; keep the bundle folder and manifest for exact restore",
+        "message": "feed the skeleton file to your AI or IDE; keep the bundle folder and manifest for exact restore; only share restore packages intentionally",
+        "ai_file": skeleton_file,
         "skeleton_file": skeleton_file,
+        "ai_guidance": "paste or attach this skeleton file when asking an AI/IDE to understand the project context",
         "bundle_root": bundle_root,
         "manifest_file": manifest_file,
         "inspect_summary": inspect_summary,
-        "restore_package": str(files.get("restore_package") or ""),
+        "restore_package": restore_package,
+        "restore_keep_files": {
+            "bundle_root": bundle_root,
+            "manifest_file": manifest_file,
+            "restore_package": restore_package,
+        },
+        "restore_guidance": "keep these files locally; do not paste the restore package into AI unless you intentionally want to share raw source bytes",
     }
 
 
@@ -1561,6 +1570,16 @@ def _render_context_quick_summary(payload: dict[str, Any]) -> str:
         f"- Estimated savings: {saved_tokens} tokens ({savings_percent}%)",
         f"- Restore command: {payload.get('restore_command_text', '') or '(not available)'}",
         f"- Inspect command: {payload.get('inspect_command_text', '') or '(not available)'}",
+        "",
+        "AI handoff:",
+        f"- Give AI this file: {handoff.get('ai_file', '') or handoff.get('skeleton_file', '') or '(not available)'}",
+        f"- Guidance: {handoff.get('ai_guidance', '') or 'paste or attach the skeleton file only'}",
+        "",
+        "Keep for restore:",
+        f"- Bundle folder: {(handoff.get('restore_keep_files') or {}).get('bundle_root', '') or handoff.get('bundle_root', '') or '(not available)'}",
+        f"- Manifest: {(handoff.get('restore_keep_files') or {}).get('manifest_file', '') or handoff.get('manifest_file', '') or '(not available)'}",
+        f"- Restore package: {(handoff.get('restore_keep_files') or {}).get('restore_package', '') or handoff.get('restore_package', '') or '(not available)'}",
+        "- Do not paste restore package contents into AI unless you intentionally want to share raw source bytes",
     ]
     if payload.get("reuse_status") == "reused":
         lines.extend([

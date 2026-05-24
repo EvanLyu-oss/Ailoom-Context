@@ -723,6 +723,11 @@ def _check_context_quick_json(workspace: Path) -> None:
     assert payload["handoff"]["bundle_root"] == payload["bundle_root"]
     assert payload["handoff"]["manifest_file"] == payload["manifest_file"]
     assert "feed the skeleton file to your AI or IDE" in payload["handoff"]["message"]
+    assert payload["handoff"]["ai_file"] == payload["handoff"]["skeleton_file"]
+    assert payload["handoff"]["restore_keep_files"]["bundle_root"] == payload["bundle_root"]
+    assert payload["handoff"]["restore_keep_files"]["manifest_file"] == payload["manifest_file"]
+    assert payload["handoff"]["restore_keep_files"]["restore_package"]
+    assert "do not paste the restore package into AI" in payload["handoff"]["restore_guidance"]
     assert payload["open_requested"] is False
     assert payload["open_performed"] is False
     assert payload["open_command_text"].startswith("open ")
@@ -763,6 +768,9 @@ def _check_context_quick_json(workspace: Path) -> None:
     assert "Result:" in payload["summary_text"]
     assert "Bundle:" in payload["summary_text"]
     assert "Use this now:" in payload["summary_text"]
+    assert "AI handoff:" in payload["summary_text"]
+    assert "Keep for restore:" in payload["summary_text"]
+    assert "Do not paste restore package contents into AI" in payload["summary_text"]
     assert "Give this skeleton to AI/IDE:" in payload["summary_text"]
     assert "Restore command:" in payload["summary_text"]
     assert "Estimated savings:" in payload["summary_text"]

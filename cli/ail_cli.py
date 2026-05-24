@@ -130,7 +130,7 @@ def _build_version_payload() -> dict[str, Any]:
         "python_check": python_check,
         "command_check": "ok" if command_path else "watch",
         "install_command_text": "sh install.sh",
-        "recommended_first_command_text": f"{command_prefix} quick --input-dir .",
+        "recommended_first_command_text": f"{command_prefix} handoff --input-dir .",
         "doctor_command_text": f"{command_prefix} doctor --input-dir .",
         "path_hint": "ok" if command_path else "mcp-skeleton command was not found on PATH; use python3 -m cli or run sh install.sh",
     }
@@ -1027,6 +1027,45 @@ def _build_quick_handoff_payload(bundle_payload: dict[str, Any], *, bundle_root:
     }
 
 
+def _render_quick_ai_handoff_guide(payload: dict[str, Any]) -> str:
+    handoff = payload.get("handoff") or {}
+    keep_files = handoff.get("restore_keep_files") or {}
+    return "\n".join([
+        "# MCP-Skeleton AI Handoff",
+        "",
+        "Give this to AI/IDE:",
+        f"- Skeleton file: {handoff.get('ai_file') or handoff.get('skeleton_file') or '(not available)'}",
+        "- This is the compressed context file intended for chat, IDE agents, and AI review.",
+        "",
+        "Keep these for restore:",
+        f"- Bundle folder: {keep_files.get('bundle_root') or handoff.get('bundle_root') or '(not available)'}",
+        f"- Manifest: {keep_files.get('manifest_file') or handoff.get('manifest_file') or '(not available)'}",
+        f"- Restore package: {keep_files.get('restore_package') or handoff.get('restore_package') or '(not available)'}",
+        "- Do not paste restore package contents into AI unless you intentionally want to share raw source bytes.",
+        "",
+        "Useful commands:",
+        f"- Inspect: {payload.get('inspect_command_text') or '(not available)'}",
+        f"- Restore: {payload.get('restore_command_text') or '(not available)'}",
+        f"- Copy skeleton on macOS: {payload.get('copy_command_text') or '(not available)'}",
+        f"- Open bundle on macOS: {payload.get('open_command_text') or '(not available)'}",
+        "",
+        "Next step:",
+        "- Attach or paste context_skeleton.mcp into your AI/IDE, and keep this bundle directory locally.",
+        "",
+    ])
+
+
+def _write_quick_ai_handoff_guide(payload: dict[str, Any]) -> str:
+    bundle_root = str(payload.get("bundle_root") or "")
+    if not bundle_root:
+        return ""
+    guide_file = Path(bundle_root) / "AI_HANDOFF.md"
+    guide_file.write_text(_render_quick_ai_handoff_guide(payload), encoding="utf-8")
+    handoff = payload.setdefault("handoff", {})
+    handoff["ai_handoff_file"] = str(guide_file)
+    return str(guide_file)
+
+
 def _quick_open_command_text(bundle_root: str) -> str:
     if not bundle_root:
         return ""
@@ -1059,7 +1098,7 @@ def _maybe_copy_quick_skeleton(args: argparse.Namespace, *, skeleton_file: str) 
     if not skeleton_file:
         return False, "skeleton file is not available"
     if sys.platform != "darwin":
-        return False, "--copy-command currently uses pbcopy only on macOS"
+        return False, "--copy currently uses pbcopy only on macOS"
     try:
         content = Path(skeleton_file).read_text(encoding="utf-8")
     except OSError as exc:
@@ -1319,6 +1358,7 @@ def _build_reused_quick_payload(args: argparse.Namespace, *, started_at: float) 
             "rerun quick without --reuse-if-fresh when you want to force a new bundle",
         ],
     }
+    _write_quick_ai_handoff_guide(payload)
     payload["speed_tip"] = {}
     payload["summary_text"] = _render_context_quick_summary(payload)
     return payload
@@ -1575,6 +1615,7 @@ def _render_context_quick_summary(payload: dict[str, Any]) -> str:
         "",
         "AI handoff:",
         f"- Give AI this file: {handoff.get('ai_file', '') or handoff.get('skeleton_file', '') or '(not available)'}",
+        f"- AI handoff guide: {handoff.get('ai_handoff_file', '') or '(not available)'}",
         f"- Guidance: {handoff.get('ai_guidance', '') or 'paste or attach the skeleton file only'}",
         "",
         "Keep for restore:",
@@ -2013,6 +2054,7 @@ def _build_context_quick_payload(args: argparse.Namespace) -> tuple[dict[str, An
             "use the restore command if you need to reconstruct the original input later",
         ],
     }
+    _write_quick_ai_handoff_guide(payload)
     payload["speed_tip"] = _build_quick_speed_tip(
         args,
         start_payload=start_payload,
@@ -3346,7 +3388,7 @@ def _build_parser() -> argparse.ArgumentParser:
     quick.add_argument("--reuse-if-fresh", action="store_true", help="Reuse the most recent quick bundle when the project fingerprint is unchanged")
     quick.add_argument("--preview", action="store_true", help="Preview restore safety, token savings, and output paths without writing a bundle")
     quick.add_argument("--open", dest="open_bundle", action="store_true", help="Open the created bundle folder in Finder on macOS")
-    quick.add_argument("--copy-command", dest="copy_command", action="store_true", help="Copy the generated skeleton text to the macOS clipboard with pbcopy")
+    quick.add_argument("--copy", "--copy-command", dest="copy_command", action="store_true", help="Copy the generated skeleton text to the macOS clipboard with pbcopy")
     quick.add_argument("--zip", dest="zip_bundle", action="store_true")
     quick.add_argument("--output-config-file", dest="output_config_file", help="Config path to write; defaults to .mcp-skeleton.json near the input")
     quick.add_argument("--output-report-file", dest="output_report_file", help="Markdown onboarding report path; defaults to mcp-skeleton-onboarding.md near the config")

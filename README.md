@@ -23,6 +23,7 @@ For macOS, from a cloned or downloaded checkout:
 sh install.sh
 mcp-skeleton demo
 mcp-skeleton handoff --input-dir .
+mcp-skeleton handoff --input-dir . --copy --open
 mcp-skeleton quick --input-dir .
 mcp-skeleton quick --reuse-if-fresh --input-dir .
 ```
@@ -32,10 +33,11 @@ What these do:
 - `install.sh` installs an isolated local command and prints PATH guidance.
 - `demo` runs a safe sample bundle so you can see the workflow before using your own project.
 - `handoff` is the shortest “give this project to AI/IDE” command; it creates the same restore-safe bundle as `quick`.
+- `handoff --copy --open` copies the skeleton to the macOS clipboard and opens the bundle folder in Finder.
 - `quick` creates a restore-safe bundle for the current directory and prints the skeleton, manifest, inspect, and restore commands.
 - `quick --reuse-if-fresh` reuses the last unchanged bundle instead of recompressing large projects.
 
-The human output for `quick`, `doctor`, and `recent` starts with an `At a glance` card so first-time users can immediately see status, restore safety, token savings, speed/freshness, and the next command to copy. `quick` also separates the skeleton file to share with AI/IDE tools from the bundle, manifest, and restore files to keep locally; explains the slowest visible phase; suggests the best next command (`--fast` or `--reuse-if-fresh`) for large or slower runs; and explains why tiny projects may expand instead of saving tokens.
+The human output for `quick`, `handoff`, `doctor`, and `recent` starts with an `At a glance` card so first-time users can immediately see status, restore safety, token savings, speed/freshness, and the next command to copy. `quick` / `handoff` also write `AI_HANDOFF.md` beside the bundle, separate the skeleton file to share with AI/IDE tools from the bundle, manifest, and restore files to keep locally, explain the slowest visible phase, suggest the best next command (`--fast` or `--reuse-if-fresh`) for large or slower runs, and explain why tiny projects may expand instead of saving tokens.
 
 ## What it does
 
@@ -110,7 +112,7 @@ sh install.sh
 ```
 
 This creates an isolated virtual environment under `~/.mcp-skeleton`, installs tokenizer-backed metrics, and links the `mcp-skeleton` command into `~/.local/bin`.
-The installer finishes with a command check, PATH status, a first-run self-check, and a copy/paste `quick` command so you can start on the current project immediately.
+The installer finishes with a command check, PATH status, a first-run self-check, and a copy/paste `handoff` command so you can give the current project to an AI/IDE immediately.
 
 Check the installed command:
 
@@ -118,7 +120,7 @@ Check the installed command:
 mcp-skeleton version
 ```
 
-`mcp-skeleton version` reports install readiness, Python status, command availability, and the first `quick` / `doctor` commands to run.
+`mcp-skeleton version` reports install readiness, Python status, command availability, and the first `handoff` / `doctor` commands to run.
 
 Update from a newer downloaded checkout:
 
@@ -177,6 +179,22 @@ mcp-skeleton demo
 
 `demo` creates a lightweight sample project, builds a safe bundle, verifies restore safety, shows token impact, and prints inspect/restore commands.
 
+Shortest AI/IDE handoff for your project:
+
+```bash
+mcp-skeleton handoff --input-dir .
+```
+
+`handoff` is a top-level shortcut for the restore-safe quick workflow. It creates `context_skeleton.mcp` for AI/IDE context, writes `AI_HANDOFF.md` with plain-language instructions, and keeps `context_manifest.json` plus the restore package available for exact reconstruction.
+
+On macOS, use:
+
+```bash
+mcp-skeleton handoff --input-dir . --copy --open
+```
+
+`--copy` copies `context_skeleton.mcp` to the clipboard with `pbcopy`; `--open` opens the generated bundle folder in Finder.
+
 One-command bundle creation for your project:
 
 ```bash
@@ -204,7 +222,7 @@ mcp-skeleton quick --input-dir . --open
 To copy the generated skeleton text directly to the macOS clipboard:
 
 ```bash
-mcp-skeleton quick --input-dir . --copy-command
+mcp-skeleton quick --input-dir . --copy
 ```
 
 To find the last quick bundle for the current project later:
@@ -429,7 +447,7 @@ Cross-platform smoke checks, including Windows environments without Bash:
 python3 testing/run_cli_checks.py
 ```
 
-Quickstart drift check for the README install/demo/quick/reuse path:
+Quickstart drift check for the README install/demo/handoff/quick/reuse path:
 
 ```bash
 python3 testing/quickstart_check.py

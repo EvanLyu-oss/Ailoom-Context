@@ -85,6 +85,11 @@ def build_quickstart_check_payload() -> dict[str, Any]:
             cwd=project,
             env=env,
         )
+        handoff, handoff_json = _json_from_command(
+            [str(command_path), "handoff", "--input-dir", str(project), "--output-dir", str(workspace / "handoff_bundle"), "--json"],
+            cwd=project,
+            env=env,
+        )
         quick, quick_json = _json_from_command(
             [str(command_path), "quick", "--input-dir", str(project), "--output-dir", str(workspace / "bundle"), "--json"],
             cwd=project,
@@ -107,6 +112,13 @@ def build_quickstart_check_payload() -> dict[str, Any]:
 
         install_passed = bool(install["passed"] and command_path.exists() and "MCP-Skeleton Install Ready" in install["stdout_tail"])
         demo_passed = bool(demo["passed"] and demo_json.get("demo_status") == "ready" and (demo_json.get("quick") or {}).get("restore_safe"))
+        handoff_passed = bool(
+            handoff["passed"]
+            and handoff_json.get("quick_status") == "ready"
+            and handoff_json.get("restore_safe")
+            and Path(str((handoff_json.get("handoff") or {}).get("ai_file") or "")).exists()
+            and Path(str((handoff_json.get("handoff") or {}).get("ai_handoff_file") or "")).exists()
+        )
         quick_passed = bool(
             quick["passed"]
             and quick_json.get("quick_status") == "ready"
@@ -130,6 +142,14 @@ def build_quickstart_check_payload() -> dict[str, Any]:
                 "passed": demo_passed,
                 "demo_status": demo_json.get("demo_status", ""),
                 "restore_safe": bool((demo_json.get("quick") or {}).get("restore_safe")),
+            },
+            "mcp_skeleton_handoff": {
+                **handoff,
+                "passed": handoff_passed,
+                "quick_status": handoff_json.get("quick_status", ""),
+                "restore_safe": bool(handoff_json.get("restore_safe")),
+                "ai_file_exists": Path(str((handoff_json.get("handoff") or {}).get("ai_file") or "")).exists(),
+                "ai_handoff_file_exists": Path(str((handoff_json.get("handoff") or {}).get("ai_handoff_file") or "")).exists(),
             },
             "mcp_skeleton_quick": {
                 **quick,

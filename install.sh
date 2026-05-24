@@ -139,15 +139,20 @@ else
 fi
 if command -v mcp-skeleton >/dev/null 2>&1; then
   echo "PATH status: ready - mcp-skeleton is available on PATH"
+  HANDOFF_COMMAND="mcp-skeleton handoff --input-dir ."
   QUICK_COMMAND="mcp-skeleton quick --input-dir ."
   VERSION_COMMAND="mcp-skeleton version"
 else
   echo "PATH status: needs shell setup - $BIN_DIR is not currently on PATH"
+  HANDOFF_COMMAND="$COMMAND_PATH handoff --input-dir ."
   QUICK_COMMAND="$COMMAND_PATH quick --input-dir ."
   VERSION_COMMAND="$COMMAND_PATH version"
 fi
 echo ""
 echo "Copy/paste next:"
+echo "  $HANDOFF_COMMAND"
+echo ""
+echo "Optional full bundle command:"
 echo "  $QUICK_COMMAND"
 echo ""
 echo "First run self-check:"

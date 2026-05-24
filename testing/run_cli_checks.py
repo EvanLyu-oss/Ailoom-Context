@@ -728,6 +728,14 @@ def _check_context_quick_json(workspace: Path) -> None:
     assert payload["handoff"]["restore_keep_files"]["manifest_file"] == payload["manifest_file"]
     assert payload["handoff"]["restore_keep_files"]["restore_package"]
     assert "do not paste the restore package into AI" in payload["handoff"]["restore_guidance"]
+    assert payload["handoff"]["ai_handoff_file"].endswith("AI_HANDOFF.md")
+    ai_handoff_file = Path(payload["handoff"]["ai_handoff_file"])
+    assert ai_handoff_file.exists()
+    ai_handoff_text = ai_handoff_file.read_text(encoding="utf-8")
+    assert "Give this to AI/IDE" in ai_handoff_text
+    assert "context_skeleton.mcp" in ai_handoff_text
+    assert "Keep these for restore" in ai_handoff_text
+    assert "mcp-skeleton restore" in ai_handoff_text
     assert payload["open_requested"] is False
     assert payload["open_performed"] is False
     assert payload["open_command_text"].startswith("open ")
@@ -770,6 +778,8 @@ def _check_context_quick_json(workspace: Path) -> None:
     assert "Use this now:" in payload["summary_text"]
     assert "AI handoff:" in payload["summary_text"]
     assert "Keep for restore:" in payload["summary_text"]
+    assert "AI handoff guide:" in payload["summary_text"]
+    assert "AI_HANDOFF.md" in payload["summary_text"]
     assert "Do not paste restore package contents into AI" in payload["summary_text"]
     assert "Give this skeleton to AI/IDE:" in payload["summary_text"]
     assert "Restore command:" in payload["summary_text"]
@@ -1021,7 +1031,7 @@ def _check_top_level_version_json(workspace: Path) -> None:
     assert payload["install_readiness_status"] in {"ready", "watch"}
     assert payload["python_check"] in {"ok", "blocked"}
     assert payload["install_command_text"] == "sh install.sh"
-    assert "quick --input-dir ." in payload["recommended_first_command_text"]
+    assert "handoff --input-dir ." in payload["recommended_first_command_text"]
     assert "doctor --input-dir ." in payload["doctor_command_text"]
     assert "mcp-skeleton version" in payload["summary_text"]
     assert "Install readiness:" in payload["summary_text"]
@@ -1055,6 +1065,7 @@ def _check_installer_lifecycle_json(workspace: Path) -> None:
     assert "First run self-check:" in install.stdout
     assert "Copy/paste next:" in install.stdout
     assert "mcp-skeleton version" in install.stdout
+    assert "mcp-skeleton handoff --input-dir ." in install.stdout
     assert "mcp-skeleton quick --input-dir ." in install.stdout
 
     update = subprocess.run(
@@ -1143,7 +1154,7 @@ def _check_release_readiness_summary_json(workspace: Path) -> None:
         },
         "quickstart_check": {
             "passed": True,
-            "stdout_json": {"passed": 4, "check_count": 4, "failed": 0},
+            "stdout_json": {"passed": 5, "check_count": 5, "failed": 0},
         },
         "dogfood_self_check": {
             "passed": True,
@@ -1183,7 +1194,7 @@ def _check_release_readiness_summary_json(workspace: Path) -> None:
     assert summary["passed"] == 7
     assert summary["failed"] == 0
     assert summary["python_smoke"] == "44/44"
-    assert summary["quickstart"] == "4/4"
+    assert summary["quickstart"] == "5/5"
     assert summary["dogfood_restore_status"] == "ok"
     assert summary["dogfood_files"] == "46/46"
     assert summary["doctor_readiness"] == "ready"
@@ -1210,12 +1221,15 @@ def _check_top_level_cli_alias_json(workspace: Path) -> None:
     assert payload["start"]["recommended_command_text"].startswith("mcp-skeleton compress")
 
     handoff_dir = workspace / "alias_handoff_bundle"
-    handoff = _run_top_level_cli_json(["handoff", "--input-dir", str(project), "--output-dir", str(handoff_dir), "--json"])
+    handoff = _run_top_level_cli_json(["handoff", "--input-dir", str(project), "--output-dir", str(handoff_dir), "--copy", "--json"])
     assert handoff["status"] == "ok"
     assert handoff["entrypoint"] == "context-quick"
     assert handoff["quick_status"] == "ready"
     assert handoff["handoff"]["ai_file"].endswith("context_skeleton.mcp")
     assert handoff["handoff"]["restore_keep_files"]["manifest_file"].endswith("context_manifest.json")
+    assert handoff["handoff"]["ai_handoff_file"].endswith("AI_HANDOFF.md")
+    assert Path(handoff["handoff"]["ai_handoff_file"]).exists()
+    assert handoff["copy_requested"] is True
     assert "AI handoff:" in handoff["summary_text"]
     assert "Keep for restore:" in handoff["summary_text"]
 

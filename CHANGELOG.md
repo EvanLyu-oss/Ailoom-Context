@@ -4,7 +4,7 @@
 
 - added `context start` as a zero-friction onboarding command that writes config/report files, runs doctor, and prints the next compression command
 - added a README Quickstart that gets new macOS users from install to demo, quick bundle, and fresh-bundle reuse in four commands
-- added `testing/quickstart_check.py` to verify the README install/demo/quick/reuse path stays executable
+- added `testing/quickstart_check.py` to verify the README install/demo/handoff/quick/reuse path stays executable
 - added a compact `executive_summary` to the release readiness runner so humans and test machines can read pass/fail, dogfood, doctor, and benchmark status without parsing full logs
 - added consistent `At a glance` status cards to `context quick`, `context quick --preview`, `context doctor`, and `context recent` human output
 - added `context quick` performance breakdown guidance that names the slowest visible phase and the best next command for large or slower runs
@@ -12,6 +12,8 @@
 - added first-run guidance to `context quick` so tiny projects explain token expansion as expected behavior instead of looking like a failed compression
 - added clearer `context quick` AI handoff guidance that separates the skeleton file to share from bundle/manifest/restore files to keep locally
 - added `mcp-skeleton handoff` as a short top-level alias for the restore-safe quick AI/IDE handoff workflow
+- added `AI_HANDOFF.md` bundle guides plus `--copy` as a shorter macOS clipboard alias for first-run AI/IDE handoff
+- updated installer and version guidance to recommend `mcp-skeleton handoff --input-dir .` as the first real project command
 - added `context quick` as a one-command start + restore-safety check + bundle workflow for zero-learning bundle creation
 - added `context explain` to translate an existing bundle into plain-language safety, compression, and next-step guidance
 - added direct `mcp-skeleton quick/start/doctor/...` top-level aliases and a macOS `install.sh` for lower-friction local installation

@@ -286,6 +286,8 @@ mcp-skeleton compress \
 
 For speed and lower token noise, directory compression has default noise protection for common VCS, dependency, build, virtualenv, and cache directories: `.git`, `node_modules`, `dist`, `build`, `coverage`, `.next`, `.nuxt`, `.venv`, `venv`, `.tox`, `.mypy_cache`, `.ruff_cache`, `.turbo`, `.cache`, `__pycache__`, `.pytest_cache`, and `.workspace_ail`. These skipped directories are reported in `source_summary.skipped_dirs` and explained in `compression_explanations`.
 
+If you intentionally need those directories, pass `--include-default-skips` or set `"include_default_skips": true` in `.mcp-skeleton.json`. This is useful for debugging generated output, but it can make compression slower and much larger on real projects.
+
 For repeatable project-level filtering beyond those defaults, add a `.mcp-skeletonignore` file at the input directory root. Blank lines and `#` comments are ignored; simple relative paths and globs such as `logs/`, `*.map`, and `generated/*.json` are supported.
 
 Compress the same directory with one symbols-focused skeleton:

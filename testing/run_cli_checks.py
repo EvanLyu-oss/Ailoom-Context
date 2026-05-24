@@ -1413,6 +1413,41 @@ def _check_directory_filtering(workspace: Path) -> None:
     assert {"node_modules", "dist", ".next", ".venv"}.issubset(set(default_noise["source_summary"]["skipped_dirs"]))
     assert any(item["code"] == "default_noise_protection" for item in default_noise["compression_explanations"])
     assert "default noise protection" in default_noise["summary_text"]
+    include_default_skips = _run_cli_json(
+        [
+            "context",
+            "compress",
+            "--input-dir",
+            str(noisy_project),
+            "--include-default-skips",
+            "--json",
+        ]
+    )
+    included_paths = {item["relative_path"] for item in include_default_skips["source_summary"]["entries"]}
+    assert "src/app.py" in included_paths
+    assert "node_modules/pkg/index.js" in included_paths
+    assert "dist/bundle.js" in included_paths
+    assert ".next/cache/page.js" in included_paths
+    assert ".venv/lib/site.py" in included_paths
+    assert include_default_skips["source_summary"]["default_noise_protection"]["status"] == "disabled"
+    assert any(item["code"] == "default_noise_protection_disabled" for item in include_default_skips["compression_explanations"])
+    assert "--include-default-skips" in include_default_skips["recommended_command_args"]
+    config_file = noisy_project / ".mcp-skeleton.json"
+    config_file.write_text(
+        json.dumps(
+            {
+                "preset": "codebase",
+                "focus_mode": "imports",
+                "skeleton_density": "adaptive",
+                "include_default_skips": True,
+            }
+        ),
+        encoding="utf-8",
+    )
+    config_include = _run_cli_json(["context", "compress", "--input-dir", str(noisy_project), "--config", str(config_file), "--json"])
+    config_paths = {item["relative_path"] for item in config_include["source_summary"]["entries"]}
+    assert "node_modules/pkg/index.js" in config_paths
+    assert config_include["source_summary"]["include_default_skips"] is True
 
     project = workspace / "filter_project"
     (project / "src").mkdir(parents=True)

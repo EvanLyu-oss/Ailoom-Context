@@ -48,12 +48,15 @@ CONTEXT_CONFIG_KEYS = [
     "exclude",
     "excludes",
     "exclude_patterns",
+    "include_default_skips",
+    "include_default_skip_dirs",
 ]
 CONTEXT_CONFIG_TEMPLATE = {
     "preset": "codebase",
     "focus_mode": "imports",
     "skeleton_density": "adaptive",
     "exclude": ["node_modules/", "dist/", "build/", ".workspace_ail/", "*.map"],
+    "include_default_skips": False,
 }
 CONTEXT_CONFIG_FILENAMES = [".mcp-skeleton.json", ".mcp-skeleton.yaml", ".mcp-skeleton.yml"]
 IGNORE_CWD_CONFIG_ENV = "MCP_SKELETON_IGNORE_CWD_CONFIG"
@@ -421,6 +424,23 @@ def _config_list(config: dict[str, Any], *keys: str) -> list[str]:
     return []
 
 
+def _config_bool(config: dict[str, Any], *keys: str) -> bool | None:
+    for key in keys:
+        value = config.get(key)
+        if value is None:
+            continue
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, str):
+            normalized = value.strip().lower()
+            if normalized in {"1", "true", "yes", "on"}:
+                return True
+            if normalized in {"0", "false", "no", "off"}:
+                return False
+        raise ValueError(f"config field '{key}' must be a boolean")
+    return None
+
+
 def _normalize_config_choice(value: str | None, *, field: str, supported: set[str]) -> str | None:
     if value is None:
         return None
@@ -476,6 +496,8 @@ def _resolve_context_defaults(args: argparse.Namespace) -> tuple[Path | None, di
         "focus_mode": focus_mode,
         "skeleton_density": skeleton_density,
         "exclude_patterns": [*config_excludes, *cli_excludes],
+        "include_default_skips": bool(getattr(args, "include_default_skips", False))
+        or bool(_config_bool(config, "include_default_skips", "include_default_skip_dirs")),
     }
     config_values = {
         key: config[key]
@@ -690,6 +712,7 @@ def _build_context_doctor_payload(
         focus_mode=context_defaults["focus_mode"],
         skeleton_density=context_defaults["skeleton_density"],
         exclude_patterns=context_defaults["exclude_patterns"],
+        include_default_skips=context_defaults["include_default_skips"],
         config_file=config_file,
         config_values=config_values,
     )
@@ -974,6 +997,8 @@ def _quick_fast_command_text(args: argparse.Namespace) -> str:
     output_dir = _opt_path(args, "output_dir")
     if output_dir is not None:
         command_args.extend(["--output-dir", str(output_dir.resolve() if output_dir.is_absolute() else (Path.cwd() / output_dir).resolve())])
+    if bool(getattr(args, "include_default_skips", False)):
+        command_args.append("--include-default-skips")
     if getattr(args, "zip_bundle", False):
         command_args.append("--zip")
     return _format_cli_command(command_args)
@@ -1000,6 +1025,8 @@ def _quick_run_command_text(args: argparse.Namespace) -> str:
     output_dir = _opt_path(args, "output_dir")
     if output_dir is not None:
         command_args.extend(["--output-dir", str(output_dir.resolve() if output_dir.is_absolute() else (Path.cwd() / output_dir).resolve())])
+    if bool(getattr(args, "include_default_skips", False)):
+        command_args.append("--include-default-skips")
     if getattr(args, "zip_bundle", False):
         command_args.append("--zip")
     return _format_cli_command(command_args)
@@ -1161,6 +1188,8 @@ def _recent_refresh_command_text(args: argparse.Namespace) -> str:
         command_args.extend(["--text-file", str(text_file.resolve())])
     else:
         command_args.extend(["--input-dir", str(Path.cwd().resolve())])
+    if bool(getattr(args, "include_default_skips", False)):
+        command_args.append("--include-default-skips")
     return _format_cli_command(command_args)
 
 
@@ -2008,6 +2037,7 @@ def _build_context_quick_payload(args: argparse.Namespace) -> tuple[dict[str, An
         focus_mode=context_defaults["focus_mode"],
         skeleton_density=context_defaults["skeleton_density"],
         exclude_patterns=context_defaults["exclude_patterns"],
+        include_default_skips=context_defaults["include_default_skips"],
         config_file=config_file,
         config_values=config_values,
         compression_payload=reusable_compression_payload if isinstance(reusable_compression_payload, dict) else None,
@@ -2444,6 +2474,8 @@ def _build_start_next_command_args(args: argparse.Namespace, *, config_path: Pat
     else:
         return []
     command_args.extend(["--config", str(config_path), "--json"])
+    if bool(getattr(args, "include_default_skips", False)):
+        command_args.insert(-1, "--include-default-skips")
     return command_args
 
 
@@ -2490,6 +2522,10 @@ def _build_context_start_payload(
         focus_mode=recommended_config.get("focus_mode") or getattr(args, "focus_mode", None),
         skeleton_density=recommended_config.get("skeleton_density") or getattr(args, "skeleton_density", None),
         exclude_patterns=list(recommended_config.get("exclude") or getattr(args, "exclude_patterns", None) or []),
+        include_default_skips=bool(
+            getattr(args, "include_default_skips", False)
+            or recommended_config.get("include_default_skips")
+        ),
     )
     doctor_started = time.perf_counter()
     doctor_payload, doctor_exit = _build_context_doctor_payload(
@@ -2589,6 +2625,7 @@ def _render_context_config_recommend_report(payload: dict[str, Any]) -> str:
         f"- preset: {config.get('preset', '')}",
         f"- focus_mode: {config.get('focus_mode', '')}",
         f"- skeleton_density: {config.get('skeleton_density', '')}",
+        f"- include_default_skips: {bool(config.get('include_default_skips', False))}",
         f"- exclude_count: {len(exclude_patterns)}",
     ]
     if exclude_patterns:
@@ -2659,6 +2696,8 @@ def _build_config_recommended_command_args(args: argparse.Namespace, recommended
         command_args.extend(["--focus-mode", focus_mode])
     if skeleton_density:
         command_args.extend(["--skeleton-density", skeleton_density])
+    if bool(recommended_config.get("include_default_skips")):
+        command_args.append("--include-default-skips")
     for pattern in recommended_config.get("exclude") or []:
         pattern_text = str(pattern).strip()
         if pattern_text:
@@ -2693,6 +2732,7 @@ def _build_config_recommendation_comparison(
             focus_mode=str(recommended_config.get("focus_mode") or "full"),
             skeleton_density=str(recommended_config.get("skeleton_density") or "adaptive"),
             exclude_patterns=list(recommended_config.get("exclude") or []),
+            include_default_skips=bool(recommended_config.get("include_default_skips")),
         )
     except Exception as exc:  # noqa: BLE001 - surface recommendation audit failures without blocking config output
         return {
@@ -2825,6 +2865,7 @@ def _build_context_config_payload(args: argparse.Namespace) -> tuple[dict[str, A
             focus_mode=context_defaults["focus_mode"],
             skeleton_density=context_defaults["skeleton_density"],
             exclude_patterns=context_defaults["exclude_patterns"],
+            include_default_skips=context_defaults["include_default_skips"],
             config_file=config_file,
             config_values=config_values,
         )
@@ -2841,6 +2882,7 @@ def _build_context_config_payload(args: argparse.Namespace) -> tuple[dict[str, A
             "focus_mode": recommended.get("focus_mode") or compression_payload.get("focus_mode") or "full",
             "skeleton_density": recommended.get("skeleton_density") or compression_payload.get("skeleton_density") or "adaptive",
             "exclude": suggested_excludes,
+            "include_default_skips": context_defaults["include_default_skips"],
         }
         comparison = _build_config_recommendation_comparison(
             args=args,
@@ -2986,6 +3028,7 @@ def cmd_context(args: argparse.Namespace) -> int:
             focus_mode=context_defaults["focus_mode"],
             skeleton_density=context_defaults["skeleton_density"],
             exclude_patterns=context_defaults["exclude_patterns"],
+            include_default_skips=context_defaults["include_default_skips"],
             config_file=config_file,
             config_values=config_values,
         )
@@ -3018,6 +3061,7 @@ def cmd_context(args: argparse.Namespace) -> int:
             focus_mode=context_defaults["focus_mode"],
             skeleton_density=context_defaults["skeleton_density"],
             exclude_patterns=context_defaults["exclude_patterns"],
+            include_default_skips=context_defaults["include_default_skips"],
             config_file=config_file,
             config_values=config_values,
         )
@@ -3274,6 +3318,7 @@ def _build_parser() -> argparse.ArgumentParser:
     compress.add_argument("--focus-mode", dest="focus_mode", choices=["full", "tree", "imports", "symbols", "writing-outline"])
     compress.add_argument("--skeleton-density", dest="skeleton_density", choices=["adaptive", "standard", "compact"])
     compress.add_argument("--exclude", dest="exclude_patterns", action="append", help="Exclude a relative path or glob from directory compression; can be repeated")
+    compress.add_argument("--include-default-skips", action="store_true", help="Include directories normally skipped by default noise protection, such as node_modules, dist, build, .venv, and .git")
     compress.add_argument("--incremental", action="store_true")
     compress.add_argument("--base-commit", dest="base_commit")
     compress.add_argument("--tokenizer-backend", dest="tokenizer_backend", default="auto", choices=["auto", "heuristic", "tiktoken"])
@@ -3332,6 +3377,7 @@ def _build_parser() -> argparse.ArgumentParser:
     config.add_argument("--focus-mode", dest="focus_mode", choices=["full", "tree", "imports", "symbols", "writing-outline"])
     config.add_argument("--skeleton-density", dest="skeleton_density", choices=["adaptive", "standard", "compact"])
     config.add_argument("--exclude", dest="exclude_patterns", action="append", help="Exclude a relative path or glob from recommendation analysis; can be repeated")
+    config.add_argument("--include-default-skips", action="store_true", help="Include directories normally skipped by default noise protection during recommendation analysis")
     config.add_argument("--tokenizer-backend", dest="tokenizer_backend", default="auto", choices=["auto", "heuristic", "tiktoken"])
     config.add_argument("--tokenizer-model", dest="tokenizer_model")
     config.add_argument("--output-file", dest="output_file", help="Write the default template to this path; .yaml/.yml writes YAML")
@@ -3360,6 +3406,7 @@ def _build_parser() -> argparse.ArgumentParser:
     doctor.add_argument("--focus-mode", dest="focus_mode", choices=["full", "tree", "imports", "symbols", "writing-outline"])
     doctor.add_argument("--skeleton-density", dest="skeleton_density", choices=["adaptive", "standard", "compact"])
     doctor.add_argument("--exclude", dest="exclude_patterns", action="append", help="Exclude a relative path or glob from directory compression; can be repeated")
+    doctor.add_argument("--include-default-skips", action="store_true", help="Include directories normally skipped by default noise protection")
     doctor.add_argument("--incremental", action="store_true")
     doctor.add_argument("--base-commit", dest="base_commit")
     doctor.add_argument("--tokenizer-backend", dest="tokenizer_backend", default="auto", choices=["auto", "heuristic", "tiktoken"])
@@ -3378,6 +3425,7 @@ def _build_parser() -> argparse.ArgumentParser:
     start.add_argument("--focus-mode", dest="focus_mode", choices=["full", "tree", "imports", "symbols", "writing-outline"])
     start.add_argument("--skeleton-density", dest="skeleton_density", choices=["adaptive", "standard", "compact"])
     start.add_argument("--exclude", dest="exclude_patterns", action="append", help="Exclude a relative path or glob from directory compression; can be repeated")
+    start.add_argument("--include-default-skips", action="store_true", help="Include directories normally skipped by default noise protection")
     start.add_argument("--tokenizer-backend", dest="tokenizer_backend", default="auto", choices=["auto", "heuristic", "tiktoken"])
     start.add_argument("--tokenizer-model", dest="tokenizer_model")
     start.add_argument("--output-config-file", dest="output_config_file", help="Config path to write; defaults to .mcp-skeleton.json near the input")
@@ -3395,6 +3443,7 @@ def _build_parser() -> argparse.ArgumentParser:
     quick.add_argument("--focus-mode", dest="focus_mode", choices=["full", "tree", "imports", "symbols", "writing-outline"])
     quick.add_argument("--skeleton-density", dest="skeleton_density", choices=["adaptive", "standard", "compact"])
     quick.add_argument("--exclude", dest="exclude_patterns", action="append", help="Exclude a relative path or glob from directory compression; can be repeated")
+    quick.add_argument("--include-default-skips", action="store_true", help="Include directories normally skipped by default noise protection")
     quick.add_argument("--incremental", action="store_true")
     quick.add_argument("--base-commit", dest="base_commit")
     quick.add_argument("--candidate-text", dest="candidate_text")
@@ -3438,6 +3487,7 @@ def _build_parser() -> argparse.ArgumentParser:
     bundle.add_argument("--focus-mode", dest="focus_mode", choices=["full", "tree", "imports", "symbols", "writing-outline"])
     bundle.add_argument("--skeleton-density", dest="skeleton_density", choices=["adaptive", "standard", "compact"])
     bundle.add_argument("--exclude", dest="exclude_patterns", action="append", help="Exclude a relative path or glob from directory compression; can be repeated")
+    bundle.add_argument("--include-default-skips", action="store_true", help="Include directories normally skipped by default noise protection")
     bundle.add_argument("--incremental", action="store_true")
     bundle.add_argument("--base-commit", dest="base_commit")
     bundle.add_argument("--candidate-text", dest="candidate_text")

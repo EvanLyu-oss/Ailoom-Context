@@ -37,6 +37,18 @@ SKIP_DIR_NAMES = {
     ".turbo",
     ".cache",
 }
+
+
+def _default_skip_dir_names(*, include_default_skips: bool = False) -> set[str]:
+    return set() if include_default_skips else set(SKIP_DIR_NAMES)
+
+
+def _path_has_default_skip_dir(rel_path: str, *, skip_dir_names: set[str]) -> bool:
+    if not skip_dir_names:
+        return False
+    return any(part in skip_dir_names for part in PurePosixPath(rel_path).parts)
+
+
 CODE_EXTENSIONS = {
     ".py", ".js", ".ts", ".tsx", ".jsx", ".vue", ".go", ".rs", ".java", ".c", ".cpp", ".h", ".hpp",
     ".css", ".scss", ".html", ".json", ".yaml", ".yml", ".toml", ".sh", ".bash", ".zsh", ".rb", ".php",
@@ -214,6 +226,7 @@ def build_context_compress_payload(
     focus_mode: str | None = None,
     skeleton_density: str | None = None,
     exclude_patterns: list[str] | None = None,
+    include_default_skips: bool = False,
     config_file: Path | None = None,
     config_values: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
@@ -229,6 +242,7 @@ def build_context_compress_payload(
             tokenizer_backend=tokenizer_backend,
             tokenizer_model=tokenizer_model,
             exclude_patterns=exclude_patterns,
+            include_default_skips=include_default_skips,
         )
     else:
         source = _resolve_context_input_source(
@@ -240,6 +254,7 @@ def build_context_compress_payload(
             tokenizer_backend=tokenizer_backend,
             tokenizer_model=tokenizer_model,
             exclude_patterns=exclude_patterns,
+            include_default_skips=include_default_skips,
         )
 
     skeleton_text = _render_skeleton_text(
@@ -448,6 +463,7 @@ def build_context_bundle_payload(
     focus_mode: str | None = None,
     skeleton_density: str | None = None,
     exclude_patterns: list[str] | None = None,
+    include_default_skips: bool = False,
     config_file: Path | None = None,
     config_values: dict[str, Any] | None = None,
     compression_payload: dict[str, Any] | None = None,
@@ -467,6 +483,7 @@ def build_context_bundle_payload(
             focus_mode=focus_mode,
             skeleton_density=skeleton_density,
             exclude_patterns=exclude_patterns,
+            include_default_skips=include_default_skips,
             config_file=config_file,
             config_values=config_values,
         )
@@ -1377,9 +1394,11 @@ def _build_directory_source(
     tokenizer_backend: str | None = None,
     tokenizer_model: str | None = None,
     exclude_patterns: list[str] | None = None,
+    include_default_skips: bool = False,
 ) -> dict[str, Any]:
     path = _resolve_existing_context_directory(path, field_name="--input-dir")
     path_filter = _build_context_path_filter(path, exclude_patterns=exclude_patterns)
+    skip_dir_names = _default_skip_dir_names(include_default_skips=include_default_skips)
     files: list[dict[str, Any]] = []
     symlinks: list[dict[str, Any]] = []
     empty_dirs: list[str] = []
@@ -1406,11 +1425,11 @@ def _build_directory_source(
 
     for current_root, dirnames, filenames in os.walk(path):
         current_path = Path(current_root)
-        skipped_here = sorted(name for name in dirnames if name in SKIP_DIR_NAMES)
+        skipped_here = sorted(name for name in dirnames if name in skip_dir_names)
         for dirname in skipped_here:
             skipped_dirs.append((current_path / dirname).relative_to(path).as_posix())
         kept_dirnames = []
-        for dirname in sorted(name for name in dirnames if name not in SKIP_DIR_NAMES):
+        for dirname in sorted(name for name in dirnames if name not in skip_dir_names):
             rel_child_dir = (current_path / dirname).relative_to(path).as_posix()
             if _context_path_is_filtered(rel_child_dir, path_filter, is_dir=True):
                 filtered_dirs.append(rel_child_dir)
@@ -1479,7 +1498,8 @@ def _build_directory_source(
         "binary_files": binary_files,
         "symlink_count": len(symlinks),
         "empty_dir_count": len(empty_dirs),
-        "skip_dir_names": sorted(SKIP_DIR_NAMES),
+        "include_default_skips": bool(include_default_skips),
+        "skip_dir_names": sorted(skip_dir_names),
         "skipped_dir_count": len(skipped_dirs),
         "skipped_dirs": skipped_dirs,
         "filter_patterns": path_filter["patterns"],
@@ -1489,7 +1509,7 @@ def _build_directory_source(
         "filtered_path_count": len(filtered_dirs) + len(filtered_files),
         "filtered_paths_preview": sorted(filtered_dirs + filtered_files)[:80],
         "default_noise_protection": {
-            "status": "active",
+            "status": "disabled" if include_default_skips else "active",
             "skipped_dir_names": sorted(SKIP_DIR_NAMES),
             "skipped_dir_count": len(skipped_dirs),
             "skipped_dirs_preview": sorted(skipped_dirs)[:80],
@@ -1691,9 +1711,11 @@ def _build_incremental_directory_source(
     tokenizer_backend: str | None = None,
     tokenizer_model: str | None = None,
     exclude_patterns: list[str] | None = None,
+    include_default_skips: bool = False,
 ) -> dict[str, Any]:
     path = _resolve_existing_context_directory(path, field_name="--input-dir")
     path_filter = _build_context_path_filter(path, exclude_patterns=exclude_patterns)
+    skip_dir_names = _default_skip_dir_names(include_default_skips=include_default_skips)
     change_set = _collect_incremental_repo_paths(path, base_commit=base_commit)
     repo_root = change_set["repo_root"]
     scope_rel = PurePosixPath(change_set["scope_rel"] or ".")
@@ -1720,10 +1742,20 @@ def _build_incremental_directory_source(
 
     added_paths: list[str] = []
     changed_paths: list[str] = []
+    default_skipped_incremental_paths = [
+        _scope_rel_from_repo_rel(repo_rel, scope_rel)
+        for repo_rel in (
+            list(change_set["added_repo_paths"])
+            + list(change_set["changed_repo_paths"])
+            + list(change_set["removed_repo_paths"])
+        )
+        if _path_has_default_skip_dir(_scope_rel_from_repo_rel(repo_rel, scope_rel), skip_dir_names=skip_dir_names)
+    ]
     removed_paths = [
         _scope_rel_from_repo_rel(repo_rel, scope_rel)
         for repo_rel in change_set["removed_repo_paths"]
-        if not _context_path_is_filtered(_scope_rel_from_repo_rel(repo_rel, scope_rel), path_filter, is_dir=False)
+        if not _path_has_default_skip_dir(_scope_rel_from_repo_rel(repo_rel, scope_rel), skip_dir_names=skip_dir_names)
+        and not _context_path_is_filtered(_scope_rel_from_repo_rel(repo_rel, scope_rel), path_filter, is_dir=False)
     ]
     filtered_incremental_paths = [
         _scope_rel_from_repo_rel(repo_rel, scope_rel)
@@ -1732,7 +1764,8 @@ def _build_incremental_directory_source(
             + list(change_set["changed_repo_paths"])
             + list(change_set["removed_repo_paths"])
         )
-        if _context_path_is_filtered(_scope_rel_from_repo_rel(repo_rel, scope_rel), path_filter, is_dir=False)
+        if not _path_has_default_skip_dir(_scope_rel_from_repo_rel(repo_rel, scope_rel), skip_dir_names=skip_dir_names)
+        and _context_path_is_filtered(_scope_rel_from_repo_rel(repo_rel, scope_rel), path_filter, is_dir=False)
     ]
     incremental_diagnostics = {
         "git_root": str(repo_root),
@@ -1752,10 +1785,12 @@ def _build_incremental_directory_source(
 
     existing_repo_paths = [
         ("added", repo_rel) for repo_rel in change_set["added_repo_paths"]
-        if not _context_path_is_filtered(_scope_rel_from_repo_rel(repo_rel, scope_rel), path_filter, is_dir=False)
+        if not _path_has_default_skip_dir(_scope_rel_from_repo_rel(repo_rel, scope_rel), skip_dir_names=skip_dir_names)
+        and not _context_path_is_filtered(_scope_rel_from_repo_rel(repo_rel, scope_rel), path_filter, is_dir=False)
     ] + [
         ("changed", repo_rel) for repo_rel in change_set["changed_repo_paths"]
-        if not _context_path_is_filtered(_scope_rel_from_repo_rel(repo_rel, scope_rel), path_filter, is_dir=False)
+        if not _path_has_default_skip_dir(_scope_rel_from_repo_rel(repo_rel, scope_rel), skip_dir_names=skip_dir_names)
+        and not _context_path_is_filtered(_scope_rel_from_repo_rel(repo_rel, scope_rel), path_filter, is_dir=False)
     ]
 
     for path_kind, repo_rel in sorted(existing_repo_paths, key=lambda item: item[1]):
@@ -1826,6 +1861,10 @@ def _build_incremental_directory_source(
         incremental_diagnostics["notes"].append(
             "Some git changes were excluded by .mcp-skeletonignore or --exclude patterns."
         )
+    if default_skipped_incremental_paths:
+        incremental_diagnostics["notes"].append(
+            "Some git changes were skipped by default noise protection; pass --include-default-skips to include dependency, build, cache, virtualenv, or VCS paths."
+        )
 
     directory_overview = _build_directory_overview(sorted(skeleton_entries, key=lambda item: item["relative_path"]))
     source_summary = {
@@ -1838,6 +1877,16 @@ def _build_incremental_directory_source(
         "binary_files": binary_files,
         "symlink_count": len(symlinks),
         "empty_dir_count": 0,
+        "include_default_skips": bool(include_default_skips),
+        "skip_dir_names": sorted(skip_dir_names),
+        "skipped_dir_count": len(set(default_skipped_incremental_paths)),
+        "skipped_dirs": sorted(set(default_skipped_incremental_paths)),
+        "default_noise_protection": {
+            "status": "disabled" if include_default_skips else "active",
+            "skipped_dir_names": sorted(SKIP_DIR_NAMES),
+            "skipped_dir_count": len(set(default_skipped_incremental_paths)),
+            "skipped_dirs_preview": sorted(set(default_skipped_incremental_paths))[:80],
+        },
         "filter_patterns": path_filter["patterns"],
         "ignore_file": path_filter["ignore_file"],
         "filtered_incremental_path_count": len(filtered_incremental_paths),
@@ -2561,6 +2610,7 @@ def _resolve_context_input_source(
     tokenizer_backend: str | None = None,
     tokenizer_model: str | None = None,
     exclude_patterns: list[str] | None = None,
+    include_default_skips: bool = False,
 ) -> dict[str, Any]:
     source_count = sum(1 for item in [inline_text.strip() if inline_text else "", text_file, input_file, input_dir] if item)
     if source_count != 1:
@@ -2577,6 +2627,7 @@ def _resolve_context_input_source(
             tokenizer_backend=tokenizer_backend,
             tokenizer_model=tokenizer_model,
             exclude_patterns=exclude_patterns,
+            include_default_skips=include_default_skips,
         )
     raise ValueError(f"{command_label} did not receive a usable input source")
 
@@ -3898,6 +3949,14 @@ def _build_compression_advice(
                     "skipped_dir_names": list(source_summary.get("skip_dir_names") or []),
                 }
             )
+        elif bool(source_summary.get("include_default_skips")):
+            explanations.append(
+                {
+                    "code": "default_noise_protection_disabled",
+                    "message": "default noise protection was disabled, so dependency, build, cache, virtualenv, and VCS directories can be included",
+                    "skipped_dir_names": list(SKIP_DIR_NAMES),
+                }
+            )
         if suggested_focus != focus_mode or suggested_density != skeleton_density:
             explanations.append(
                 {
@@ -3960,6 +4019,8 @@ def _build_recommended_context_compress_args(
         args.extend(["--focus-mode", focus_mode])
     if skeleton_density:
         args.extend(["--skeleton-density", skeleton_density])
+    if bool((source.get("source_summary") or {}).get("include_default_skips")):
+        args.append("--include-default-skips")
     for pattern in recommended_config.get("exclude") or []:
         pattern_text = str(pattern).strip()
         if pattern_text:

@@ -822,7 +822,12 @@ def _check_context_quick_json(workspace: Path) -> None:
     assert reused["manifest_file"] == payload["manifest_file"]
     assert reused["handoff"]["skeleton_file"] == payload["handoff"]["skeleton_file"]
     assert reused["timings_ms"]["bundle"] == 0.0
+    assert reused["reuse_guidance"]["status"] == "reused"
+    assert reused["reuse_guidance"]["saved_work"] == "skipped recompression and restore recheck"
+    assert reused["reuse_guidance"]["next_handoff_command_text"].startswith("mcp-skeleton handoff --reuse-if-fresh")
     assert "Reused previous bundle:" in reused["summary_text"]
+    assert "Saved time:" in reused["summary_text"]
+    assert "mcp-skeleton handoff --reuse-if-fresh" in reused["summary_text"]
     assert "At a glance:" in reused["summary_text"]
     assert "- Status:" in reused["summary_text"]
     assert "- Next command:" in reused["summary_text"]
@@ -1230,6 +1235,7 @@ def _check_top_level_cli_alias_json(workspace: Path) -> None:
     assert handoff["handoff"]["ai_handoff_file"].endswith("AI_HANDOFF.md")
     assert Path(handoff["handoff"]["ai_handoff_file"]).exists()
     assert handoff["copy_requested"] is True
+    assert handoff["performance_advice"]["reuse_command_text"].startswith("mcp-skeleton handoff --reuse-if-fresh")
     assert "AI handoff:" in handoff["summary_text"]
     assert "Keep for restore:" in handoff["summary_text"]
 

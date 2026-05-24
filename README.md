@@ -24,6 +24,7 @@ sh install.sh
 mcp-skeleton demo
 mcp-skeleton handoff --input-dir .
 mcp-skeleton handoff --input-dir . --copy --open
+mcp-skeleton handoff --reuse-if-fresh --input-dir .
 mcp-skeleton quick --input-dir .
 mcp-skeleton quick --reuse-if-fresh --input-dir .
 ```
@@ -34,6 +35,7 @@ What these do:
 - `demo` runs a safe sample bundle so you can see the workflow before using your own project.
 - `handoff` is the shortest “give this project to AI/IDE” command; it creates the same restore-safe bundle as `quick`.
 - `handoff --copy --open` copies the skeleton to the macOS clipboard and opens the bundle folder in Finder.
+- `handoff --reuse-if-fresh` reuses the last unchanged bundle, which is the fastest day-to-day path for large projects.
 - `quick` creates a restore-safe bundle for the current directory and prints the skeleton, manifest, inspect, and restore commands.
 - `quick --reuse-if-fresh` reuses the last unchanged bundle instead of recompressing large projects.
 
@@ -194,6 +196,14 @@ mcp-skeleton handoff --input-dir . --copy --open
 ```
 
 `--copy` copies `context_skeleton.mcp` to the clipboard with `pbcopy`; `--open` opens the generated bundle folder in Finder.
+
+For day-to-day work on an unchanged project, use:
+
+```bash
+mcp-skeleton handoff --reuse-if-fresh --input-dir .
+```
+
+When the project fingerprint is unchanged, this skips recompression and restore recheck, reuses the previous bundle, and tells you exactly which skeleton file / handoff guide to use.
 
 One-command bundle creation for your project:
 

@@ -537,7 +537,7 @@ def _format_cli_command(command_args: list[Any]) -> str:
 
 def _normalize_top_level_context_aliases(argv: list[str]) -> list[str]:
     if argv and argv[0] == "handoff":
-        return ["context", "quick", *argv[1:]]
+        return ["context", "quick", "--handoff-alias", *argv[1:]]
     if argv and argv[0] in CONTEXT_SUBCOMMANDS:
         return ["context", *argv]
     return argv
@@ -981,6 +981,8 @@ def _quick_fast_command_text(args: argparse.Namespace) -> str:
 
 def _quick_run_command_text(args: argparse.Namespace) -> str:
     command_args = ["context", "quick"]
+    if bool(getattr(args, "handoff_alias", False)):
+        command_args = ["handoff"]
     if bool(getattr(args, "fast", False)):
         command_args.append("--fast")
     if bool(getattr(args, "reuse_if_fresh", False)):
@@ -1147,7 +1149,7 @@ def _recent_source_fingerprint(root: Path) -> str:
 
 
 def _recent_refresh_command_text(args: argparse.Namespace) -> str:
-    command_args: list[Any] = ["context", "quick"]
+    command_args: list[Any] = ["handoff"] if bool(getattr(args, "handoff_alias", False)) else ["context", "quick"]
     input_dir = _opt_path(args, "input_dir")
     input_file = _opt_path(args, "input_file")
     text_file = _opt_path(args, "text_file")
@@ -1302,11 +1304,17 @@ def _build_reused_quick_payload(args: argparse.Namespace, *, started_at: float) 
     handoff = {
         "status": "ready",
         "message": "feed the skeleton file to your AI or IDE; keep the bundle folder and manifest for exact restore",
+        "ai_file": skeleton_file,
         "skeleton_file": skeleton_file,
         "bundle_root": bundle_root,
         "manifest_file": manifest_file,
         "inspect_summary": str(Path(bundle_root) / "inspect_summary.txt"),
         "restore_package": str((bundle_payload.get("files") or {}).get("restore_package") or ""),
+        "restore_keep_files": {
+            "bundle_root": bundle_root,
+            "manifest_file": manifest_file,
+            "restore_package": str((bundle_payload.get("files") or {}).get("restore_package") or ""),
+        },
     }
     open_command_text = _quick_open_command_text(bundle_root)
     open_performed, open_error = _maybe_open_quick_bundle(args, bundle_root=bundle_root)
@@ -1315,6 +1323,14 @@ def _build_reused_quick_payload(args: argparse.Namespace, *, started_at: float) 
     inspect_args = ["context", "inspect", "--package-file", manifest_file, "--json"]
     restore_args = _quick_restore_command_args(bundle_payload)
     timings_ms = {"start": 0.0, "start_config_recommend": 0.0, "start_doctor": 0.0, "bundle": 0.0, "total": _elapsed_ms(started_at)}
+    next_handoff_args = _clone_args(args, reuse_if_fresh=True)
+    next_handoff_args.handoff_alias = True
+    reuse_guidance = {
+        "status": "reused",
+        "saved_work": "skipped recompression and restore recheck",
+        "message": "Reused the previous fresh bundle because the project fingerprint has not changed.",
+        "next_handoff_command_text": _quick_run_command_text(next_handoff_args),
+    }
     payload = {
         "status": "ok",
         "entrypoint": "context-quick",
@@ -1339,6 +1355,7 @@ def _build_reused_quick_payload(args: argparse.Namespace, *, started_at: float) 
         "copy_requested": bool(getattr(args, "copy_command", False)),
         "copy_performed": copy_performed,
         "copy_error": copy_error,
+        "reuse_guidance": reuse_guidance,
         "experience": recent_payload.get("experience") or {},
         "archive_path": "",
         "inspect_command_args": inspect_args,
@@ -1625,11 +1642,13 @@ def _render_context_quick_summary(payload: dict[str, Any]) -> str:
         "- Do not paste restore package contents into AI unless you intentionally want to share raw source bytes",
     ]
     if payload.get("reuse_status") == "reused":
+        reuse_guidance = payload.get("reuse_guidance") or {}
         lines.extend([
             "",
             "Reused previous bundle:",
             "- Project fingerprint is still fresh",
-            "- Skipped recompression and restore recheck",
+            f"- Saved time: {reuse_guidance.get('saved_work') or 'skipped recompression and restore recheck'}",
+            f"- Next handoff: {reuse_guidance.get('next_handoff_command_text') or '(not available)'}",
         ])
     lines.extend([
         "",
@@ -3389,6 +3408,7 @@ def _build_parser() -> argparse.ArgumentParser:
     quick.add_argument("--preview", action="store_true", help="Preview restore safety, token savings, and output paths without writing a bundle")
     quick.add_argument("--open", dest="open_bundle", action="store_true", help="Open the created bundle folder in Finder on macOS")
     quick.add_argument("--copy", "--copy-command", dest="copy_command", action="store_true", help="Copy the generated skeleton text to the macOS clipboard with pbcopy")
+    quick.add_argument("--handoff-alias", dest="handoff_alias", action="store_true", help=argparse.SUPPRESS)
     quick.add_argument("--zip", dest="zip_bundle", action="store_true")
     quick.add_argument("--output-config-file", dest="output_config_file", help="Config path to write; defaults to .mcp-skeleton.json near the input")
     quick.add_argument("--output-report-file", dest="output_report_file", help="Markdown onboarding report path; defaults to mcp-skeleton-onboarding.md near the config")

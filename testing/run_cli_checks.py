@@ -604,6 +604,11 @@ def _check_context_doctor_json(workspace: Path) -> None:
     assert payload["recommended_command_text"].startswith("mcp-skeleton compress")
     assert payload["timings_ms"]["total"] >= payload["timings_ms"]["compress"] >= 0
     assert payload["timings_ms"]["restore_check"] >= 0
+    assert "At a glance:" in payload["summary_text"]
+    assert "- Status:" in payload["summary_text"]
+    assert "- Restore safety:" in payload["summary_text"]
+    assert "- Token savings:" in payload["summary_text"]
+    assert "- Next command:" in payload["summary_text"]
     assert "Total time:" in payload["summary_text"]
     assert payload["install"]["entrypoint"] == "mcp-skeleton-version"
     assert "Command:" in payload["summary_text"]
@@ -743,6 +748,12 @@ def _check_context_quick_json(workspace: Path) -> None:
     assert "_compression_payload" not in payload["start"]
     assert "_compression_payload" not in payload["start"]["doctor"]
     assert "MCP-Skeleton Quick" in payload["summary_text"]
+    assert "At a glance:" in payload["summary_text"]
+    assert "- Status:" in payload["summary_text"]
+    assert "- Restore safety:" in payload["summary_text"]
+    assert "- Token savings:" in payload["summary_text"]
+    assert "- Speed:" in payload["summary_text"]
+    assert "- Next command:" in payload["summary_text"]
     assert "Result:" in payload["summary_text"]
     assert "Bundle:" in payload["summary_text"]
     assert "Use this now:" in payload["summary_text"]
@@ -787,6 +798,9 @@ def _check_context_quick_json(workspace: Path) -> None:
     assert reused["handoff"]["skeleton_file"] == payload["handoff"]["skeleton_file"]
     assert reused["timings_ms"]["bundle"] == 0.0
     assert "Reused previous bundle:" in reused["summary_text"]
+    assert "At a glance:" in reused["summary_text"]
+    assert "- Status:" in reused["summary_text"]
+    assert "- Next command:" in reused["summary_text"]
 
     preview_project = workspace / "quick_preview_project"
     (preview_project / "src").mkdir(parents=True)
@@ -824,6 +838,11 @@ def _check_context_quick_json(workspace: Path) -> None:
     assert not Path(preview["recent_file"]).exists()
     assert preview["run_command_text"].startswith("mcp-skeleton quick --input-dir")
     assert "MCP-Skeleton Quick Preview" in preview["summary_text"]
+    assert "At a glance:" in preview["summary_text"]
+    assert "- Status:" in preview["summary_text"]
+    assert "- Restore safety:" in preview["summary_text"]
+    assert "- Token savings:" in preview["summary_text"]
+    assert "- Run command:" in preview["summary_text"]
     assert "No files were written." in preview["summary_text"]
     assert "Run for real:" in preview["summary_text"]
 
@@ -853,6 +872,11 @@ def _check_context_recent_json(workspace: Path) -> None:
     assert recent["inspect_command_text"].startswith("mcp-skeleton inspect")
     assert recent["restore_command_text"].startswith("mcp-skeleton restore")
     assert "MCP-Skeleton Recent" in recent["summary_text"]
+    assert "At a glance:" in recent["summary_text"]
+    assert "- Status:" in recent["summary_text"]
+    assert "- Freshness:" in recent["summary_text"]
+    assert "- Token savings:" in recent["summary_text"]
+    assert "- Next command:" in recent["summary_text"]
     assert "Last bundle:" in recent["summary_text"]
     assert "Copy skeleton:" in recent["summary_text"]
 

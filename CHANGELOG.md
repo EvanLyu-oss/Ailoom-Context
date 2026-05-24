@@ -11,6 +11,7 @@
 - added install readiness fields to `mcp-skeleton version` and a first-run self-check panel to `install.sh`
 - added first-run guidance to `context quick` so tiny projects explain token expansion as expected behavior instead of looking like a failed compression
 - added clearer `context quick` AI handoff guidance that separates the skeleton file to share from bundle/manifest/restore files to keep locally
+- added `mcp-skeleton handoff` as a short top-level alias for the restore-safe quick AI/IDE handoff workflow
 - added `context quick` as a one-command start + restore-safety check + bundle workflow for zero-learning bundle creation
 - added `context explain` to translate an existing bundle into plain-language safety, compression, and next-step guidance
 - added direct `mcp-skeleton quick/start/doctor/...` top-level aliases and a macOS `install.sh` for lower-friction local installation

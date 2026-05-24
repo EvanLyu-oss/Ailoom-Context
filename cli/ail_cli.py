@@ -536,6 +536,8 @@ def _format_cli_command(command_args: list[Any]) -> str:
 
 
 def _normalize_top_level_context_aliases(argv: list[str]) -> list[str]:
+    if argv and argv[0] == "handoff":
+        return ["context", "quick", *argv[1:]]
     if argv and argv[0] in CONTEXT_SUBCOMMANDS:
         return ["context", *argv]
     return argv
@@ -3187,6 +3189,7 @@ def _build_parser() -> argparse.ArgumentParser:
         description="MCP-Skeleton: lossless context compression, exact restore, patch, and replay workflows",
         epilog=(
             "Common shortcuts: mcp-skeleton quick --input-dir . | "
+            "mcp-skeleton handoff --input-dir . | "
             "mcp-skeleton start --input-dir . | "
             "mcp-skeleton doctor --input-dir . | "
             "mcp-skeleton explain --package-file context_manifest.json"

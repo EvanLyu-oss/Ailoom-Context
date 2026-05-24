@@ -1209,6 +1209,16 @@ def _check_top_level_cli_alias_json(workspace: Path) -> None:
     assert payload["restore_command_text"].startswith("mcp-skeleton restore")
     assert payload["start"]["recommended_command_text"].startswith("mcp-skeleton compress")
 
+    handoff_dir = workspace / "alias_handoff_bundle"
+    handoff = _run_top_level_cli_json(["handoff", "--input-dir", str(project), "--output-dir", str(handoff_dir), "--json"])
+    assert handoff["status"] == "ok"
+    assert handoff["entrypoint"] == "context-quick"
+    assert handoff["quick_status"] == "ready"
+    assert handoff["handoff"]["ai_file"].endswith("context_skeleton.mcp")
+    assert handoff["handoff"]["restore_keep_files"]["manifest_file"].endswith("context_manifest.json")
+    assert "AI handoff:" in handoff["summary_text"]
+    assert "Keep for restore:" in handoff["summary_text"]
+
 
 def _check_context_auto_defaults_json(workspace: Path) -> None:
     project = workspace / "auto_defaults_project"

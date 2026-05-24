@@ -22,6 +22,7 @@ For macOS, from a cloned or downloaded checkout:
 ```bash
 sh install.sh
 mcp-skeleton demo
+mcp-skeleton handoff --input-dir .
 mcp-skeleton quick --input-dir .
 mcp-skeleton quick --reuse-if-fresh --input-dir .
 ```
@@ -30,6 +31,7 @@ What these do:
 
 - `install.sh` installs an isolated local command and prints PATH guidance.
 - `demo` runs a safe sample bundle so you can see the workflow before using your own project.
+- `handoff` is the shortest “give this project to AI/IDE” command; it creates the same restore-safe bundle as `quick`.
 - `quick` creates a restore-safe bundle for the current directory and prints the skeleton, manifest, inspect, and restore commands.
 - `quick --reuse-if-fresh` reuses the last unchanged bundle instead of recompressing large projects.
 

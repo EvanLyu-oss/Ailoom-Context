@@ -907,6 +907,13 @@ def _check_context_recent_json(workspace: Path) -> None:
     assert recent["bundle_root"] == quick["bundle_root"]
     assert recent["manifest_file"] == quick["manifest_file"]
     assert recent["skeleton_file"] == quick["handoff"]["skeleton_file"]
+    assert recent["bundle_size_bytes"] > 0
+    assert recent["created_at"]
+    assert recent["bundle_exists"] is True
+    assert recent["manifest_exists"] is True
+    assert recent["skeleton_exists"] is True
+    assert recent["restore_package_exists"] is True
+    assert recent["restore_package"]
     assert recent["open_command_text"].startswith("open ")
     assert "| pbcopy" in recent["copy_command_text"]
     assert recent["inspect_command_text"].startswith("mcp-skeleton inspect")
@@ -918,6 +925,8 @@ def _check_context_recent_json(workspace: Path) -> None:
     assert "- Token savings:" in recent["summary_text"]
     assert "- Next command:" in recent["summary_text"]
     assert "Last bundle:" in recent["summary_text"]
+    assert "Bundle size:" in recent["summary_text"]
+    assert "Created:" in recent["summary_text"]
     assert "Copy skeleton:" in recent["summary_text"]
 
     (project / "src" / "app.py").write_text(
@@ -933,6 +942,24 @@ def _check_context_recent_json(workspace: Path) -> None:
     assert stale["refresh_command_text"].startswith("mcp-skeleton quick --input-dir")
     assert "Bundle may be stale:" in stale["summary_text"]
     assert "Refresh bundle:" in stale["summary_text"]
+
+    listed = _run_top_level_cli_json(["recent", "--input-dir", str(project), "--list", "--json"])
+    assert listed["status"] == "ok"
+    assert listed["entrypoint"] == "context-bundles"
+    assert listed["bundle_count"] >= 1
+    assert listed["bundles"][0]["bundle_root"] == quick["bundle_root"]
+    assert listed["bundles"][0]["bundle_size_bytes"] > 0
+    assert listed["bundles"][0]["freshness_status"] == "stale"
+    assert "MCP-Skeleton Bundles" in listed["summary_text"]
+
+    clean = _run_top_level_cli_json(["recent", "--input-dir", str(project), "--clean-stale", "--dry-run", "--json"])
+    assert clean["status"] == "ok"
+    assert clean["entrypoint"] == "context-bundle-clean"
+    assert clean["dry_run"] is True
+    assert clean["candidate_count"] >= 1
+    assert clean["deleted_count"] == 0
+    assert Path(quick["bundle_root"]).exists()
+    assert "Dry run:" in clean["summary_text"]
 
 
 def _check_context_quick_fast_json(workspace: Path) -> None:
@@ -1511,11 +1538,17 @@ def _check_directory_filtering(workspace: Path) -> None:
     (noisy_project / "dist").mkdir()
     (noisy_project / ".next" / "cache").mkdir(parents=True)
     (noisy_project / ".venv" / "lib").mkdir(parents=True)
+    (noisy_project / "testing" / "results").mkdir(parents=True)
+    (noisy_project / "pkg.egg-info").mkdir()
+    (noisy_project / "mcp-skeleton-restore").mkdir()
     (noisy_project / "src" / "app.py").write_text("def keep() -> str:\n    return 'source'\n", encoding="utf-8")
     (noisy_project / "node_modules" / "pkg" / "index.js").write_text("dependency\n", encoding="utf-8")
     (noisy_project / "dist" / "bundle.js").write_text("build artifact\n", encoding="utf-8")
     (noisy_project / ".next" / "cache" / "page.js").write_text("next cache\n", encoding="utf-8")
     (noisy_project / ".venv" / "lib" / "site.py").write_text("venv artifact\n", encoding="utf-8")
+    (noisy_project / "testing" / "results" / "huge.json").write_text("generated result\n", encoding="utf-8")
+    (noisy_project / "pkg.egg-info" / "PKG-INFO").write_text("metadata\n", encoding="utf-8")
+    (noisy_project / "mcp-skeleton-restore" / "restored.py").write_text("restore output\n", encoding="utf-8")
     default_noise = _run_cli_json(["context", "compress", "--input-dir", str(noisy_project), "--json"])
     default_paths = {item["relative_path"] for item in default_noise["source_summary"]["entries"]}
     assert "src/app.py" in default_paths
@@ -1523,7 +1556,10 @@ def _check_directory_filtering(workspace: Path) -> None:
     assert "dist/bundle.js" not in default_paths
     assert ".next/cache/page.js" not in default_paths
     assert ".venv/lib/site.py" not in default_paths
-    assert {"node_modules", "dist", ".next", ".venv"}.issubset(set(default_noise["source_summary"]["skipped_dirs"]))
+    assert "testing/results/huge.json" not in default_paths
+    assert "pkg.egg-info/PKG-INFO" not in default_paths
+    assert "mcp-skeleton-restore/restored.py" not in default_paths
+    assert {"node_modules", "dist", ".next", ".venv", "testing/results", "pkg.egg-info", "mcp-skeleton-restore"}.issubset(set(default_noise["source_summary"]["skipped_dirs"]))
     assert any(item["code"] == "default_noise_protection" for item in default_noise["compression_explanations"])
     assert "default noise protection" in default_noise["summary_text"]
     include_default_skips = _run_cli_json(

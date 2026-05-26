@@ -249,8 +249,9 @@ To find the last quick bundle for the current project later:
 mcp-skeleton recent
 ```
 
-`recent` reads `.workspace_ail/recent_quick.json` and prints the last bundle path, skeleton file, manifest, open command, clipboard command, inspect command, and restore command.
+`recent` reads `.workspace_ail/recent_quick.json` and prints the last bundle path, skeleton file, manifest, restore package, bundle size, created time, open command, clipboard command, inspect command, and restore command.
 It also checks whether the project appears to have changed since the last quick bundle; if the bundle may be stale, it prints a copy/paste refresh command.
+Use `mcp-skeleton recent --list` to list the known recent bundle record, and `mcp-skeleton recent --clean-stale --dry-run` to preview safe stale-bundle cleanup candidates without deleting anything.
 
 For very large directories where you want the fastest safe bundle path, use:
 
@@ -292,7 +293,7 @@ mcp-skeleton compress \
   --json
 ```
 
-For speed and lower token noise, directory compression has default noise protection for common VCS, dependency, build, virtualenv, and cache directories: `.git`, `node_modules`, `dist`, `build`, `coverage`, `.next`, `.nuxt`, `.venv`, `venv`, `.tox`, `.mypy_cache`, `.ruff_cache`, `.turbo`, `.cache`, `__pycache__`, `.pytest_cache`, and `.workspace_ail`. These skipped directories are reported in `source_summary.skipped_dirs` and explained in `compression_explanations`.
+For speed and lower token noise, directory compression has default noise protection for common VCS, dependency, build, virtualenv, cache, test-result, restore-output, and package-metadata directories: `.git`, `node_modules`, `dist`, `build`, `coverage`, `.next`, `.nuxt`, `.venv`, `venv`, `.tox`, `.mypy_cache`, `.ruff_cache`, `.turbo`, `.cache`, `__pycache__`, `.pytest_cache`, `.workspace_ail`, `testing/results`, `test-results`, `mcp-skeleton-restore`, and `*.egg-info`. These skipped directories are reported in `source_summary.skipped_dirs` and explained in `compression_explanations`.
 
 If you intentionally need those directories, pass `--include-default-skips` or set `"include_default_skips": true` in `.mcp-skeleton.json`. This is useful for debugging generated output, but it can make compression slower and much larger on real projects.
 

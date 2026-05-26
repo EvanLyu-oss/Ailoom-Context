@@ -36,6 +36,9 @@ SKIP_DIR_NAMES = {
     ".ruff_cache",
     ".turbo",
     ".cache",
+    "testing/results",
+    "test-results",
+    "mcp-skeleton-restore",
 }
 
 
@@ -46,7 +49,13 @@ def _default_skip_dir_names(*, include_default_skips: bool = False) -> set[str]:
 def _path_has_default_skip_dir(rel_path: str, *, skip_dir_names: set[str]) -> bool:
     if not skip_dir_names:
         return False
-    return any(part in skip_dir_names for part in PurePosixPath(rel_path).parts)
+    parts = PurePosixPath(rel_path).parts
+    return any(
+        part in skip_dir_names
+        or part.endswith(".egg-info")
+        or "/".join(parts[:index + 1]) in skip_dir_names
+        for index, part in enumerate(parts)
+    )
 
 
 CODE_EXTENSIONS = {
@@ -1425,12 +1434,19 @@ def _build_directory_source(
 
     for current_root, dirnames, filenames in os.walk(path):
         current_path = Path(current_root)
-        skipped_here = sorted(name for name in dirnames if name in skip_dir_names)
+        skip_map = {
+            name: (current_path / name).relative_to(path).as_posix()
+            for name in dirnames
+        }
+        skipped_here = sorted(
+            name for name, rel_child_dir in skip_map.items()
+            if _path_has_default_skip_dir(rel_child_dir, skip_dir_names=skip_dir_names)
+        )
         for dirname in skipped_here:
-            skipped_dirs.append((current_path / dirname).relative_to(path).as_posix())
+            skipped_dirs.append(skip_map[dirname])
         kept_dirnames = []
-        for dirname in sorted(name for name in dirnames if name not in skip_dir_names):
-            rel_child_dir = (current_path / dirname).relative_to(path).as_posix()
+        for dirname in sorted(name for name in dirnames if name not in skipped_here):
+            rel_child_dir = skip_map[dirname]
             if _context_path_is_filtered(rel_child_dir, path_filter, is_dir=True):
                 filtered_dirs.append(rel_child_dir)
             else:

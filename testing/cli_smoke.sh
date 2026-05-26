@@ -319,7 +319,10 @@ skip_names = {
     "build",
     "coverage",
     "dist",
+    "mcp-skeleton-restore",
     "node_modules",
+    "test-results",
+    "testing/results",
     "venv",
 }
 

@@ -1157,6 +1157,18 @@ def _recent_file_from_args(args: argparse.Namespace) -> Path:
     return _recent_root_from_args(args) / ".workspace_ail" / "recent_quick.json"
 
 
+def _path_size_bytes(path: Path) -> int:
+    if not path.exists():
+        return 0
+    if path.is_file():
+        return path.stat().st_size
+    total = 0
+    for item in path.rglob("*"):
+        if item.is_file():
+            total += item.stat().st_size
+    return total
+
+
 def _recent_source_fingerprint(root: Path) -> str:
     digest = hashlib.sha256()
     if root.is_file():
@@ -1202,15 +1214,23 @@ def _recent_refresh_command_text(args: argparse.Namespace) -> str:
 def _build_recent_record(args: argparse.Namespace, payload: dict[str, Any]) -> dict[str, Any]:
     metrics = ((payload.get("start") or {}).get("metrics") or {})
     recent_root = _recent_root_from_args(args)
+    handoff = payload.get("handoff") or {}
+    keep_files = handoff.get("restore_keep_files") or {}
+    bundle_root = str(payload.get("bundle_root", ""))
+    manifest_file = str(payload.get("manifest_file", ""))
+    skeleton_file = str(handoff.get("skeleton_file", ""))
+    restore_package = str(keep_files.get("restore_package") or handoff.get("restore_package") or "")
     return {
         "status": "ok",
         "entrypoint": "context-recent-record",
         "created_at": time.strftime("%Y-%m-%dT%H:%M:%S%z", time.localtime()),
         "source_root": str(recent_root),
         "source_fingerprint": _recent_source_fingerprint(recent_root),
-        "bundle_root": payload.get("bundle_root", ""),
-        "manifest_file": payload.get("manifest_file", ""),
-        "skeleton_file": (payload.get("handoff") or {}).get("skeleton_file", ""),
+        "bundle_root": bundle_root,
+        "manifest_file": manifest_file,
+        "skeleton_file": skeleton_file,
+        "restore_package": restore_package,
+        "bundle_size_bytes": _path_size_bytes(Path(bundle_root)) if bundle_root else 0,
         "inspect_command_text": payload.get("inspect_command_text", ""),
         "restore_command_text": payload.get("restore_command_text", ""),
         "open_command_text": payload.get("open_command_text", ""),
@@ -1244,9 +1264,12 @@ def _render_context_recent_summary(payload: dict[str, Any]) -> str:
         f"Recent file: {payload.get('recent_file', '')}",
         "",
         "Last bundle:",
+        f"- Created: {payload.get('created_at', '') or '(unknown)'}",
         f"- Bundle: {payload.get('bundle_root', '') or '(not available)'}",
+        f"- Bundle size: {payload.get('bundle_size_bytes', 0)} bytes",
         f"- Skeleton: {payload.get('skeleton_file', '') or '(not available)'}",
         f"- Manifest: {payload.get('manifest_file', '') or '(not available)'}",
+        f"- Restore package: {payload.get('restore_package', '') or '(not available)'}",
         f"- Estimated tokens saved: {payload.get('estimated_tokens_saved', 0)}",
         f"- Estimated token savings: {payload.get('estimated_savings_percent', 0)}%",
         f"- Freshness: {payload.get('freshness_status', 'unknown')}",
@@ -1275,7 +1298,115 @@ def _render_context_recent_summary(payload: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
+def _bundle_lifecycle_from_record(record: dict[str, Any], *, recent_root: Path) -> dict[str, Any]:
+    source_fingerprint = _recent_source_fingerprint(recent_root)
+    recorded_source_fingerprint = str(record.get("source_fingerprint") or "")
+    freshness_status = "fresh" if recorded_source_fingerprint and source_fingerprint == recorded_source_fingerprint else "stale"
+    bundle_root = str(record.get("bundle_root") or "")
+    manifest_file = str(record.get("manifest_file") or "")
+    skeleton_file = str(record.get("skeleton_file") or "")
+    restore_package = str(record.get("restore_package") or "")
+    return {
+        "source_fingerprint": source_fingerprint,
+        "recorded_source_fingerprint": recorded_source_fingerprint,
+        "freshness_status": freshness_status,
+        "bundle_exists": bool(bundle_root and Path(bundle_root).exists()),
+        "manifest_exists": bool(manifest_file and Path(manifest_file).exists()),
+        "skeleton_exists": bool(skeleton_file and Path(skeleton_file).exists()),
+        "restore_package_exists": bool(restore_package and Path(restore_package).exists()),
+        "bundle_size_bytes": _path_size_bytes(Path(bundle_root)) if bundle_root else 0,
+    }
+
+
+def _render_context_bundles_summary(payload: dict[str, Any]) -> str:
+    lines = [
+        "MCP-Skeleton Bundles",
+        "",
+        f"Status: {payload.get('bundles_status', '')}",
+        f"Bundle count: {payload.get('bundle_count', 0)}",
+    ]
+    for item in payload.get("bundles") or []:
+        lines.extend([
+            "",
+            f"- Bundle: {item.get('bundle_root', '') or '(not available)'}",
+            f"  Freshness: {item.get('freshness_status', 'unknown')}",
+            f"  Size: {item.get('bundle_size_bytes', 0)} bytes",
+            f"  Created: {item.get('created_at', '') or '(unknown)'}",
+        ])
+    return "\n".join(lines)
+
+
+def _render_context_bundle_clean_summary(payload: dict[str, Any]) -> str:
+    lines = [
+        "MCP-Skeleton Bundle Clean",
+        "",
+        f"Status: {payload.get('clean_status', '')}",
+        f"Dry run: {payload.get('dry_run', False)}",
+        f"Candidates: {payload.get('candidate_count', 0)}",
+        f"Deleted: {payload.get('deleted_count', 0)}",
+    ]
+    for item in payload.get("candidates") or []:
+        lines.append(f"- {item.get('bundle_root', '')}")
+    return "\n".join(lines)
+
+
+def _build_context_bundles_payload(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
+    recent_file = _recent_file_from_args(args)
+    bundles: list[dict[str, Any]] = []
+    if recent_file.exists():
+        record = json.loads(recent_file.read_text(encoding="utf-8"))
+        recent_root = _recent_root_from_args(args)
+        lifecycle = _bundle_lifecycle_from_record(record, recent_root=recent_root)
+        bundles.append({
+            **record,
+            **lifecycle,
+            "recent_file": str(recent_file),
+        })
+    payload = {
+        "status": "ok",
+        "entrypoint": "context-bundles",
+        "bundles_status": "ready",
+        "recent_file": str(recent_file),
+        "bundle_count": len(bundles),
+        "bundles": bundles,
+    }
+    payload["summary_text"] = _render_context_bundles_summary(payload)
+    return payload, EXIT_OK
+
+
+def _build_context_bundle_clean_payload(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
+    list_payload, _ = _build_context_bundles_payload(args)
+    candidates = [
+        item for item in list_payload.get("bundles") or []
+        if item.get("freshness_status") == "stale" and item.get("bundle_exists")
+    ]
+    dry_run = bool(getattr(args, "dry_run", False))
+    deleted: list[dict[str, Any]] = []
+    if not dry_run:
+        for item in candidates:
+            bundle_root = str(item.get("bundle_root") or "")
+            if bundle_root:
+                shutil.rmtree(bundle_root, ignore_errors=True)
+                deleted.append(item)
+    payload = {
+        "status": "ok",
+        "entrypoint": "context-bundle-clean",
+        "clean_status": "ready",
+        "dry_run": dry_run,
+        "candidate_count": len(candidates),
+        "deleted_count": len(deleted),
+        "candidates": candidates,
+        "deleted": deleted,
+    }
+    payload["summary_text"] = _render_context_bundle_clean_summary(payload)
+    return payload, EXIT_OK
+
+
 def _build_context_recent_payload(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
+    if bool(getattr(args, "list_bundles", False)):
+        return _build_context_bundles_payload(args)
+    if bool(getattr(args, "clean_stale", False)):
+        return _build_context_bundle_clean_payload(args)
     recent_file = _recent_file_from_args(args)
     if not recent_file.exists():
         payload = {
@@ -1289,28 +1420,26 @@ def _build_context_recent_payload(args: argparse.Namespace) -> tuple[dict[str, A
         return payload, EXIT_VALIDATION
     record = json.loads(recent_file.read_text(encoding="utf-8"))
     recent_root = _recent_root_from_args(args)
-    source_fingerprint = _recent_source_fingerprint(recent_root)
-    recorded_source_fingerprint = str(record.get("source_fingerprint") or "")
-    freshness_status = "fresh" if recorded_source_fingerprint and source_fingerprint == recorded_source_fingerprint else "stale"
+    lifecycle = _bundle_lifecycle_from_record(record, recent_root=recent_root)
     payload = {
         "status": "ok",
         "entrypoint": "context-recent",
         "recent_status": "ready",
-        "freshness_status": freshness_status,
         "recent_file": str(recent_file),
         **{key: record.get(key, "") for key in [
+            "created_at",
             "source_root",
             "bundle_root",
             "manifest_file",
             "skeleton_file",
+            "restore_package",
             "inspect_command_text",
             "restore_command_text",
             "open_command_text",
             "copy_command_text",
             "refresh_command_text",
         ]},
-        "source_fingerprint": source_fingerprint,
-        "recorded_source_fingerprint": recorded_source_fingerprint,
+        **lifecycle,
         "estimated_tokens_saved": record.get("estimated_tokens_saved", 0),
         "estimated_savings_percent": record.get("estimated_savings_percent", 0),
         "experience": record.get("experience") or {},
@@ -3639,6 +3768,9 @@ def _build_parser() -> argparse.ArgumentParser:
     recent.add_argument("--input-dir", dest="input_dir", help="Project directory whose .workspace_ail/recent_quick.json should be read; defaults to current directory")
     recent.add_argument("--input-file", dest="input_file", help="Read recent state next to this file")
     recent.add_argument("--text-file", dest="text_file", help="Read recent state next to this text file")
+    recent.add_argument("--list", dest="list_bundles", action="store_true", help="List known recent bundles for this project")
+    recent.add_argument("--clean-stale", action="store_true", help="Clean stale known bundles for this project")
+    recent.add_argument("--dry-run", action="store_true", help="Show bundle cleanup candidates without deleting anything")
     recent.add_argument("--json", action="store_true")
 
     demo = context_subparsers.add_parser("demo", help="Run a one-command demo that creates a sample project, safe bundle, and restore guidance")

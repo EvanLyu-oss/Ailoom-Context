@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- expanded default noise protection to skip common generated test results, restore outputs, and Python package metadata such as `testing/results`, `test-results`, `mcp-skeleton-restore`, and `*.egg-info`
+- added bundle lifecycle fields to `mcp-skeleton recent`, including created time, bundle size, restore package path, and file-existence checks
+- added `mcp-skeleton recent --list` and `mcp-skeleton recent --clean-stale --dry-run` for safe recent-bundle discovery and cleanup previews
 - added zero-learning defaults so `mcp-skeleton handoff`, `quick`, `doctor`, and `recent` use the current directory when no input source is provided
 - made `mcp-skeleton handoff` automatically reuse the last fresh bundle for unchanged projects, with `--force-refresh` available when a new bundle is required
 - simplified the README and quickstart check around the two-command macOS path: `sh install.sh --setup-shell` then `mcp-skeleton handoff`

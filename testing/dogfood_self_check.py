@@ -12,7 +12,7 @@ from typing import Any
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from cli.context_compression import SKIP_DIR_NAMES  # noqa: E402
+from cli.context_compression import SKIP_DIR_NAMES, _path_has_default_skip_dir  # noqa: E402
 
 RESULTS_DIR = ROOT / "testing" / "results"
 DOGFOOD_ROOT = RESULTS_DIR / "dogfood-self-check"
@@ -59,7 +59,10 @@ def _expected_files(source_root: Path) -> list[str]:
     paths: list[str] = []
     for current_root, dirnames, filenames in os.walk(source_root):
         current_path = Path(current_root)
-        dirnames[:] = [name for name in dirnames if name not in SKIP_DIR_NAMES]
+        dirnames[:] = [
+            name for name in dirnames
+            if not _path_has_default_skip_dir((current_path / name).relative_to(source_root).as_posix(), skip_dir_names=SKIP_DIR_NAMES)
+        ]
         for filename in sorted(filenames):
             if filename in DOGFOOD_LOCAL_ARTIFACTS:
                 continue

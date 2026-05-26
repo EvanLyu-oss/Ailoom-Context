@@ -1432,6 +1432,40 @@ def _build_directory_source(
         except Exception as exc:
             tokenizer_error = f"{type(exc).__name__}: {exc}"
 
+    def estimate_skipped_noise(paths: list[str], *, max_files: int = 5000) -> dict[str, Any]:
+        file_count = 0
+        byte_count = 0
+        truncated = False
+        for rel_dir in sorted(set(paths)):
+            skipped_root = path / rel_dir
+            if not skipped_root.exists():
+                continue
+            for skipped_current, skipped_dirnames, skipped_filenames in os.walk(skipped_root):
+                skipped_dirnames[:] = sorted(skipped_dirnames)
+                for skipped_filename in sorted(skipped_filenames):
+                    skipped_file = Path(skipped_current) / skipped_filename
+                    if skipped_file.is_symlink():
+                        continue
+                    try:
+                        byte_count += skipped_file.stat().st_size
+                    except OSError:
+                        pass
+                    file_count += 1
+                    if file_count >= max_files:
+                        truncated = True
+                        return {
+                            "estimated_skipped_file_count": file_count,
+                            "estimated_skipped_bytes": byte_count,
+                            "estimate_truncated": truncated,
+                            "estimate_file_limit": max_files,
+                        }
+        return {
+            "estimated_skipped_file_count": file_count,
+            "estimated_skipped_bytes": byte_count,
+            "estimate_truncated": truncated,
+            "estimate_file_limit": max_files,
+        }
+
     for current_root, dirnames, filenames in os.walk(path):
         current_path = Path(current_root)
         skip_map = {
@@ -1504,6 +1538,7 @@ def _build_directory_source(
             skeleton_entries.append({"relative_path": rel_path, "kind": kind, "summary": summary})
 
     directory_overview = _build_directory_overview(sorted(skeleton_entries, key=lambda item: item["relative_path"]))
+    skipped_noise_estimate = estimate_skipped_noise(skipped_dirs)
     source_summary = {
         "source_kind": "directory",
         "label": path.name,
@@ -1529,6 +1564,7 @@ def _build_directory_source(
             "skipped_dir_names": sorted(SKIP_DIR_NAMES),
             "skipped_dir_count": len(skipped_dirs),
             "skipped_dirs_preview": sorted(skipped_dirs)[:80],
+            **skipped_noise_estimate,
         },
         "total_bytes": total_bytes,
         "total_chars": total_chars,
@@ -3956,13 +3992,19 @@ def _build_compression_advice(
             )
         skipped_dir_count = int(source_summary.get("skipped_dir_count", 0) or 0)
         if skipped_dir_count:
+            noise_profile = source_summary.get("default_noise_protection") or {}
+            estimated_skipped_files = int(noise_profile.get("estimated_skipped_file_count") or 0)
+            estimated_skipped_bytes = int(noise_profile.get("estimated_skipped_bytes") or 0)
             explanations.append(
                 {
                     "code": "default_noise_protection",
-                    "message": f"default noise protection skipped {skipped_dir_count} dependency, build, cache, or VCS directories before compression",
+                    "message": f"default noise protection skipped {skipped_dir_count} dependency, build, cache, or VCS directories before compression; estimated skipped files: {estimated_skipped_files}, estimated skipped bytes: {estimated_skipped_bytes}",
                     "skipped_dir_count": skipped_dir_count,
                     "skipped_dirs_preview": list(source_summary.get("skipped_dirs") or [])[:20],
                     "skipped_dir_names": list(source_summary.get("skip_dir_names") or []),
+                    "estimated_skipped_file_count": estimated_skipped_files,
+                    "estimated_skipped_bytes": estimated_skipped_bytes,
+                    "estimate_truncated": bool(noise_profile.get("estimate_truncated")),
                 }
             )
         elif bool(source_summary.get("include_default_skips")):

@@ -766,7 +766,13 @@ def _check_context_quick_json(workspace: Path) -> None:
     assert payload["performance_summary"]["token_impact"]["estimated_source_tokens"] >= 0
     assert payload["performance_summary"]["token_impact"]["estimated_skeleton_tokens"] >= 0
     assert payload["performance_summary"]["noise_protection"]["status"] in {"active", "disabled"}
+    assert payload["user_outcome"]["status"] == "ready_to_share"
+    assert payload["user_outcome"]["primary_file"] == payload["handoff"]["skeleton_file"]
+    assert payload["user_outcome"]["share_action"] == "give_skeleton_to_ai"
+    assert payload["user_outcome"]["next_command_text"].startswith("mcp-skeleton inspect")
+    assert payload["user_outcome"]["restore_safety"] == "ok"
     assert "Performance advice:" in payload["summary_text"]
+    assert "User outcome:" in payload["summary_text"]
     assert "Performance summary:" in payload["summary_text"]
     assert "Performance profile:" in payload["summary_text"]
     assert "Default noise protection:" in payload["summary_text"]
@@ -845,6 +851,9 @@ def _check_context_quick_json(workspace: Path) -> None:
     assert reused["performance_summary"]["status"] == "fast"
     assert reused["performance_summary"]["recommended_next_run"]["strategy"] == "reuse_if_fresh"
     assert reused["performance_summary"]["recommended_next_run"]["command_text"].startswith("mcp-skeleton handoff")
+    assert reused["user_outcome"]["status"] == "reused_ready_to_share"
+    assert reused["user_outcome"]["primary_file"] == reused["handoff"]["skeleton_file"]
+    assert reused["user_outcome"]["next_command_text"].startswith("mcp-skeleton handoff")
     assert reused["restore_command_text"].startswith(f"mcp-skeleton restore --package-file {reused['manifest_file']}")
     assert "Reused previous bundle:" in reused["summary_text"]
     assert "Saved time:" in reused["summary_text"]
@@ -935,6 +944,9 @@ def _check_context_recent_json(workspace: Path) -> None:
     assert "| pbcopy" in recent["copy_command_text"]
     assert recent["inspect_command_text"].startswith("mcp-skeleton inspect")
     assert recent["restore_command_text"].startswith("mcp-skeleton restore")
+    assert recent["user_outcome"]["status"] == "fresh_ready_to_share"
+    assert recent["user_outcome"]["primary_file"] == recent["skeleton_file"]
+    assert recent["user_outcome"]["next_command_text"].startswith("mcp-skeleton handoff")
     assert "MCP-Skeleton Recent" in recent["summary_text"]
     assert "At a glance:" in recent["summary_text"]
     assert "- Status:" in recent["summary_text"]
@@ -946,6 +958,7 @@ def _check_context_recent_json(workspace: Path) -> None:
     assert "Created:" in recent["summary_text"]
     assert "Recommended prompt:" in recent["summary_text"]
     assert "Copy skeleton:" in recent["summary_text"]
+    assert "User outcome:" in recent["summary_text"]
 
     (project / "src" / "app.py").write_text(
         "def run() -> str:\n"
@@ -956,6 +969,8 @@ def _check_context_recent_json(workspace: Path) -> None:
     assert stale["status"] == "ok"
     assert stale["recent_status"] == "ready"
     assert stale["freshness_status"] == "stale"
+    assert stale["user_outcome"]["status"] == "stale_refresh_needed"
+    assert stale["user_outcome"]["next_command_text"].startswith("mcp-skeleton quick --input-dir")
     assert stale["source_fingerprint"] != stale["recorded_source_fingerprint"]
     assert stale["refresh_command_text"].startswith("mcp-skeleton quick --input-dir")
     assert "Bundle may be stale:" in stale["summary_text"]
@@ -1077,6 +1092,24 @@ def _check_context_demo_json(workspace: Path) -> None:
     assert inspect["status"] == "ok"
     restore = _run_cli_json([*quick["restore_command_args"], "--json"])
     assert restore["status"] == "ok"
+
+
+def _check_context_safety_json(workspace: Path) -> None:
+    del workspace
+    payload = _run_cli_json(["context", "safety", "--json"])
+    assert payload["status"] == "ok"
+    assert payload["entrypoint"] == "context-safety"
+    assert payload["safety_status"] == "ready"
+    assert payload["guarantees"]["lossless_restore_package"] is True
+    assert payload["guarantees"]["no_source_overwrite_by_default"] is True
+    assert payload["restore_package"]["share_with_ai_default"] == "no"
+    assert payload["patch_replay"]["recommended_first_mode"] == "dry-run"
+    assert ".workspace_ail" in payload["default_noise_protection"]["skipped_dir_names"]
+    assert "MCP-Skeleton Safety" in payload["summary_text"]
+    assert "Do not paste restore packages into AI" in payload["summary_text"]
+    alias_payload = _run_top_level_cli_json(["safety", "--json"])
+    assert alias_payload["status"] == "ok"
+    assert alias_payload["entrypoint"] == "context-safety"
 
 
 def _check_top_level_version_json(workspace: Path) -> None:
@@ -1679,8 +1712,13 @@ def _check_directory_filtering(workspace: Path) -> None:
     assert "pkg.egg-info/PKG-INFO" not in default_paths
     assert "mcp-skeleton-restore/restored.py" not in default_paths
     assert {"node_modules", "dist", ".next", ".venv", "testing/results", "pkg.egg-info", "mcp-skeleton-restore"}.issubset(set(default_noise["source_summary"]["skipped_dirs"]))
+    noise = default_noise["source_summary"]["default_noise_protection"]
+    assert noise["estimated_skipped_file_count"] >= 7
+    assert noise["estimated_skipped_bytes"] > 0
+    assert noise["estimate_truncated"] is False
     assert any(item["code"] == "default_noise_protection" for item in default_noise["compression_explanations"])
     assert "default noise protection" in default_noise["summary_text"]
+    assert "estimated skipped files" in default_noise["summary_text"]
     include_default_skips = _run_cli_json(
         [
             "context",
@@ -2728,6 +2766,7 @@ CHECKS: list[tuple[str, Callable[[Path], None]]] = [
     ("context_quick_fast_json_ok", _check_context_quick_fast_json),
     ("context_quick_speed_tip_json_ok", _check_context_quick_speed_tip_json),
     ("context_demo_json_ok", _check_context_demo_json),
+    ("context_safety_json_ok", _check_context_safety_json),
     ("top_level_version_json_ok", _check_top_level_version_json),
     ("installer_lifecycle_json_ok", _check_installer_lifecycle_json),
     ("context_explain_json_ok", _check_context_explain_json),

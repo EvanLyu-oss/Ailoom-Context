@@ -29,6 +29,7 @@ from .context_compression import (
     load_context_package,
     restore_context_from_package,
     resolve_context_preset,
+    SKIP_DIR_NAMES,
     SKELETON_DENSITY_MODES,
 )
 
@@ -75,6 +76,7 @@ CONTEXT_SUBCOMMANDS = {
     "quick",
     "recent",
     "demo",
+    "safety",
     "bundle",
     "patch",
     "patch-apply",
@@ -1242,6 +1244,35 @@ def _build_daily_handoff_payload(payload: dict[str, Any], *, reason_code: str, r
     }
 
 
+def _build_quick_user_outcome(payload: dict[str, Any], *, reused: bool = False) -> dict[str, Any]:
+    handoff = payload.get("handoff") or {}
+    performance_summary = payload.get("performance_summary") or {}
+    token_impact = performance_summary.get("token_impact") or {}
+    skeleton_file = str(handoff.get("skeleton_file") or handoff.get("ai_file") or "")
+    next_command = str(
+        (payload.get("reuse_guidance") or {}).get("next_handoff_command_text")
+        or payload.get("inspect_command_text")
+        or payload.get("restore_command_text")
+        or ""
+    )
+    return {
+        "status": "reused_ready_to_share" if reused else "ready_to_share",
+        "share_action": "give_skeleton_to_ai",
+        "primary_file": skeleton_file,
+        "primary_file_label": "context_skeleton.mcp",
+        "restore_safety": "ok" if payload.get("restore_safe") else "blocked",
+        "token_savings_percent": token_impact.get("estimated_savings_percent", ((payload.get("start") or {}).get("metrics") or {}).get("estimated_savings_percent", 0)),
+        "tokens_saved": token_impact.get("estimated_tokens_saved", ((payload.get("start") or {}).get("metrics") or {}).get("estimated_tokens_saved", 0)),
+        "elapsed_ms": (payload.get("timings_ms") or {}).get("total", 0),
+        "next_command_text": next_command,
+        "message": (
+            "Previous fresh bundle was reused; share the same skeleton with your AI/IDE."
+            if reused
+            else "Bundle is restore-safe; share the skeleton file with your AI/IDE and keep the bundle locally."
+        ),
+    }
+
+
 def _recent_root_from_args(args: argparse.Namespace) -> Path:
     input_dir = _opt_path(args, "input_dir")
     if input_dir is not None:
@@ -1340,6 +1371,7 @@ def _build_recent_record(args: argparse.Namespace, payload: dict[str, Any]) -> d
         "estimated_tokens_saved": metrics.get("estimated_tokens_saved", 0),
         "estimated_savings_percent": metrics.get("estimated_savings_percent", 0),
         "experience": payload.get("experience") or {},
+        "user_outcome": payload.get("user_outcome") or {},
     }
 
 
@@ -1351,6 +1383,7 @@ def _write_recent_record(args: argparse.Namespace, payload: dict[str, Any]) -> s
 
 
 def _render_context_recent_summary(payload: dict[str, Any]) -> str:
+    user_outcome = payload.get("user_outcome") or {}
     lines = [
         "MCP-Skeleton Recent",
         "",
@@ -1377,6 +1410,15 @@ def _render_context_recent_summary(payload: dict[str, Any]) -> str:
         f"- Metadata: {payload.get('metadata_file', '') or '(not available)'}",
         f"- Recommended prompt: {payload.get('recommended_prompt', '') or '(not available)'}",
     ]
+    if user_outcome:
+        lines.extend([
+            "",
+            "User outcome:",
+            f"- Status: {user_outcome.get('status', '')}",
+            f"- Share file: {user_outcome.get('primary_file', '') or '(not available)'}",
+            f"- Next command: {user_outcome.get('next_command_text', '') or '(not available)'}",
+            f"- Message: {user_outcome.get('message', '')}",
+        ])
     if payload.get("freshness_status") == "stale":
         lines.extend([
             "",
@@ -1524,6 +1566,36 @@ def _build_context_recent_payload(args: argparse.Namespace) -> tuple[dict[str, A
     record = json.loads(recent_file.read_text(encoding="utf-8"))
     recent_root = _recent_root_from_args(args)
     lifecycle = _bundle_lifecycle_from_record(record, recent_root=recent_root)
+    freshness_status = str(lifecycle.get("freshness_status") or "unknown")
+    record_outcome = record.get("user_outcome") or {}
+    if freshness_status == "stale":
+        user_outcome = {
+            "status": "stale_refresh_needed",
+            "share_action": "refresh_before_sharing",
+            "primary_file": str(record.get("skeleton_file") or ""),
+            "primary_file_label": "context_skeleton.mcp",
+            "restore_safety": "unknown_until_refresh",
+            "token_savings_percent": record.get("estimated_savings_percent", 0),
+            "tokens_saved": record.get("estimated_tokens_saved", 0),
+            "elapsed_ms": 0,
+            "next_command_text": str(record.get("refresh_command_text") or _recent_refresh_command_text(args)),
+            "message": "Project changed since the last bundle; refresh before sharing this context again.",
+        }
+    else:
+        recent_handoff_args = _clone_args(args, reuse_if_fresh=True)
+        recent_handoff_args.handoff_alias = True
+        user_outcome = {
+            **(record_outcome if isinstance(record_outcome, dict) else {}),
+            "status": "fresh_ready_to_share",
+            "share_action": "give_skeleton_to_ai",
+            "primary_file": str(record.get("skeleton_file") or ""),
+            "primary_file_label": "context_skeleton.mcp",
+            "restore_safety": "ok",
+            "token_savings_percent": record.get("estimated_savings_percent", 0),
+            "tokens_saved": record.get("estimated_tokens_saved", 0),
+            "next_command_text": _quick_run_command_text(recent_handoff_args),
+            "message": "Latest bundle is fresh; share the skeleton or keep using handoff reuse.",
+        }
     payload = {
         "status": "ok",
         "entrypoint": "context-recent",
@@ -1548,6 +1620,7 @@ def _build_context_recent_payload(args: argparse.Namespace) -> tuple[dict[str, A
         "estimated_tokens_saved": record.get("estimated_tokens_saved", 0),
         "estimated_savings_percent": record.get("estimated_savings_percent", 0),
         "experience": record.get("experience") or {},
+        "user_outcome": user_outcome,
     }
     payload["summary_text"] = _render_context_recent_summary(payload)
     return payload, EXIT_OK
@@ -1683,6 +1756,7 @@ def _build_reused_quick_payload(args: argparse.Namespace, *, started_at: float) 
         reuse_status="reused",
         preferred_next_command_text=reuse_guidance["next_handoff_command_text"],
     )
+    payload["user_outcome"] = _build_quick_user_outcome(payload, reused=True)
     _write_quick_ai_handoff_guide(payload)
     payload["daily_handoff"] = _build_daily_handoff_payload(
         payload,
@@ -2075,6 +2149,7 @@ def _render_context_quick_summary(payload: dict[str, Any]) -> str:
     performance_advice = payload.get("performance_advice") or {}
     performance_profile = payload.get("performance_profile") or {}
     performance_summary = payload.get("performance_summary") or {}
+    user_outcome = payload.get("user_outcome") or {}
     dominant_phase = performance_profile.get("dominant_phase") or {}
     default_noise = performance_profile.get("default_noise_protection") or {}
     next_run = performance_profile.get("next_run") or {}
@@ -2119,6 +2194,13 @@ def _render_context_quick_summary(payload: dict[str, Any]) -> str:
         f"- Readiness: {payload.get('doctor_readiness_status', '')}",
         f"- Bundle: {payload.get('bundle_root', '') or '(not created)'}",
         f"- Manifest: {payload.get('manifest_file', '') or '(not created)'}",
+        "",
+        "User outcome:",
+        f"- Status: {user_outcome.get('status', '')}",
+        f"- Share file: {user_outcome.get('primary_file', '') or '(not available)'}",
+        f"- Token savings: {user_outcome.get('tokens_saved', saved_tokens)} tokens ({user_outcome.get('token_savings_percent', savings_percent)}%)",
+        f"- Next command: {user_outcome.get('next_command_text', '') or '(not available)'}",
+        f"- Message: {user_outcome.get('message', '')}",
         "",
         "Use this now:",
         f"- Give this skeleton to AI/IDE: {handoff.get('skeleton_file', '') or '(not available)'}",
@@ -2651,6 +2733,7 @@ def _build_context_quick_payload(args: argparse.Namespace) -> tuple[dict[str, An
         fast_path=fast_path,
         reuse_status="created",
     )
+    payload["user_outcome"] = _build_quick_user_outcome(payload, reused=False)
     _write_quick_ai_handoff_guide(payload)
     payload["daily_handoff"] = _build_daily_handoff_payload(
         payload,
@@ -2950,6 +3033,69 @@ def _build_context_demo_payload(args: argparse.Namespace) -> tuple[dict[str, Any
     }
     payload["summary_text"] = _render_context_demo_summary(payload)
     return payload, quick_exit
+
+
+def _render_context_safety_summary(payload: dict[str, Any]) -> str:
+    guarantees = payload.get("guarantees") or {}
+    restore_package = payload.get("restore_package") or {}
+    patch_replay = payload.get("patch_replay") or {}
+    noise = payload.get("default_noise_protection") or {}
+    return "\n".join([
+        "MCP-Skeleton Safety",
+        "",
+        f"Status: {payload.get('safety_status', '')}",
+        "",
+        "Core guarantees:",
+        f"- Lossless restore package: {guarantees.get('lossless_restore_package', False)}",
+        f"- No source overwrite by default: {guarantees.get('no_source_overwrite_by_default', False)}",
+        f"- Restore requires explicit output target: {guarantees.get('restore_requires_explicit_output', False)}",
+        "",
+        "Restore package:",
+        "- Do not paste restore packages into AI unless you intentionally want to share raw source bytes.",
+        f"- Share with AI by default: {restore_package.get('share_with_ai_default', '')}",
+        "",
+        "Patch/replay:",
+        f"- Recommended first mode: {patch_replay.get('recommended_first_mode', '')}",
+        f"- Dry-run report flag: {patch_replay.get('dry_run_report_flag', '')}",
+        "",
+        "Default noise protection:",
+        f"- Status: {noise.get('status', '')}",
+        f"- Skipped dirs: {', '.join(list(noise.get('skipped_dir_names') or [])[:12])}",
+    ])
+
+
+def _build_context_safety_payload(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
+    del args
+    payload = {
+        "status": "ok",
+        "entrypoint": "context-safety",
+        "safety_status": "ready",
+        "guarantees": {
+            "lossless_restore_package": True,
+            "no_source_overwrite_by_default": True,
+            "restore_requires_explicit_output": True,
+            "quick_writes_to_workspace_artifacts": True,
+        },
+        "restore_package": {
+            "share_with_ai_default": "no",
+            "safe_ai_file": "context_skeleton.mcp",
+            "keep_local_files": ["context_manifest.json", "context_restore_package.*", "AI_HANDOFF.md", "handoff.json"],
+            "reason": "restore packages preserve raw source bytes for exact reconstruction",
+        },
+        "patch_replay": {
+            "recommended_first_mode": "dry-run",
+            "dry_run_report_flag": "--dry-run --write-dry-run-report",
+            "policy_modes": ["open", "safe", "strict"],
+        },
+        "default_noise_protection": {
+            "status": "active",
+            "skipped_dir_names": sorted(SKIP_DIR_NAMES),
+            "disable_flag": "--include-default-skips",
+        },
+        "recommended_first_commands": ["mcp-skeleton handoff", "mcp-skeleton recent", "mcp-skeleton doctor"],
+    }
+    payload["summary_text"] = _render_context_safety_summary(payload)
+    return payload, EXIT_OK
 
 
 def _clone_args(args: argparse.Namespace, **updates: Any) -> argparse.Namespace:
@@ -3542,7 +3688,7 @@ def cmd_context(args: argparse.Namespace) -> int:
     command = getattr(args, "context_command", None)
     supported = CONTEXT_SUBCOMMANDS
     if command not in supported:
-        return _emit_command_error(args, EXIT_USAGE, "invalid_usage", "supported context subcommands: compress, restore, inspect, explain, apply-check, preset, config, init, install-hook, doctor, start, quick, recent, demo, bundle, patch, patch-apply")
+        return _emit_command_error(args, EXIT_USAGE, "invalid_usage", "supported context subcommands: compress, restore, inspect, explain, apply-check, preset, config, init, install-hook, doctor, start, quick, recent, demo, safety, bundle, patch, patch-apply")
 
     if command == "preset":
         payload = build_context_preset_payload(getattr(args, "preset_id", None))
@@ -3584,6 +3730,10 @@ def cmd_context(args: argparse.Namespace) -> int:
 
     if command == "demo":
         payload, exit_code = _build_context_demo_payload(args)
+        return _emit_simple_result(args, payload, text=str(payload.get("summary_text", "")), exit_code=exit_code)
+
+    if command == "safety":
+        payload, exit_code = _build_context_safety_payload(args)
         return _emit_simple_result(args, payload, text=str(payload.get("summary_text", "")), exit_code=exit_code)
 
     if command == "explain":
@@ -4058,6 +4208,9 @@ def _build_parser() -> argparse.ArgumentParser:
     demo.add_argument("--output-dir", dest="output_dir", help="Demo root directory; defaults under .workspace_ail/demo_runs")
     demo.add_argument("--force", action="store_true", help="Overwrite --output-dir if it already exists")
     demo.add_argument("--json", action="store_true")
+
+    safety = context_subparsers.add_parser("safety", help="Show safety boundaries for sharing skeletons, restore packages, and patch replay")
+    safety.add_argument("--json", action="store_true")
 
     bundle = context_subparsers.add_parser("bundle", help="Export a full context bundle with compression, inspect, and optional apply-check artifacts")
     bundle.add_argument("--text", dest="context_text")

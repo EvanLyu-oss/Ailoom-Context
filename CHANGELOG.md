@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- added `context safety` / `mcp-skeleton safety` to explain the restore-package sharing boundary, dry-run-first patch replay, and default noise protection in both human and JSON output
+- added stable `user_outcome` fields to quick, handoff, and recent JSON so IDEs can tell users exactly which skeleton file is ready to share, whether the bundle was reused, and what command to run next
+- expanded default-noise explanations with estimated skipped file and byte counts so large-project users can see why compression is faster and smaller before disabling the defaults
 - added an installer readiness manifest at `~/.mcp-skeleton/install-readiness.json`, and exposed it through `mcp-skeleton version --json` for IDEs, test machines, and first-run automation
 - added a stable `performance_summary` to `context quick` / `mcp-skeleton handoff` JSON and human output, with speed status, slowest phase, token impact, noise-protection impact, and the recommended next run
 - expanded dogfood self-check output with a real performance record covering elapsed time, bundle size, included files, source/skeleton tokens, estimated savings, and exact-restore status

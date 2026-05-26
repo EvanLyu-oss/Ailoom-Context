@@ -131,6 +131,14 @@ mcp-skeleton version
 
 `mcp-skeleton version` reports install readiness, Python status, command availability, whether `handoff` is directly runnable from PATH, and the first `handoff` / `doctor` commands to run. If PATH is not ready, it prints both the persistent setup command and the temporary `export PATH=...` command. JSON output also includes `install_readiness_file` and `install_readiness_manifest` for IDE/plugin integration.
 
+Current v1.0 readiness contract:
+
+- `sh install.sh` should leave a usable `mcp-skeleton` command or print exact PATH recovery commands.
+- `mcp-skeleton version --json` should expose machine-readable install readiness.
+- `mcp-skeleton handoff` should create or reuse a restore-safe skeleton bundle for the current directory without extra flags.
+- `mcp-skeleton safety` should make the “share skeleton, keep restore package local” boundary explicit.
+- `testing/release_readiness_check.py` is the release gate for smoke, quickstart, dogfood, doctor, benchmark, and installer readiness.
+
 Update from a newer downloaded checkout:
 
 ```bash
@@ -283,6 +291,14 @@ mcp-skeleton explain \
 
 `context explain` translates a bundle into “what this is”, “why it is useful”, and “what to do next”, including restore guidance. It is the fastest way to hand a bundle to another AI, IDE, or teammate without making them learn the manifest shape.
 
+Check the safety boundary before sharing files or replaying patches:
+
+```bash
+mcp-skeleton safety
+```
+
+`context safety` explains the core contract in plain language: `context_skeleton.mcp` is the AI-facing file, restore packages preserve raw source bytes and should stay local by default, restore never overwrites your source tree unless you choose an output target, and patch replay should start with `--dry-run --write-dry-run-report`. JSON output exposes the same guarantees for IDEs and wrappers.
+
 Compress a directory:
 
 ```bash
@@ -295,7 +311,7 @@ mcp-skeleton compress \
   --json
 ```
 
-For speed and lower token noise, directory compression has default noise protection for common VCS, dependency, build, virtualenv, cache, test-result, restore-output, and package-metadata directories: `.git`, `node_modules`, `dist`, `build`, `coverage`, `.next`, `.nuxt`, `.venv`, `venv`, `.tox`, `.mypy_cache`, `.ruff_cache`, `.turbo`, `.cache`, `__pycache__`, `.pytest_cache`, `.workspace_ail`, `testing/results`, `test-results`, `mcp-skeleton-restore`, and `*.egg-info`. These skipped directories are reported in `source_summary.skipped_dirs` and explained in `compression_explanations`.
+For speed and lower token noise, directory compression has default noise protection for common VCS, dependency, build, virtualenv, cache, test-result, restore-output, and package-metadata directories: `.git`, `node_modules`, `dist`, `build`, `coverage`, `.next`, `.nuxt`, `.venv`, `venv`, `.tox`, `.mypy_cache`, `.ruff_cache`, `.turbo`, `.cache`, `__pycache__`, `.pytest_cache`, `.workspace_ail`, `testing/results`, `test-results`, `mcp-skeleton-restore`, and `*.egg-info`. These skipped directories are reported in `source_summary.skipped_dirs` and explained in `compression_explanations`, including estimated skipped file and byte counts where they can be measured quickly.
 
 If you intentionally need those directories, pass `--include-default-skips` or set `"include_default_skips": true` in `.mcp-skeleton.json`. This is useful for debugging generated output, but it can make compression slower and much larger on real projects.
 

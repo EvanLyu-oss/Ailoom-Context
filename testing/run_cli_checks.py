@@ -759,7 +759,15 @@ def _check_context_quick_json(workspace: Path) -> None:
     assert payload["performance_profile"]["default_noise_protection"]["status"] in {"active", "disabled"}
     assert "reuse-if-fresh" in payload["performance_profile"]["next_run"]["reuse_command_text"]
     assert "fast" in payload["performance_profile"]["next_run"]["fast_command_text"]
+    assert payload["performance_summary"]["status"] in {"fast", "ok", "slow"}
+    assert payload["performance_summary"]["dominant_phase"]["name"] in {"start_and_doctor", "config_recommendation", "restore_safety_check", "bundle_write", "quick_total"}
+    assert payload["performance_summary"]["recommended_next_run"]["strategy"] in {"reuse_if_fresh", "fast_first_run"}
+    assert payload["performance_summary"]["recommended_next_run"]["command_text"].startswith("mcp-skeleton quick")
+    assert payload["performance_summary"]["token_impact"]["estimated_source_tokens"] >= 0
+    assert payload["performance_summary"]["token_impact"]["estimated_skeleton_tokens"] >= 0
+    assert payload["performance_summary"]["noise_protection"]["status"] in {"active", "disabled"}
     assert "Performance advice:" in payload["summary_text"]
+    assert "Performance summary:" in payload["summary_text"]
     assert "Performance profile:" in payload["summary_text"]
     assert "Default noise protection:" in payload["summary_text"]
     assert "Next run:" in payload["summary_text"]
@@ -834,6 +842,10 @@ def _check_context_quick_json(workspace: Path) -> None:
     assert reused["reuse_guidance"]["status"] == "reused"
     assert reused["reuse_guidance"]["saved_work"] == "skipped recompression and restore recheck"
     assert reused["reuse_guidance"]["next_handoff_command_text"].startswith("mcp-skeleton handoff --reuse-if-fresh")
+    assert reused["performance_summary"]["status"] == "fast"
+    assert reused["performance_summary"]["recommended_next_run"]["strategy"] == "reuse_if_fresh"
+    assert reused["performance_summary"]["recommended_next_run"]["command_text"].startswith("mcp-skeleton handoff")
+    assert reused["restore_command_text"].startswith(f"mcp-skeleton restore --package-file {reused['manifest_file']}")
     assert "Reused previous bundle:" in reused["summary_text"]
     assert "Saved time:" in reused["summary_text"]
     assert "mcp-skeleton handoff --reuse-if-fresh" in reused["summary_text"]
@@ -872,7 +884,10 @@ def _check_context_quick_json(workspace: Path) -> None:
     assert preview["write_performed"] is False
     assert preview["performance_advice"]["speed_status"] in {"fast", "ok", "slow"}
     assert preview["performance_advice"]["fast_command_text"].startswith("mcp-skeleton quick --fast")
+    assert preview["performance_summary"]["status"] in {"fast", "ok", "slow"}
+    assert preview["performance_summary"]["recommended_next_run"]["command_text"].startswith("mcp-skeleton quick")
     assert "Performance advice:" in preview["summary_text"]
+    assert "Performance summary:" in preview["summary_text"]
     assert "--fast" in preview["summary_text"]
     assert not preview_dir.exists()
     assert not Path(preview["recent_file"]).exists()

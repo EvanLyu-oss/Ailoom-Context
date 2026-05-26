@@ -38,7 +38,7 @@ What these do:
 - `quick` creates a restore-safe bundle for the current directory and prints the skeleton, manifest, inspect, and restore commands.
 - `recent` shows the latest bundle, skeleton, manifest, restore command, and freshness status for the current directory.
 
-The human output for `quick`, `handoff`, `doctor`, and `recent` starts with an `At a glance` card so first-time users can immediately see status, restore safety, token savings, speed/freshness, and the next command to copy. `handoff` also includes a `Daily handoff` panel that says whether it created or reused a bundle, why, and whether the skeleton was copied automatically or needs the shown manual copy command. `quick` / `handoff` also write `AI_HANDOFF.md` and `handoff.json` beside the bundle, include a recommended AI/IDE prompt, separate the skeleton file to share from restore files to keep locally, explain the slowest visible phase, show a `Performance profile` with phase timing and default noise protection, suggest the best next command (`--fast` or `--reuse-if-fresh`) for large or slower runs, and explain why tiny projects may expand instead of saving tokens.
+The human output for `quick`, `handoff`, `doctor`, and `recent` starts with an `At a glance` card so first-time users can immediately see status, restore safety, token savings, speed/freshness, and the next command to copy. `handoff` also includes a `Daily handoff` panel that says whether it created or reused a bundle, why, and whether the skeleton was copied automatically or needs the shown manual copy command. `quick` / `handoff` also write `AI_HANDOFF.md` and `handoff.json` beside the bundle, include a recommended AI/IDE prompt, separate the skeleton file to share from restore files to keep locally, explain the slowest visible phase, show a stable `Performance summary` plus detailed `Performance profile`, report default noise protection, suggest the best next command (`--fast` or `--reuse-if-fresh`) for large or slower runs, and explain why tiny projects may expand instead of saving tokens.
 
 ## What it does
 
@@ -223,6 +223,7 @@ mcp-skeleton quick
 `context quick` runs the zero-friction setup, checks restore safety, writes a full bundle, and prints the bundle path plus inspect/restore commands. It also points out the exact `context_skeleton.mcp` file to give to an AI or IDE, the bundle folder to keep, and a copy/paste `open <bundle>` command for locating the generated files on macOS.
 The first screen includes a `Use this now` section with the skeleton file, estimated token savings, restore command, and inspect command.
 It also prints performance advice with `fast / ok / slow` status and copy/paste `--fast` / `--reuse-if-fresh` commands when those paths improve the experience.
+The JSON output also includes `performance_summary`, a stable field intended for IDE/plugin integrations and simple dashboards. It reports speed status, slowest measured phase, estimated source/skeleton tokens, estimated tokens saved, default noise-protection impact, and the recommended next command.
 
 To preview the plan without writing a bundle:
 
@@ -484,6 +485,7 @@ python3 testing/release_readiness_check.py
 ```
 
 The release readiness JSON includes a top-level `executive_summary` with the quick answer: total passed/failed checks, smoke and quickstart counts, dogfood restore status, doctor readiness, benchmark health, restore coverage, and the next action.
+The dogfood self-check JSON also includes `performance_record`, which captures the tool compressing this repository itself: elapsed time, bundle size, included file count, source/skeleton token estimates, estimated token savings, and whether restore remained byte-exact.
 
 For repeatable test-machine prompts, stress benchmark commands, and result reporting templates, see [CROSS_PLATFORM_TESTING.md](CROSS_PLATFORM_TESTING.md).
 

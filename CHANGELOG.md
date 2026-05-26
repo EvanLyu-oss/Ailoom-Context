@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- added a stable `performance_summary` to `context quick` / `mcp-skeleton handoff` JSON and human output, with speed status, slowest phase, token impact, noise-protection impact, and the recommended next run
+- expanded dogfood self-check output with a real performance record covering elapsed time, bundle size, included files, source/skeleton tokens, estimated savings, and exact-restore status
+- fixed reused quick/handoff restore command text so it keeps the full manifest path instead of falling back to `context_manifest.json`
 - added AI/IDE handoff prompt and `handoff.json` metadata files beside generated bundles, with `mcp-skeleton recent` reprinting the latest prompt
 - improved installer and `mcp-skeleton version` guidance with explicit PATH fix, temporary export, self-check, and first-run handoff commands
 - added a daily handoff summary to `mcp-skeleton handoff` that explains whether the bundle was created or reused, why that happened, and how clipboard copy was handled

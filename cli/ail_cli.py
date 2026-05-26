@@ -1579,7 +1579,7 @@ def _build_reused_quick_payload(args: argparse.Namespace, *, started_at: float) 
     copy_command_text = _quick_copy_command_text(skeleton_file)
     copy_performed, copy_error = _maybe_copy_quick_skeleton(args, skeleton_file=skeleton_file)
     inspect_args = ["context", "inspect", "--package-file", manifest_file, "--json"]
-    restore_args = _quick_restore_command_args(bundle_payload)
+    restore_args = _quick_restore_command_args({**bundle_payload, "bundle_root": bundle_root})
     timings_ms = {"start": 0.0, "start_config_recommend": 0.0, "start_doctor": 0.0, "bundle": 0.0, "total": _elapsed_ms(started_at)}
     next_handoff_args = _clone_args(args, reuse_if_fresh=True)
     next_handoff_args.handoff_alias = True
@@ -1633,6 +1633,43 @@ def _build_reused_quick_payload(args: argparse.Namespace, *, started_at: float) 
             "rerun quick without --reuse-if-fresh when you want to force a new bundle",
         ],
     }
+    reused_performance_profile = {
+        "status": "available",
+        "total_ms": timings_ms["total"],
+        "phase_count": 1,
+        "phases": [
+            {
+                "name": "quick_total",
+                "label": "Quick total",
+                "duration_ms": timings_ms["total"],
+                "percent_of_total": 100.0 if timings_ms["total"] else 0.0,
+            }
+        ],
+        "dominant_phase": {
+            "name": "quick_total",
+            "label": "Quick total",
+            "duration_ms": timings_ms["total"],
+            "percent_of_total": 100.0 if timings_ms["total"] else 0.0,
+        },
+        "default_noise_protection": {"status": "active", "skipped_dir_count": 0, "skipped_dirs_preview": [], "message": "reuse path kept the previous bundle unchanged"},
+        "next_run": {
+            "recommended_strategy": "reuse_if_fresh",
+            "reuse_command_text": reuse_guidance["next_handoff_command_text"],
+            "fast_command_text": _quick_fast_command_text(args),
+            "message": "Keep using handoff reuse while the project is unchanged.",
+        },
+    }
+    payload["performance_profile"] = reused_performance_profile
+    payload["performance_summary"] = _build_quick_performance_summary(
+        next_handoff_args,
+        start_payload=payload["start"],
+        timings_ms=timings_ms,
+        performance_advice={},
+        performance_profile=reused_performance_profile,
+        fast_path=False,
+        reuse_status="reused",
+        preferred_next_command_text=reuse_guidance["next_handoff_command_text"],
+    )
     _write_quick_ai_handoff_guide(payload)
     payload["daily_handoff"] = _build_daily_handoff_payload(
         payload,
@@ -1882,6 +1919,76 @@ def _build_quick_performance_profile(
     }
 
 
+def _build_quick_performance_summary(
+    args: argparse.Namespace,
+    *,
+    start_payload: dict[str, Any],
+    timings_ms: dict[str, Any],
+    performance_advice: dict[str, Any],
+    performance_profile: dict[str, Any],
+    fast_path: bool,
+    reuse_status: str = "",
+    preferred_next_command_text: str = "",
+) -> dict[str, Any]:
+    metrics = start_payload.get("metrics") or {}
+    total_ms = float(timings_ms.get("total") or 0.0)
+    status = str(performance_advice.get("speed_status") or "")
+    if not status:
+        status = "fast" if total_ms < 500 else "ok" if total_ms < 2500 else "slow"
+
+    dominant_phase = performance_profile.get("dominant_phase") or {
+        "name": "quick_total",
+        "label": "Quick total",
+        "duration_ms": total_ms,
+        "percent_of_total": 100.0 if total_ms else 0.0,
+    }
+    noise_profile = performance_profile.get("default_noise_protection") or {}
+    fast_command = str(performance_advice.get("fast_command_text") or _quick_fast_command_text(args))
+    reuse_args = _clone_args(args, reuse_if_fresh=True, preview=False)
+    reuse_command = str(performance_advice.get("reuse_command_text") or _quick_run_command_text(reuse_args))
+
+    if reuse_status == "reused":
+        strategy = "reuse_if_fresh"
+        command_text = preferred_next_command_text or reuse_command
+        reason = "this project was unchanged, so reuse avoided recompression and restore recheck"
+    elif not fast_path and (status == "slow" or int(((start_payload.get("source_scale_profile") or {}).get("total_files") or 0)) >= 100):
+        strategy = "fast_first_run"
+        command_text = fast_command or reuse_command
+        reason = "large or slower input detected; --fast keeps restore safety while trimming onboarding work"
+    else:
+        strategy = "reuse_if_fresh"
+        command_text = preferred_next_command_text or reuse_command
+        reason = "after the first bundle, unchanged projects should reuse the fresh bundle"
+
+    source_tokens = int(metrics.get("estimated_token_count_source") or 0)
+    skeleton_tokens = int(metrics.get("estimated_token_count_skeleton") or 0)
+    saved_tokens = int(metrics.get("estimated_tokens_saved") or 0)
+    savings_percent = float(metrics.get("estimated_savings_percent") or 0.0)
+    return {
+        "status": status,
+        "message": str(performance_advice.get("speed_message") or f"{status}: {round(total_ms, 2)} ms total"),
+        "total_ms": total_ms,
+        "dominant_phase": dominant_phase,
+        "recommended_next_run": {
+            "strategy": strategy,
+            "command_text": command_text,
+            "reason": reason,
+        },
+        "token_impact": {
+            "estimated_source_tokens": source_tokens,
+            "estimated_skeleton_tokens": skeleton_tokens,
+            "estimated_tokens_saved": saved_tokens,
+            "estimated_savings_percent": savings_percent,
+        },
+        "noise_protection": {
+            "status": str(noise_profile.get("status") or "not_applicable"),
+            "skipped_dir_count": int(noise_profile.get("skipped_dir_count") or 0),
+            "message": str(noise_profile.get("message") or ""),
+            "skipped_dirs_preview": list(noise_profile.get("skipped_dirs_preview") or [])[:10],
+        },
+    }
+
+
 def _render_context_quick_summary(payload: dict[str, Any]) -> str:
     if payload.get("preview"):
         start = payload.get("start") or {}
@@ -1890,7 +1997,9 @@ def _render_context_quick_summary(payload: dict[str, Any]) -> str:
         timings = payload.get("timings_ms") or {}
         performance_advice = payload.get("performance_advice") or {}
         performance_profile = payload.get("performance_profile") or {}
+        performance_summary = payload.get("performance_summary") or {}
         dominant_phase = performance_profile.get("dominant_phase") or {}
+        recommended_next = performance_summary.get("recommended_next_run") or {}
         lines = [
             "MCP-Skeleton Quick Preview",
             "",
@@ -1929,6 +2038,12 @@ def _render_context_quick_summary(payload: dict[str, Any]) -> str:
             f"- Reuse unchanged bundle: {performance_advice.get('reuse_command_text', '') or '(not available)'}",
             f"- Recommendation: {performance_advice.get('recommendation', '')}",
             "",
+            "Performance summary:",
+            f"- Status: {performance_summary.get('status', '')}",
+            f"- Slowest phase: {(performance_summary.get('dominant_phase') or {}).get('label', (performance_summary.get('dominant_phase') or {}).get('name', ''))}",
+            f"- Recommended next run: {recommended_next.get('command_text', '') or '(not available)'}",
+            f"- Why: {recommended_next.get('reason', '')}",
+            "",
             "Performance profile:",
             f"- Total measured: {performance_profile.get('total_ms', timings.get('total', 0))} ms",
             f"- Slowest phase: {dominant_phase.get('label', dominant_phase.get('name', ''))} ({dominant_phase.get('duration_ms', 0)} ms, {dominant_phase.get('percent_of_total', 0)}%)",
@@ -1946,9 +2061,12 @@ def _render_context_quick_summary(payload: dict[str, Any]) -> str:
     experience = payload.get("experience") or {}
     performance_advice = payload.get("performance_advice") or {}
     performance_profile = payload.get("performance_profile") or {}
+    performance_summary = payload.get("performance_summary") or {}
     dominant_phase = performance_profile.get("dominant_phase") or {}
     default_noise = performance_profile.get("default_noise_protection") or {}
     next_run = performance_profile.get("next_run") or {}
+    recommended_next = performance_summary.get("recommended_next_run") or {}
+    summary_dominant_phase = performance_summary.get("dominant_phase") or {}
     quick_mode = "reused" if payload.get("reuse_status") == "reused" else ("fast" if payload.get("fast_path") else "standard")
     scale_profile = start.get("source_scale_profile") or {}
     token_direction = str(metrics.get("estimated_token_direction") or "")
@@ -2069,6 +2187,19 @@ def _render_context_quick_summary(payload: dict[str, Any]) -> str:
             f"- Faster first run: {performance_advice.get('fast_command_text', '') or '(not available)'}",
             f"- Reuse unchanged bundle: {performance_advice.get('reuse_command_text', '') or '(not available)'}",
             f"- Recommendation: {performance_advice.get('recommendation', '')}",
+        ])
+    if performance_summary:
+        token_impact = performance_summary.get("token_impact") or {}
+        noise_protection = performance_summary.get("noise_protection") or {}
+        lines.extend([
+            "",
+            "Performance summary:",
+            f"- Status: {performance_summary.get('status', '')} - {performance_summary.get('message', '')}",
+            f"- Slowest phase: {summary_dominant_phase.get('label', summary_dominant_phase.get('name', ''))} ({summary_dominant_phase.get('duration_ms', 0)} ms)",
+            f"- Token result: {token_impact.get('estimated_tokens_saved', 0)} tokens saved ({token_impact.get('estimated_savings_percent', 0)}%)",
+            f"- Noise skipped: {noise_protection.get('skipped_dir_count', 0)} dirs",
+            f"- Recommended next run: {recommended_next.get('command_text', '') or '(not available)'}",
+            f"- Why: {recommended_next.get('reason', '')}",
         ])
     if performance_profile.get("status") == "available":
         lines.extend([
@@ -2380,6 +2511,15 @@ def _build_context_quick_payload(args: argparse.Namespace) -> tuple[dict[str, An
             timings_ms=timings_ms,
             fast_path=fast_path,
         )
+        payload["performance_summary"] = _build_quick_performance_summary(
+            args,
+            start_payload=start_payload,
+            timings_ms=timings_ms,
+            performance_advice=payload["performance_advice"],
+            performance_profile=payload["performance_profile"],
+            fast_path=fast_path,
+            reuse_status="preview",
+        )
         payload["summary_text"] = _render_context_quick_summary(payload)
         return payload, EXIT_OK
 
@@ -2488,6 +2628,15 @@ def _build_context_quick_payload(args: argparse.Namespace) -> tuple[dict[str, An
         bundle_payload=bundle_payload,
         timings_ms=timings_ms,
         fast_path=fast_path,
+    )
+    payload["performance_summary"] = _build_quick_performance_summary(
+        args,
+        start_payload=start_payload,
+        timings_ms=timings_ms,
+        performance_advice=payload["performance_advice"],
+        performance_profile=payload["performance_profile"],
+        fast_path=fast_path,
+        reuse_status="created",
     )
     _write_quick_ai_handoff_guide(payload)
     payload["daily_handoff"] = _build_daily_handoff_payload(

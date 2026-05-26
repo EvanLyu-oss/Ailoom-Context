@@ -6,6 +6,7 @@ import os
 import shutil
 import subprocess
 import sys
+import time
 from pathlib import Path
 from typing import Any
 
@@ -80,12 +81,26 @@ def _sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def _path_size_bytes(path: Path) -> int:
+    if not path.exists():
+        return 0
+    if path.is_file():
+        return path.stat().st_size
+    total = 0
+    for item in path.rglob("*"):
+        if item.is_file():
+            total += item.stat().st_size
+    return total
+
+
 def run_dogfood_self_check() -> dict[str, Any]:
     RESULTS_DIR.mkdir(parents=True, exist_ok=True)
     if DOGFOOD_ROOT.exists():
         shutil.rmtree(DOGFOOD_ROOT)
     DOGFOOD_ROOT.mkdir(parents=True)
 
+    total_started = time.perf_counter()
+    start_started = time.perf_counter()
     start = _run_cli_json(
         [
             "context",
@@ -115,15 +130,21 @@ def run_dogfood_self_check() -> dict[str, Any]:
         ],
         output_file=DOGFOOD_ROOT / "context_start.json",
     )
+    start_ms = round((time.perf_counter() - start_started) * 1000, 2)
+    validate_started = time.perf_counter()
     validate = _run_cli_json(
         ["context", "config", "--validate", "--config", str(CONFIG_FILE), "--json"],
         output_file=DOGFOOD_ROOT / "config_validate.json",
     )
+    validate_ms = round((time.perf_counter() - validate_started) * 1000, 2)
     recommended_args = [str(item) for item in (start.get("recommended_command_args") or [])]
+    recommended_trial_started = time.perf_counter()
     recommended_trial = _run_cli_json(
         recommended_args,
         output_file=DOGFOOD_ROOT / "recommended_trial_compress.json",
     ) if recommended_args else {"status": "skipped"}
+    recommended_trial_ms = round((time.perf_counter() - recommended_trial_started) * 1000, 2) if recommended_args else 0.0
+    bundle_started = time.perf_counter()
     bundle = _run_cli_json(
         [
             "context",
@@ -138,10 +159,14 @@ def run_dogfood_self_check() -> dict[str, Any]:
         ],
         output_file=DOGFOOD_ROOT / "bundle.json",
     )
+    bundle_ms = round((time.perf_counter() - bundle_started) * 1000, 2)
+    inspect_started = time.perf_counter()
     inspect = _run_cli_json(
         ["context", "inspect", "--package-file", str(BUNDLE_DIR / "context_manifest.json"), "--json"],
         output_file=DOGFOOD_ROOT / "inspect.json",
     )
+    inspect_ms = round((time.perf_counter() - inspect_started) * 1000, 2)
+    restore_started = time.perf_counter()
     restore = _run_cli_json(
         [
             "context",
@@ -154,6 +179,7 @@ def run_dogfood_self_check() -> dict[str, Any]:
         ],
         output_file=DOGFOOD_ROOT / "restore.json",
     )
+    restore_ms = round((time.perf_counter() - restore_started) * 1000, 2)
 
     expected_files = _expected_files(ROOT)
     missing: list[str] = []
@@ -168,8 +194,20 @@ def run_dogfood_self_check() -> dict[str, Any]:
             mismatched.append(rel_path)
 
     compression = bundle.get("compression") or {}
+    metrics = compression.get("metrics") or {
+        "estimated_token_count_source": compression.get("estimated_token_count_source", 0),
+        "estimated_token_count_skeleton": compression.get("estimated_token_count_skeleton", 0),
+        "estimated_tokens_saved": compression.get("estimated_tokens_saved", 0),
+    }
+    source_tokens = int(metrics.get("estimated_token_count_source") or 0)
+    skeleton_tokens = int(metrics.get("estimated_token_count_skeleton") or 0)
+    tokens_saved = int(metrics.get("estimated_tokens_saved") or 0)
+    savings_percent = round((tokens_saved / source_tokens) * 100, 2) if source_tokens else 0.0
     source_summary = compression.get("source_summary") or {}
     dogfood_ok = not missing and not mismatched and recommended_trial.get("status") in {"ok", "skipped"}
+    total_ms = round((time.perf_counter() - total_started) * 1000, 2)
+    speed_status = "fast" if total_ms < 1500 else "ok" if total_ms < 10000 else "slow"
+    bundle_size_bytes = _path_size_bytes(BUNDLE_DIR)
     payload = {
         "status": "ok" if dogfood_ok else "error",
         "entrypoint": "dogfood-self-check",
@@ -187,6 +225,24 @@ def run_dogfood_self_check() -> dict[str, Any]:
         "expected_file_count": len(expected_files),
         "skeleton_char_count": int(compression.get("skeleton_char_count", 0) or 0),
         "compression_ratio": compression.get("compression_ratio", 0),
+        "performance_record": {
+            "status": speed_status,
+            "total_elapsed_ms": total_ms,
+            "start_elapsed_ms": start_ms,
+            "config_validate_elapsed_ms": validate_ms,
+            "recommended_trial_elapsed_ms": recommended_trial_ms,
+            "bundle_elapsed_ms": bundle_ms,
+            "inspect_elapsed_ms": inspect_ms,
+            "restore_elapsed_ms": restore_ms,
+            "bundle_size_bytes": bundle_size_bytes,
+            "included_file_count": int(source_summary.get("total_files", 0) or 0),
+            "expected_file_count": len(expected_files),
+            "estimated_source_tokens": source_tokens,
+            "estimated_skeleton_tokens": skeleton_tokens,
+            "estimated_tokens_saved": tokens_saved,
+            "estimated_savings_percent": savings_percent,
+            "restore_exact": not missing and not mismatched,
+        },
         "start_restore_safe": bool(start.get("restore_safe")),
         "start_doctor_readiness_status": start.get("doctor_readiness_status", ""),
         "recommended_focus_mode": (start.get("recommended_config") or {}).get("focus_mode", ""),

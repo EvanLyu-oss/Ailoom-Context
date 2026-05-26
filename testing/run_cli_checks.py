@@ -1046,8 +1046,8 @@ def _check_top_level_version_json(workspace: Path) -> None:
     assert payload["install_readiness_status"] in {"ready", "watch"}
     assert payload["python_check"] in {"ok", "blocked"}
     assert payload["install_command_text"] == "sh install.sh"
-    assert "handoff --input-dir ." in payload["recommended_first_command_text"]
-    assert "doctor --input-dir ." in payload["doctor_command_text"]
+    assert payload["recommended_first_command_text"].endswith("handoff")
+    assert payload["doctor_command_text"].endswith("doctor")
     assert "mcp-skeleton version" in payload["summary_text"]
     assert "Install readiness:" in payload["summary_text"]
     assert "Python check:" in payload["summary_text"]
@@ -1080,8 +1080,9 @@ def _check_installer_lifecycle_json(workspace: Path) -> None:
     assert "First run self-check:" in install.stdout
     assert "Copy/paste next:" in install.stdout
     assert "mcp-skeleton version" in install.stdout
-    assert "mcp-skeleton handoff --input-dir ." in install.stdout
-    assert "mcp-skeleton quick --input-dir ." in install.stdout
+    assert "mcp-skeleton handoff" in install.stdout
+    assert "mcp-skeleton quick" in install.stdout
+    assert "mcp-skeleton handoff --input-dir ." not in install.stdout
 
     shell_home = workspace / "installer_shell_home"
     shell_home.mkdir()
@@ -1270,6 +1271,86 @@ def _check_top_level_cli_alias_json(workspace: Path) -> None:
     assert handoff["performance_advice"]["reuse_command_text"].startswith("mcp-skeleton handoff --reuse-if-fresh")
     assert "AI handoff:" in handoff["summary_text"]
     assert "Keep for restore:" in handoff["summary_text"]
+
+
+def _check_zero_learning_defaults_json(workspace: Path) -> None:
+    project = workspace / "zero_learning_project"
+    (project / "src").mkdir(parents=True)
+    (project / "src" / "app.py").write_text(
+        "def run() -> str:\n"
+        "    return 'zero-learning'\n",
+        encoding="utf-8",
+    )
+
+    doctor = _run_top_level_cli_json(["doctor", "--json"], cwd=project)
+    assert doctor["status"] == "ok"
+    assert doctor["entrypoint"] == "context-doctor"
+    assert doctor["source_label"] == project.name
+    assert doctor["restore_check"]["status"] == "ok"
+
+    start = _run_top_level_cli_json(["start", "--json"], cwd=project)
+    assert start["status"] == "ok"
+    assert start["entrypoint"] == "context-start"
+    assert start["source_label"] == project.name
+    assert start["restore_safe"] is True
+
+    quick_dir = project / "quick-default-bundle"
+    quick = _run_top_level_cli_json(["quick", "--output-dir", str(quick_dir), "--json"], cwd=project)
+    assert quick["status"] == "ok"
+    assert quick["entrypoint"] == "context-quick"
+    assert quick["quick_status"] == "ready"
+    assert quick["restore_safe"] is True
+    assert Path(quick["bundle_root"]).resolve() == quick_dir.resolve()
+    assert quick["start"]["source_label"] == project.name
+
+    recent = _run_top_level_cli_json(["recent", "--json"], cwd=project)
+    assert recent["status"] == "ok"
+    assert recent["entrypoint"] == "context-recent"
+    assert recent["recent_status"] == "ready"
+    assert recent["freshness_status"] == "fresh"
+    assert recent["bundle_root"] == quick["bundle_root"]
+
+
+def _check_handoff_auto_reuse_json(workspace: Path) -> None:
+    project = workspace / "handoff_auto_reuse_project"
+    (project / "src").mkdir(parents=True)
+    (project / "src" / "app.py").write_text(
+        "def run() -> str:\n"
+        "    return 'handoff-auto-reuse'\n",
+        encoding="utf-8",
+    )
+
+    first_dir = project / "first-handoff-bundle"
+    first = _run_top_level_cli_json(["handoff", "--output-dir", str(first_dir), "--json"], cwd=project)
+    assert first["status"] == "ok"
+    assert first["entrypoint"] == "context-quick"
+    assert first["quick_status"] == "ready"
+    assert first.get("reuse_status", "") != "reused"
+    assert Path(first["handoff"]["skeleton_file"]).exists()
+    assert "--input-dir" not in first["performance_profile"]["next_run"]["reuse_command_text"]
+    assert "--input-dir" not in first["performance_profile"]["next_run"]["fast_command_text"]
+
+    second = _run_top_level_cli_json(["handoff", "--json"], cwd=project)
+    assert second["status"] == "ok"
+    assert second["entrypoint"] == "context-quick"
+    assert second["quick_status"] == "ready"
+    assert second["reuse_status"] == "reused"
+    assert second["freshness_status"] == "fresh"
+    assert second["bundle_root"] == first["bundle_root"]
+    assert second["handoff"]["skeleton_file"] == first["handoff"]["skeleton_file"]
+    assert second["timings_ms"]["bundle"] == 0.0
+    assert "Reused previous bundle:" in second["summary_text"]
+    assert "--input-dir" not in second["reuse_guidance"]["next_handoff_command_text"]
+
+    forced_dir = project / "forced-handoff-bundle"
+    forced = _run_top_level_cli_json(["handoff", "--force-refresh", "--output-dir", str(forced_dir), "--json"], cwd=project)
+    assert forced["status"] == "ok"
+    assert forced["entrypoint"] == "context-quick"
+    assert forced["quick_status"] == "ready"
+    assert forced.get("reuse_status", "") != "reused"
+    assert Path(forced["bundle_root"]).resolve() == forced_dir.resolve()
+    assert forced["bundle_root"] != first["bundle_root"]
+    assert Path(forced["handoff"]["skeleton_file"]).exists()
 
 
 def _check_context_auto_defaults_json(workspace: Path) -> None:
@@ -2497,6 +2578,8 @@ CHECKS: list[tuple[str, Callable[[Path], None]]] = [
     ("context_explain_json_ok", _check_context_explain_json),
     ("release_readiness_summary_json_ok", _check_release_readiness_summary_json),
     ("top_level_cli_alias_json_ok", _check_top_level_cli_alias_json),
+    ("zero_learning_defaults_json_ok", _check_zero_learning_defaults_json),
+    ("handoff_auto_reuse_json_ok", _check_handoff_auto_reuse_json),
     ("context_auto_defaults_json_ok", _check_context_auto_defaults_json),
     ("context_bundle_json_ok", _check_bundle_outputs),
     ("context_compress_incremental_clean_diagnostics_json_ok", _check_clean_incremental_diagnostics),

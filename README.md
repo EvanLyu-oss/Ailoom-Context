@@ -20,24 +20,23 @@ That gives us a practical workflow for large repositories and long documents:
 For macOS, from a cloned or downloaded checkout:
 
 ```bash
-sh install.sh
+sh install.sh --setup-shell
 mcp-skeleton demo
-mcp-skeleton handoff --input-dir .
-mcp-skeleton handoff --input-dir . --copy --open
-mcp-skeleton handoff --reuse-if-fresh --input-dir .
-mcp-skeleton quick --input-dir .
-mcp-skeleton quick --reuse-if-fresh --input-dir .
+mcp-skeleton handoff
+mcp-skeleton handoff --copy --open
+mcp-skeleton quick
+mcp-skeleton recent
 ```
 
 What these do:
 
-- `install.sh` installs an isolated local command and prints PATH guidance.
+- `install.sh --setup-shell` installs an isolated local command and adds one managed PATH block for future zsh terminals.
 - `demo` runs a safe sample bundle so you can see the workflow before using your own project.
 - `handoff` is the shortest “give this project to AI/IDE” command; it creates the same restore-safe bundle as `quick`.
+- Running `handoff` again automatically reuses the last fresh bundle when the project has not changed.
 - `handoff --copy --open` copies the skeleton to the macOS clipboard and opens the bundle folder in Finder.
-- `handoff --reuse-if-fresh` reuses the last unchanged bundle, which is the fastest day-to-day path for large projects.
 - `quick` creates a restore-safe bundle for the current directory and prints the skeleton, manifest, inspect, and restore commands.
-- `quick --reuse-if-fresh` reuses the last unchanged bundle instead of recompressing large projects.
+- `recent` shows the latest bundle, skeleton, manifest, restore command, and freshness status for the current directory.
 
 The human output for `quick`, `handoff`, `doctor`, and `recent` starts with an `At a glance` card so first-time users can immediately see status, restore safety, token savings, speed/freshness, and the next command to copy. `quick` / `handoff` also write `AI_HANDOFF.md` beside the bundle, separate the skeleton file to share with AI/IDE tools from the bundle, manifest, and restore files to keep locally, explain the slowest visible phase, show a `Performance profile` with phase timing and default noise protection, suggest the best next command (`--fast` or `--reuse-if-fresh`) for large or slower runs, and explain why tiny projects may expand instead of saving tokens.
 
@@ -173,7 +172,7 @@ py -3 -m pip install '.[context-metrics]'
 Zero-learning project setup:
 
 ```bash
-mcp-skeleton start --input-dir .
+mcp-skeleton start
 ```
 
 `context start` recommends a config, writes `.mcp-skeleton.json`, writes `mcp-skeleton-onboarding.md`, runs a restore-safety doctor check, and prints a copy/paste-ready command plus plain next steps. JSON output also includes `recommended_command_text` and `action_plan` for wrappers or test machines.
@@ -192,31 +191,32 @@ mcp-skeleton demo
 Shortest AI/IDE handoff for your project:
 
 ```bash
-mcp-skeleton handoff --input-dir .
+mcp-skeleton handoff
 ```
 
-`handoff` is a top-level shortcut for the restore-safe quick workflow. It creates `context_skeleton.mcp` for AI/IDE context, writes `AI_HANDOFF.md` with plain-language instructions, and keeps `context_manifest.json` plus the restore package available for exact reconstruction.
+`handoff` is a top-level shortcut for the restore-safe quick workflow. It defaults to the current directory, creates `context_skeleton.mcp` for AI/IDE context, writes `AI_HANDOFF.md` with plain-language instructions, and keeps `context_manifest.json` plus the restore package available for exact reconstruction.
+Run the same command again during day-to-day work; when the project fingerprint is unchanged, MCP-Skeleton automatically reuses the previous fresh bundle instead of recompressing.
 
 On macOS, use:
 
 ```bash
-mcp-skeleton handoff --input-dir . --copy --open
+mcp-skeleton handoff --copy --open
 ```
 
 `--copy` copies `context_skeleton.mcp` to the clipboard with `pbcopy`; `--open` opens the generated bundle folder in Finder.
 
-For day-to-day work on an unchanged project, use:
+To force a new handoff bundle even when the previous one is fresh, use:
 
 ```bash
-mcp-skeleton handoff --reuse-if-fresh --input-dir .
+mcp-skeleton handoff --force-refresh
 ```
 
-When the project fingerprint is unchanged, this skips recompression and restore recheck, reuses the previous bundle, and tells you exactly which skeleton file / handoff guide to use.
+This refreshes the bundle and updates the recent-bundle record.
 
 One-command bundle creation for your project:
 
 ```bash
-mcp-skeleton quick --input-dir .
+mcp-skeleton quick
 ```
 
 `context quick` runs the zero-friction setup, checks restore safety, writes a full bundle, and prints the bundle path plus inspect/restore commands. It also points out the exact `context_skeleton.mcp` file to give to an AI or IDE, the bundle folder to keep, and a copy/paste `open <bundle>` command for locating the generated files on macOS.
@@ -226,7 +226,7 @@ It also prints performance advice with `fast / ok / slow` status and copy/paste 
 To preview the plan without writing a bundle:
 
 ```bash
-mcp-skeleton quick --preview --input-dir .
+mcp-skeleton quick --preview
 ```
 
 `--preview` checks restore safety, estimates token savings, shows the planned bundle/manifest paths, prints performance advice, and gives the exact command to run for real.
@@ -234,19 +234,19 @@ mcp-skeleton quick --preview --input-dir .
 To open the bundle folder automatically on macOS after creation:
 
 ```bash
-mcp-skeleton quick --input-dir . --open
+mcp-skeleton quick --open
 ```
 
 To copy the generated skeleton text directly to the macOS clipboard:
 
 ```bash
-mcp-skeleton quick --input-dir . --copy
+mcp-skeleton quick --copy
 ```
 
 To find the last quick bundle for the current project later:
 
 ```bash
-mcp-skeleton recent --input-dir .
+mcp-skeleton recent
 ```
 
 `recent` reads `.workspace_ail/recent_quick.json` and prints the last bundle path, skeleton file, manifest, open command, clipboard command, inspect command, and restore command.
@@ -255,19 +255,19 @@ It also checks whether the project appears to have changed since the last quick 
 For very large directories where you want the fastest safe bundle path, use:
 
 ```bash
-mcp-skeleton quick --fast --input-dir .
+mcp-skeleton quick --fast
 ```
 
 `--fast` skips config recommendation/onboarding generation but still runs sandbox restore verification before creating the bundle.
 Standard `quick` will also print a speed tip with a copy/paste `--fast` command when the input is large enough that the faster path is likely to feel better.
 
-If you already created a quick bundle and want to avoid recompressing unchanged projects:
+If you already created a quick bundle and want to explicitly avoid recompressing unchanged projects:
 
 ```bash
-mcp-skeleton quick --reuse-if-fresh --input-dir .
+mcp-skeleton quick --reuse-if-fresh
 ```
 
-When the previous bundle is still fresh, this reuses it immediately and prints the same handoff commands. If the project changed or the bundle files are missing, MCP-Skeleton falls back to a normal quick run.
+When the previous bundle is still fresh, this reuses it immediately and prints the same handoff commands. `handoff` does this automatically by default; if the project changed or the bundle files are missing, MCP-Skeleton falls back to a normal quick run.
 
 Generated MCP-Skeleton work artifacts under `.workspace_ail/` are skipped by default so repeated `context quick` or dogfood runs do not pollute later compression or benchmark results.
 
@@ -398,8 +398,8 @@ The dogfood self-check recommends an ignored `.mcp-skeleton.json`, writes an onb
 Readiness doctor for one source:
 
 ```bash
-mcp-skeleton doctor --input-dir . --preset codebase --json
-mcp-skeleton doctor --input-dir . --preset codebase --write-report mcp-skeleton-readiness.md --json
+mcp-skeleton doctor --preset codebase --json
+mcp-skeleton doctor --preset codebase --write-report mcp-skeleton-readiness.md --json
 ```
 
 `context doctor` resolves config defaults, runs compression analysis, emits warnings/recommendations/explanations, restores into a temporary sandbox, and verifies the restored files against the original included hashes. It reports `readiness_status` as `ready`, `watch`, or `blocked`, plus `recommended_command_text` and `action_plan` so users know exactly what to do next.

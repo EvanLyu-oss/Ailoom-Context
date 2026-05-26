@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- added zero-learning defaults so `mcp-skeleton handoff`, `quick`, `doctor`, and `recent` use the current directory when no input source is provided
+- made `mcp-skeleton handoff` automatically reuse the last fresh bundle for unchanged projects, with `--force-refresh` available when a new bundle is required
+- simplified the README and quickstart check around the two-command macOS path: `sh install.sh --setup-shell` then `mcp-skeleton handoff`
 - added `context start` as a zero-friction onboarding command that writes config/report files, runs doctor, and prints the next compression command
 - added a README Quickstart that gets new macOS users from install to demo, quick bundle, and fresh-bundle reuse in four commands
 - added `testing/quickstart_check.py` to verify the README install/demo/handoff/quick/reuse path stays executable
@@ -15,7 +18,7 @@
 - added clearer `context quick` AI handoff guidance that separates the skeleton file to share from bundle/manifest/restore files to keep locally
 - added `mcp-skeleton handoff` as a short top-level alias for the restore-safe quick AI/IDE handoff workflow
 - added `AI_HANDOFF.md` bundle guides plus `--copy` as a shorter macOS clipboard alias for first-run AI/IDE handoff
-- updated installer and version guidance to recommend `mcp-skeleton handoff --input-dir .` as the first real project command
+- updated installer and version guidance to recommend `mcp-skeleton handoff` as the first real project command
 - improved fresh-bundle reuse guidance so `handoff` users see `mcp-skeleton handoff --reuse-if-fresh` and an explicit saved-work summary
 - added default directory noise protection for common dependency, build, virtualenv, VCS, and cache folders, with visible compression explanations
 - added `--include-default-skips` and `include_default_skips` config support for intentionally including default-skipped directories

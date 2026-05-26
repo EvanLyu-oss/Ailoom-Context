@@ -78,7 +78,7 @@ def build_quickstart_check_payload() -> dict[str, Any]:
         env["PATH"] = f"{home / '.local' / 'bin'}{os.pathsep}{env.get('PATH', '')}"
 
         command_path = home / ".local" / "bin" / "mcp-skeleton"
-        install = _run(["sh", str(ROOT / "install.sh")], cwd=ROOT, env=env)
+        install = _run(["sh", str(ROOT / "install.sh"), "--setup-shell"], cwd=ROOT, env=env)
         install.pop("stdout", None)
         demo, demo_json = _json_from_command(
             [str(command_path), "demo", "--output-dir", str(workspace / "demo"), "--json"],
@@ -86,24 +86,19 @@ def build_quickstart_check_payload() -> dict[str, Any]:
             env=env,
         )
         handoff, handoff_json = _json_from_command(
-            [str(command_path), "handoff", "--input-dir", str(project), "--output-dir", str(workspace / "handoff_bundle"), "--json"],
+            [str(command_path), "handoff", "--output-dir", str(workspace / "handoff_bundle"), "--json"],
             cwd=project,
             env=env,
         )
         quick, quick_json = _json_from_command(
-            [str(command_path), "quick", "--input-dir", str(project), "--output-dir", str(workspace / "bundle"), "--json"],
+            [str(command_path), "quick", "--output-dir", str(workspace / "bundle"), "--json"],
             cwd=project,
             env=env,
         )
         reuse, reuse_json = _json_from_command(
             [
                 str(command_path),
-                "quick",
-                "--reuse-if-fresh",
-                "--input-dir",
-                str(project),
-                "--output-dir",
-                str(workspace / "bundle"),
+                "handoff",
                 "--json",
             ],
             cwd=project,
@@ -136,6 +131,7 @@ def build_quickstart_check_payload() -> dict[str, Any]:
                 "passed": install_passed,
                 "command_exists": command_path.exists(),
                 "has_ready_panel": "MCP-Skeleton Install Ready" in install["stdout_tail"],
+                "shell_profile_updated": "Shell profile:" in install["stdout_tail"],
             },
             "mcp_skeleton_demo": {
                 **demo,
@@ -158,7 +154,7 @@ def build_quickstart_check_payload() -> dict[str, Any]:
                 "restore_safe": bool(quick_json.get("restore_safe")),
                 "manifest_exists": Path(str(quick_json.get("manifest_file") or "")).exists(),
             },
-            "mcp_skeleton_quick_reuse_if_fresh": {
+            "mcp_skeleton_handoff_auto_reuse": {
                 **reuse,
                 "passed": reuse_passed,
                 "quick_status": reuse_json.get("quick_status", ""),

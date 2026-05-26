@@ -164,13 +164,13 @@ else
 fi
 if command -v mcp-skeleton >/dev/null 2>&1; then
   echo "PATH status: ready - mcp-skeleton is available on PATH"
-  HANDOFF_COMMAND="mcp-skeleton handoff --input-dir ."
-  QUICK_COMMAND="mcp-skeleton quick --input-dir ."
+  HANDOFF_COMMAND="mcp-skeleton handoff"
+  QUICK_COMMAND="mcp-skeleton quick"
   VERSION_COMMAND="mcp-skeleton version"
 else
   echo "PATH status: needs shell setup - $BIN_DIR is not currently on PATH"
-  HANDOFF_COMMAND="$COMMAND_PATH handoff --input-dir ."
-  QUICK_COMMAND="$COMMAND_PATH quick --input-dir ."
+  HANDOFF_COMMAND="$COMMAND_PATH handoff"
+  QUICK_COMMAND="$COMMAND_PATH quick"
   VERSION_COMMAND="$COMMAND_PATH version"
 fi
 echo "Shell profile: $SHELL_PROFILE_STATUS"
@@ -187,11 +187,11 @@ echo "  $QUICK_COMMAND"
 echo ""
 echo "First run self-check:"
 echo "  $VERSION_COMMAND"
-echo "  $COMMAND_PATH doctor --input-dir ."
+echo "  $COMMAND_PATH doctor"
 echo ""
 echo "Useful checks:"
 echo "  $VERSION_COMMAND"
-echo "  $COMMAND_PATH doctor --input-dir ."
+echo "  $COMMAND_PATH doctor"
 echo ""
 if ! printf '%s' "$PATH" | grep -q "$BIN_DIR"; then
   echo "Note: $BIN_DIR is not currently in PATH."

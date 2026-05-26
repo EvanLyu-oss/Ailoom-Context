@@ -133,8 +133,8 @@ def _build_version_payload() -> dict[str, Any]:
         "python_check": python_check,
         "command_check": "ok" if command_path else "watch",
         "install_command_text": "sh install.sh",
-        "recommended_first_command_text": f"{command_prefix} handoff --input-dir .",
-        "doctor_command_text": f"{command_prefix} doctor --input-dir .",
+        "recommended_first_command_text": f"{command_prefix} handoff",
+        "doctor_command_text": f"{command_prefix} doctor",
         "path_hint": "ok" if command_path else "mcp-skeleton command was not found on PATH; use python3 -m cli or run sh install.sh",
     }
     payload["summary_text"] = "\n".join(
@@ -233,9 +233,9 @@ def _build_error_guidance(code: str, message: str) -> dict[str, Any]:
     elif "requires exactly one input source" in lower or "did not receive a usable input source" in lower:
         recovery_steps = [
             "provide exactly one source: --input-dir, --input-file, --text-file, or --text",
-            "for the current repository, try: mcp-skeleton quick --input-dir .",
+            "for the current repository, try: mcp-skeleton quick",
         ]
-        fix_command_text = "mcp-skeleton quick --input-dir ."
+        fix_command_text = "mcp-skeleton quick"
     elif "requires --output-dir" in lower:
         recovery_steps = [
             "add --output-dir with a safe empty directory for restored or replayed files",
@@ -986,7 +986,9 @@ def _quick_fast_command_text(args: argparse.Namespace) -> str:
     command_args = ["context", "quick", "--fast"]
     if _inline_text(args) is not None:
         return ""
-    if _opt_path(args, "input_dir") is not None:
+    if bool(getattr(args, "defaulted_input_dir", False)):
+        pass
+    elif _opt_path(args, "input_dir") is not None:
         command_args.extend(["--input-dir", str(_opt_path(args, "input_dir").resolve())])  # type: ignore[union-attr]
     elif _opt_path(args, "input_file") is not None:
         command_args.extend(["--input-file", str(_opt_path(args, "input_file").resolve())])  # type: ignore[union-attr]
@@ -1014,7 +1016,9 @@ def _quick_run_command_text(args: argparse.Namespace) -> str:
         command_args.append("--reuse-if-fresh")
     if _inline_text(args) is not None:
         return ""
-    if _opt_path(args, "input_dir") is not None:
+    if bool(getattr(args, "defaulted_input_dir", False)):
+        pass
+    elif _opt_path(args, "input_dir") is not None:
         command_args.extend(["--input-dir", str(_opt_path(args, "input_dir").resolve())])  # type: ignore[union-attr]
     elif _opt_path(args, "input_file") is not None:
         command_args.extend(["--input-file", str(_opt_path(args, "input_file").resolve())])  # type: ignore[union-attr]
@@ -1180,7 +1184,9 @@ def _recent_refresh_command_text(args: argparse.Namespace) -> str:
     input_dir = _opt_path(args, "input_dir")
     input_file = _opt_path(args, "input_file")
     text_file = _opt_path(args, "text_file")
-    if input_dir is not None:
+    if bool(getattr(args, "defaulted_input_dir", False)):
+        pass
+    elif input_dir is not None:
         command_args.extend(["--input-dir", str(input_dir.resolve())])
     elif input_file is not None:
         command_args.extend(["--input-file", str(input_file.resolve())])
@@ -1277,7 +1283,7 @@ def _build_context_recent_payload(args: argparse.Namespace) -> tuple[dict[str, A
             "entrypoint": "context-recent",
             "recent_status": "missing",
             "recent_file": str(recent_file),
-            "message": "no recent quick bundle was found for this project; run mcp-skeleton quick --input-dir . first",
+            "message": "no recent quick bundle was found for this project; run mcp-skeleton quick first",
         }
         payload["summary_text"] = _render_context_recent_summary(payload)
         return payload, EXIT_VALIDATION
@@ -1458,7 +1464,7 @@ def _build_quick_experience_payload(*, start_payload: dict[str, Any], timings_ms
         first_run_guidance = {
             "status": "ok",
             "message": "this input is large enough to show the token advantage",
-            "try_next_command_text": "mcp-skeleton quick --reuse-if-fresh --input-dir .",
+            "try_next_command_text": "mcp-skeleton quick --reuse-if-fresh",
         }
     elif token_direction == "reduced":
         token_status = "watch"
@@ -1466,7 +1472,7 @@ def _build_quick_experience_payload(*, start_payload: dict[str, Any], timings_ms
         first_run_guidance = {
             "status": "notice",
             "message": "savings are modest on this input; larger projects and long documents usually show clearer benefits",
-            "try_next_command_text": "mcp-skeleton quick --fast --input-dir .",
+            "try_next_command_text": "mcp-skeleton quick --fast",
         }
     else:
         token_status = "expanded"
@@ -1988,6 +1994,7 @@ def _build_quick_fast_start_payload(args: argparse.Namespace) -> tuple[dict[str,
         "recommended_command_text": doctor_payload.get("recommended_command_text", ""),
         "next_command": doctor_payload.get("recommended_command_text", ""),
         "doctor_readiness_status": doctor_payload.get("readiness_status", ""),
+        "source_label": doctor_payload.get("source_label", ""),
         "restore_safe": restore_safe,
         "restore_check": restore_check,
         "source_scale_profile": doctor_payload.get("source_scale_profile") or {},
@@ -2012,7 +2019,15 @@ def _build_quick_fast_start_payload(args: argparse.Namespace) -> tuple[dict[str,
 
 def _build_context_quick_payload(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
     total_started = time.perf_counter()
-    if bool(getattr(args, "reuse_if_fresh", False)):
+    should_try_reuse = (
+        bool(getattr(args, "reuse_if_fresh", False))
+        or (
+            bool(getattr(args, "handoff_alias", False))
+            and _opt_path(args, "output_dir") is None
+            and not bool(getattr(args, "preview", False))
+        )
+    )
+    if should_try_reuse and not bool(getattr(args, "force_refresh", False)):
         reused_payload = _build_reused_quick_payload(args, started_at=total_started)
         if reused_payload is not None:
             return reused_payload, EXIT_OK
@@ -2183,6 +2198,8 @@ def _build_context_quick_payload(args: argparse.Namespace) -> tuple[dict[str, An
         "status": "ok",
         "entrypoint": "context-quick",
         "quick_status": "ready",
+        "reuse_status": "created",
+        "freshness_status": "refreshed" if should_try_reuse else "",
         "fast_path": fast_path,
         "restore_safe": restore_safe,
         "doctor_readiness_status": start_payload.get("doctor_readiness_status", ""),
@@ -2462,8 +2479,8 @@ def _render_context_demo_summary(payload: dict[str, Any]) -> str:
         f"- Restore: {quick.get('restore_command_text', '')}",
         "",
         "Use on your project:",
-        "mcp-skeleton quick --input-dir .",
-        "mcp-skeleton quick --fast --input-dir .",
+        "mcp-skeleton quick",
+        "mcp-skeleton quick --fast",
     ]
     return "\n".join(lines)
 
@@ -2518,7 +2535,7 @@ def _build_context_demo_payload(args: argparse.Namespace) -> tuple[dict[str, Any
         "next_steps": [
             "inspect the demo bundle",
             "restore the demo bundle",
-            "run mcp-skeleton quick --input-dir . in your own project",
+            "run mcp-skeleton quick in your own project",
         ],
     }
     payload["summary_text"] = _render_context_demo_summary(payload)
@@ -2529,6 +2546,26 @@ def _clone_args(args: argparse.Namespace, **updates: Any) -> argparse.Namespace:
     values = dict(vars(args))
     values.update(updates)
     return argparse.Namespace(**values)
+
+
+def _has_context_input(args: argparse.Namespace) -> bool:
+    return any(
+        [
+            _inline_text(args) is not None,
+            _opt_path(args, "input_dir") is not None,
+            _opt_path(args, "input_file") is not None,
+            _opt_path(args, "text_file") is not None,
+        ]
+    )
+
+
+def _apply_current_dir_default(args: argparse.Namespace) -> argparse.Namespace:
+    if not _has_context_input(args):
+        setattr(args, "input_dir", Path.cwd())
+        setattr(args, "defaulted_input_dir", True)
+    else:
+        setattr(args, "defaulted_input_dir", False)
+    return args
 
 
 def _default_start_output_paths(args: argparse.Namespace) -> tuple[Path, Path]:
@@ -2699,6 +2736,7 @@ def _build_context_start_payload(
         "recommended_command_text": next_command,
         "next_command": next_command,
         "doctor_readiness_status": doctor_payload.get("readiness_status", ""),
+        "source_label": doctor_payload.get("source_label", ""),
         "restore_safe": restore_safe,
         "restore_check": restore_check,
         "source_scale_profile": doctor_payload.get("source_scale_profile") or {},
@@ -3115,18 +3153,22 @@ def cmd_context(args: argparse.Namespace) -> int:
         return exit_code
 
     if command == "doctor":
+        _apply_current_dir_default(args)
         payload, exit_code = _build_context_doctor_payload(args)
         return _emit_simple_result(args, payload, text=_render_context_doctor_summary(payload), exit_code=exit_code)
 
     if command == "start":
+        _apply_current_dir_default(args)
         payload, exit_code = _build_context_start_payload(args)
         return _emit_simple_result(args, payload, text=str(payload.get("summary_text", "")), exit_code=exit_code)
 
     if command == "quick":
+        _apply_current_dir_default(args)
         payload, exit_code = _build_context_quick_payload(args)
         return _emit_simple_result(args, payload, text=str(payload.get("summary_text", "")), exit_code=exit_code)
 
     if command == "recent":
+        _apply_current_dir_default(args)
         payload, exit_code = _build_context_recent_payload(args)
         return _emit_simple_result(args, payload, text=str(payload.get("summary_text", "")), exit_code=exit_code)
 
@@ -3419,10 +3461,10 @@ def _build_parser() -> argparse.ArgumentParser:
         prog="mcp-skeleton",
         description="MCP-Skeleton: lossless context compression, exact restore, patch, and replay workflows",
         epilog=(
-            "Common shortcuts: mcp-skeleton quick --input-dir . | "
-            "mcp-skeleton handoff --input-dir . | "
-            "mcp-skeleton start --input-dir . | "
-            "mcp-skeleton doctor --input-dir . | "
+            "Common shortcuts: mcp-skeleton quick | "
+            "mcp-skeleton handoff | "
+            "mcp-skeleton start | "
+            "mcp-skeleton doctor | "
             "mcp-skeleton explain --package-file context_manifest.json"
         ),
     )
@@ -3580,6 +3622,7 @@ def _build_parser() -> argparse.ArgumentParser:
     quick.add_argument("--tokenizer-model", dest="tokenizer_model")
     quick.add_argument("--fast", action="store_true", help="Skip config recommendation/onboarding generation while keeping restore safety checks enabled")
     quick.add_argument("--reuse-if-fresh", action="store_true", help="Reuse the most recent quick bundle when the project fingerprint is unchanged")
+    quick.add_argument("--force-refresh", action="store_true", help="Force handoff/quick to create a fresh bundle instead of reusing a fresh recent bundle")
     quick.add_argument("--preview", action="store_true", help="Preview restore safety, token savings, and output paths without writing a bundle")
     quick.add_argument("--open", dest="open_bundle", action="store_true", help="Open the created bundle folder in Finder on macOS")
     quick.add_argument("--copy", "--copy-command", dest="copy_command", action="store_true", help="Copy the generated skeleton text to the macOS clipboard with pbcopy")

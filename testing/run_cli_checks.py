@@ -6,6 +6,7 @@ import importlib.util
 import json
 import os
 import shutil
+import shlex
 import subprocess
 import sys
 import tempfile
@@ -57,6 +58,14 @@ def _run_top_level_cli_json(args: list[str], *, cwd: Path = ROOT, expect: int = 
         return json.loads(proc.stdout)
     except json.JSONDecodeError as exc:
         raise SmokeFailure(f"top-level command did not emit JSON: {' '.join(args)}\nSTDOUT:\n{proc.stdout}") from exc
+
+
+def _assert_command_contains_option(command_text: str, option: str, expected_value: str) -> None:
+    parts = shlex.split(command_text)
+    assert option in parts
+    index = parts.index(option)
+    assert index + 1 < len(parts)
+    assert parts[index + 1] == expected_value
 
 
 def _python310_plus() -> str:
@@ -881,7 +890,8 @@ def _check_context_quick_json(workspace: Path) -> None:
     assert reused["user_outcome"]["status"] == "reused_ready_to_share"
     assert reused["user_outcome"]["primary_file"] == reused["handoff"]["skeleton_file"]
     assert reused["user_outcome"]["next_command_text"].startswith("mcp-skeleton handoff")
-    assert reused["restore_command_text"].startswith(f"mcp-skeleton restore --package-file {reused['manifest_file']}")
+    assert reused["restore_command_text"].startswith("mcp-skeleton restore --package-file")
+    _assert_command_contains_option(reused["restore_command_text"], "--package-file", reused["manifest_file"])
     assert "Reused previous bundle:" in reused["summary_text"]
     assert "Saved time:" in reused["summary_text"]
     assert "mcp-skeleton handoff --reuse-if-fresh" in reused["summary_text"]

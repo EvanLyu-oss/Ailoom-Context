@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- renamed the public product surface to Ailoom Context, with `ailoom` as the primary CLI and `mcp-skeleton` retained as a compatibility alias
+- updated new bundle metadata to `ailoom_context_bundle.v1` and `AILOOM-SKL.v1` while keeping restore workflows compatible through the same package reader
+- updated install scripts, README, SECURITY, beta trial docs, and smoke expectations to use the Ailoom Context brand for new-user paths
 - added a Windows PowerShell installer (`install.ps1`) with install/update/uninstall/setup-shell flows and install-readiness manifest generation
 - made quick/handoff/recent open and clipboard command text platform-aware so Windows users see `Start-Process` and `Set-Clipboard` instead of macOS-only `open`/`pbcopy`
 - expanded README quickstart/install guidance with a Windows PowerShell path and tokenizer-backed metrics install option

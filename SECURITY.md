@@ -1,13 +1,13 @@
-# MCP-Skeleton Security Model
+# Ailoom Context Security Model
 
-MCP-Skeleton is designed as a local-first context compression tool. Its core safety boundary is simple: share the AI-facing skeleton when you want compact context, and keep restore packages local when you need byte-exact recovery.
+Ailoom Context is designed as a local-first context compression tool. Its core safety boundary is simple: share the AI-facing skeleton when you want compact context, and keep restore packages local when you need byte-exact recovery.
 
 ## Local-Only Promise
 
-- MCP-Skeleton does not upload source code, text files, restore packages, skeletons, patch bundles, logs, or usage records to any MCP-Skeleton server.
-- MCP-Skeleton does not include telemetry, analytics beacons, background log collection, or silent network reporting.
+- Ailoom Context does not upload source code, text files, restore packages, skeletons, patch bundles, logs, or usage records to any Ailoom Context server.
+- Ailoom Context does not include telemetry, analytics beacons, background log collection, or silent network reporting.
 - Compression, restore, patch, replay, benchmark, dogfood, and doctor checks run on the user's local machine by default.
-- Optional third-party dependencies such as tokenizers may be installed by the user, but MCP-Skeleton itself does not require cloud processing for the core workflows.
+- Optional third-party dependencies such as tokenizers may be installed by the user, but Ailoom Context itself does not require cloud processing for the core workflows.
 
 ## What Is Safe To Share
 
@@ -24,11 +24,11 @@ Redaction only applies to the skeleton surface. It does not modify original file
 Generated bundle and handoff artifacts normally live under `.workspace_ail/`. To preview or remove local generated artifacts:
 
 ```bash
-mcp-skeleton clean --dry-run --all
-mcp-skeleton clean --all
+ailoom clean --dry-run --all
+ailoom clean --all
 ```
 
-The clean command targets known MCP-Skeleton generated directories such as `.workspace_ail/` and, with `--all`, `mcp-skeleton-restore/`. It does not delete source files or config files.
+The clean command targets known Ailoom Context generated directories such as `.workspace_ail/` and, with `--all`, `mcp-skeleton-restore/`. It does not delete source files or config files.
 
 ## Import And Replay Safety
 
@@ -39,11 +39,11 @@ The clean command targets known MCP-Skeleton generated directories such as `.wor
 
 ## Original Skeleton Language And Project Identity
 
-`MCP-SKL.v1`, the MCP-Skeleton bundle schema, and the associated lossless context compression workflow are original project artifacts of MCP-Skeleton.
+`AILOOM-SKL.v1`, the Ailoom Context bundle schema, and the associated lossless context compression workflow are original project artifacts of Ailoom Context.
 
-Please do not misrepresent derived tools, forks, or commercial products as the official MCP-Skeleton project. If you build on this work, keep clear attribution and project identity separation.
+Please do not misrepresent derived tools, forks, or commercial products as the official Ailoom Context project. If you build on this work, keep clear attribution and project identity separation.
 
-The current repository license remains the source of legal permissions and restrictions. If MCP-Skeleton later needs stronger restrictions against competing commercial clones or rebranded resale, that should be handled through an explicit license change and legal review rather than a documentation-only claim.
+The current repository license remains the source of legal permissions and restrictions. If Ailoom Context later needs stronger restrictions against competing commercial clones or rebranded resale, that should be handled through an explicit license change and legal review rather than a documentation-only claim.
 
 ## Reporting Security Issues
 

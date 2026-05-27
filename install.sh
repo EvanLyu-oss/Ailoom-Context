@@ -2,11 +2,12 @@
 set -eu
 
 ROOT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
-INSTALL_DIR="${MCP_SKELETON_HOME:-$HOME/.mcp-skeleton}"
+INSTALL_DIR="${AILOOM_HOME:-${MCP_SKELETON_HOME:-$HOME/.ailoom}}"
 VENV_DIR="$INSTALL_DIR/venv"
 BIN_DIR="$HOME/.local/bin"
-COMMAND_PATH="$BIN_DIR/mcp-skeleton"
-MARKER_FILE="$INSTALL_DIR/.mcp-skeleton-install"
+COMMAND_PATH="$BIN_DIR/ailoom"
+LEGACY_COMMAND_PATH="$BIN_DIR/mcp-skeleton"
+MARKER_FILE="$INSTALL_DIR/.ailoom-install"
 READINESS_FILE="$INSTALL_DIR/install-readiness.json"
 MODE="install"
 SETUP_SHELL=0
@@ -23,10 +24,10 @@ while [ "$#" -gt 0 ]; do
       SETUP_SHELL=1
       ;;
     -h|--help)
-      echo "MCP-Skeleton macOS installer"
+      echo "Ailoom Context macOS installer"
       echo ""
       echo "Usage:"
-      echo "  sh install.sh                 install MCP-Skeleton"
+      echo "  sh install.sh                 install Ailoom Context"
       echo "  sh install.sh --setup-shell   install and add ~/.local/bin to ~/.zshrc for future terminals"
       echo "  sh install.sh --update        refresh the installed command from this checkout"
       echo "  sh install.sh --uninstall     remove the installed command and managed venv"
@@ -42,7 +43,7 @@ while [ "$#" -gt 0 ]; do
 done
 
 if [ "$MODE" = "uninstall" ]; then
-  echo "MCP-Skeleton uninstaller"
+  echo "Ailoom Context uninstaller"
   echo ""
   echo "Command:     $COMMAND_PATH"
   echo "Install dir: $INSTALL_DIR"
@@ -53,6 +54,10 @@ if [ "$MODE" = "uninstall" ]; then
   else
     echo "Command already absent: $COMMAND_PATH"
   fi
+  if [ -L "$LEGACY_COMMAND_PATH" ] || [ -f "$LEGACY_COMMAND_PATH" ]; then
+    rm -f "$LEGACY_COMMAND_PATH"
+    echo "Removed legacy command: $LEGACY_COMMAND_PATH"
+  fi
   if [ -f "$MARKER_FILE" ]; then
     rm -rf "$INSTALL_DIR"
     echo "Removed managed install dir: $INSTALL_DIR"
@@ -61,7 +66,7 @@ if [ "$MODE" = "uninstall" ]; then
     rmdir "$INSTALL_DIR" 2>/dev/null || true
     echo "Removed managed virtual environment: $VENV_DIR"
   else
-    echo "Install dir was not removed because it is not marked as MCP-Skeleton-managed."
+  echo "Install dir was not removed because it is not marked as Ailoom-managed."
   fi
   echo ""
   echo "Uninstalled successfully."
@@ -87,9 +92,9 @@ PY
 fi
 
 if [ "$MODE" = "update" ]; then
-  echo "MCP-Skeleton macOS updater"
+  echo "Ailoom Context macOS updater"
 else
-  echo "MCP-Skeleton macOS installer"
+  echo "Ailoom Context macOS installer"
 fi
 echo ""
 echo "Install dir: $INSTALL_DIR"
@@ -104,7 +109,7 @@ fi
 "$PYTHON_BIN" - <<'PY'
 import sys
 if sys.version_info < (3, 10):
-    raise SystemExit("error: MCP-Skeleton requires Python 3.10+")
+    raise SystemExit("error: Ailoom Context requires Python 3.10+")
 PY
 
 mkdir -p "$INSTALL_DIR" "$BIN_DIR"
@@ -119,29 +124,30 @@ echo "Using Python: $PYTHON_BIN"
 "$PYTHON_BIN" -m venv "$VENV_DIR"
 
 if [ "$MODE" = "update" ]; then
-  echo "Updating MCP-Skeleton..."
+  echo "Updating Ailoom Context..."
 else
-  echo "Installing MCP-Skeleton..."
+  echo "Installing Ailoom Context..."
 fi
 "$VENV_DIR/bin/python" -m pip install --upgrade pip >/dev/null
 "$VENV_DIR/bin/python" -m pip install "$ROOT_DIR[context-metrics]" >/dev/null
 
-printf '%s\n' "managed-by=mcp-skeleton" "source=$ROOT_DIR" > "$MARKER_FILE"
-ln -sf "$VENV_DIR/bin/mcp-skeleton" "$COMMAND_PATH"
+printf '%s\n' "managed-by=ailoom" "source=$ROOT_DIR" > "$MARKER_FILE"
+ln -sf "$VENV_DIR/bin/ailoom" "$COMMAND_PATH"
+ln -sf "$VENV_DIR/bin/mcp-skeleton" "$LEGACY_COMMAND_PATH"
 
 SHELL_PROFILE="$HOME/.zshrc"
 SHELL_PROFILE_STATUS="not requested"
 if [ "$SETUP_SHELL" = "1" ]; then
   mkdir -p "$(dirname "$SHELL_PROFILE")"
   touch "$SHELL_PROFILE"
-  if grep -q "mcp-skeleton PATH" "$SHELL_PROFILE"; then
+  if grep -q "ailoom PATH" "$SHELL_PROFILE"; then
     SHELL_PROFILE_STATUS="already configured"
   else
     {
       echo ""
-      echo "# >>> mcp-skeleton PATH >>>"
+      echo "# >>> ailoom PATH >>>"
       echo "export PATH=\"$BIN_DIR:\$PATH\""
-      echo "# <<< mcp-skeleton PATH <<<"
+      echo "# <<< ailoom PATH <<<"
     } >> "$SHELL_PROFILE"
     SHELL_PROFILE_STATUS="updated"
   fi
@@ -156,20 +162,20 @@ else
   echo "Installed successfully."
 fi
 echo ""
-echo "MCP-Skeleton Install Ready"
+echo "Ailoom Context Install Ready"
 echo ""
 if "$COMMAND_PATH" version >/dev/null 2>&1; then
   echo "Command check: OK"
 else
   echo "Command check: unable to run $COMMAND_PATH version"
 fi
-if command -v mcp-skeleton >/dev/null 2>&1; then
-  echo "PATH status: ready - mcp-skeleton is available on PATH"
+if command -v ailoom >/dev/null 2>&1; then
+  echo "PATH status: ready - ailoom is available on PATH"
   PATH_STATUS="ready"
-  HANDOFF_COMMAND="mcp-skeleton handoff"
-  QUICK_COMMAND="mcp-skeleton quick"
-  VERSION_COMMAND="mcp-skeleton version"
-  INSTALL_DOCTOR_COMMAND="mcp-skeleton doctor --install"
+  HANDOFF_COMMAND="ailoom handoff"
+  QUICK_COMMAND="ailoom quick"
+  VERSION_COMMAND="ailoom version"
+  INSTALL_DOCTOR_COMMAND="ailoom doctor --install"
 else
   echo "PATH status: needs shell setup - $BIN_DIR is not currently on PATH"
   PATH_STATUS="needs_shell_setup"
@@ -204,7 +210,8 @@ from pathlib import Path
 ) = sys.argv[1:12]
 
 payload = {
-    "schema": "mcp-skeleton.install-readiness.v1",
+    "schema": "ailoom.install-readiness.v1",
+    "legacy_schema": "mcp-skeleton.install-readiness.v1",
     "status": "ready",
     "command_path": command_path,
     "install_dir": install_dir,

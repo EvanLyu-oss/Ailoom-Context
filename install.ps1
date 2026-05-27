@@ -7,15 +7,16 @@ param(
 $ErrorActionPreference = "Stop"
 
 $RootDir = Split-Path -Parent $MyInvocation.MyCommand.Path
-$InstallHome = if ($env:MCP_SKELETON_HOME) { $env:MCP_SKELETON_HOME } else { Join-Path $env:USERPROFILE ".mcp-skeleton" }
+$InstallHome = if ($env:AILOOM_HOME) { $env:AILOOM_HOME } elseif ($env:MCP_SKELETON_HOME) { $env:MCP_SKELETON_HOME } else { Join-Path $env:USERPROFILE ".ailoom" }
 $VenvDir = Join-Path $InstallHome "venv"
 $CommandDir = Join-Path $InstallHome "bin"
-$CommandPath = Join-Path $CommandDir "mcp-skeleton.cmd"
+$CommandPath = Join-Path $CommandDir "ailoom.cmd"
+$LegacyCommandPath = Join-Path $CommandDir "mcp-skeleton.cmd"
 $ReadinessPath = Join-Path $InstallHome "install-readiness.json"
 
 function Write-Info {
     param([string]$Message)
-    Write-Host "[MCP-Skeleton] $Message" -ForegroundColor Cyan
+    Write-Host "[Ailoom] $Message" -ForegroundColor Cyan
 }
 
 function Get-PythonCommand {
@@ -43,9 +44,12 @@ function Invoke-Python {
 
 function Write-CommandShim {
     New-Item -ItemType Directory -Force -Path $CommandDir | Out-Null
-    $EntryPoint = Join-Path $VenvDir "Scripts\mcp-skeleton.exe"
+    $EntryPoint = Join-Path $VenvDir "Scripts\ailoom.exe"
     $Shim = "@echo off`r`n`"$EntryPoint`" %*`r`n"
     Set-Content -Path $CommandPath -Value $Shim -Encoding ASCII
+    $LegacyEntryPoint = Join-Path $VenvDir "Scripts\mcp-skeleton.exe"
+    $LegacyShim = "@echo off`r`n`"$LegacyEntryPoint`" %*`r`n"
+    Set-Content -Path $LegacyCommandPath -Value $LegacyShim -Encoding ASCII
 }
 
 function Write-ReadinessManifest {
@@ -58,15 +62,16 @@ function Write-ReadinessManifest {
         install_home = $InstallHome
         venv_dir = $VenvDir
         command_path = $CommandPath
+        legacy_command_path = $LegacyCommandPath
         setup_shell = $ShellConfigured
         install_command_text = ".\install.ps1"
         update_command_text = ".\install.ps1 -Update"
         uninstall_command_text = ".\install.ps1 -Uninstall"
         path_setup_command_text = ".\install.ps1 -SetupShell"
         temporary_path_command_text = "`$env:PATH = `"$CommandDir;`$env:PATH`""
-        self_check_command_text = "mcp-skeleton version"
-        install_doctor_command_text = "mcp-skeleton doctor --install"
-        recommended_first_command_text = "mcp-skeleton handoff"
+        self_check_command_text = "ailoom version"
+        install_doctor_command_text = "ailoom doctor --install"
+        recommended_first_command_text = "ailoom handoff"
         python_executable = $PythonExe
     }
     New-Item -ItemType Directory -Force -Path $InstallHome | Out-Null
@@ -84,7 +89,7 @@ function Install-McpSkeleton {
     Write-Info "Upgrading pip"
     & $PythonExe -m pip install --upgrade pip | Out-Null
 
-    Write-Info "Installing MCP-Skeleton with context-metrics extras"
+    Write-Info "Installing Ailoom Context with context-metrics extras"
     & $PythonExe -m pip install -e "$RootDir[context-metrics]"
     if ($LASTEXITCODE -ne 0) {
         Write-Info "context-metrics install failed; retrying base install"
@@ -100,10 +105,10 @@ function Install-McpSkeleton {
     Write-Host "  $CommandPath"
     Write-Host ""
     Write-Host "Copy/paste next:" -ForegroundColor Green
-    Write-Host "  mcp-skeleton doctor --install"
-    Write-Host "  mcp-skeleton handoff"
+    Write-Host "  ailoom doctor --install"
+    Write-Host "  ailoom handoff"
     Write-Host ""
-    Write-Host "If mcp-skeleton is not found in this terminal, run:" -ForegroundColor Yellow
+    Write-Host "If ailoom is not found in this terminal, run:" -ForegroundColor Yellow
     Write-Host "  `$env:PATH = `"$CommandDir;`$env:PATH`""
 }
 
@@ -111,8 +116,8 @@ function Setup-Path {
     $ProfilePath = $PROFILE.CurrentUserCurrentHost
     $ProfileDir = Split-Path -Parent $ProfilePath
     New-Item -ItemType Directory -Force -Path $ProfileDir | Out-Null
-    $BlockStart = "# >>> MCP-Skeleton PATH >>>"
-    $BlockEnd = "# <<< MCP-Skeleton PATH <<<"
+    $BlockStart = "# >>> ailoom PATH >>>"
+    $BlockEnd = "# <<< ailoom PATH <<<"
     $Block = @"
 
 $BlockStart
@@ -122,16 +127,16 @@ $BlockEnd
     $Existing = if (Test-Path $ProfilePath) { Get-Content $ProfilePath -Raw } else { "" }
     if ($Existing -notlike "*$BlockStart*") {
         Add-Content -Path $ProfilePath -Value $Block -Encoding UTF8
-        Write-Info "Added MCP-Skeleton PATH block to $ProfilePath"
+        Write-Info "Added Ailoom PATH block to $ProfilePath"
     } else {
-        Write-Info "MCP-Skeleton PATH block already exists in $ProfilePath"
+        Write-Info "Ailoom PATH block already exists in $ProfilePath"
     }
 }
 
 function Uninstall-McpSkeleton {
     Write-Info "Removing $InstallHome"
     Remove-Item -Path $InstallHome -Recurse -Force -ErrorAction SilentlyContinue
-    Write-Info "Uninstall complete. Remove the MCP-Skeleton PATH block from your PowerShell profile if you added it."
+    Write-Info "Uninstall complete. Remove the Ailoom PATH block from your PowerShell profile if you added it."
 }
 
 if ($Uninstall) {

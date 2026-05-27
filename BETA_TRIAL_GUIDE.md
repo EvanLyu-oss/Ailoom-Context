@@ -1,4 +1,4 @@
-# MCP-Skeleton v1 Beta Trial Guide
+# Ailoom Context v1 Beta Trial Guide
 
 This beta is for users who want to try lossless context compression on real projects before the formal v1.0 release.
 
@@ -23,8 +23,8 @@ Restart the terminal, or run the `export PATH=...` command printed by the instal
 Check the install:
 
 ```bash
-mcp-skeleton version
-mcp-skeleton doctor --install
+ailoom version
+ailoom doctor --install
 ```
 
 If either command reports a PATH or Python issue, copy the fix command it prints.
@@ -34,7 +34,7 @@ If either command reports a PATH or Python issue, copy the fix command it prints
 Run this inside a project you want to hand to an AI or IDE:
 
 ```bash
-mcp-skeleton handoff
+ailoom handoff
 ```
 
 This creates a restore-safe bundle under `.workspace_ail/`.
@@ -57,7 +57,7 @@ handoff.json
 ## Copy/open shortcut on macOS
 
 ```bash
-mcp-skeleton handoff --copy --open
+ailoom handoff --copy --open
 ```
 
 This copies the skeleton to the clipboard and opens the bundle folder.
@@ -67,21 +67,21 @@ This copies the skeleton to the clipboard and opens the bundle folder.
 Run the same command again:
 
 ```bash
-mcp-skeleton handoff
+ailoom handoff
 ```
 
-If the project has not changed, MCP-Skeleton reuses the previous fresh bundle instead of recompressing.
+If the project has not changed, Ailoom Context reuses the previous fresh bundle instead of recompressing.
 
 Force a fresh bundle when needed:
 
 ```bash
-mcp-skeleton handoff --force-refresh
+ailoom handoff --force-refresh
 ```
 
 ## Safety check
 
 ```bash
-mcp-skeleton safety
+ailoom safety
 ```
 
 The short version:
@@ -97,13 +97,13 @@ The `handoff` output includes token savings, speed status, and the best next com
 For large projects where the first run feels slow:
 
 ```bash
-mcp-skeleton quick --fast
+ailoom quick --fast
 ```
 
 For unchanged projects:
 
 ```bash
-mcp-skeleton handoff --reuse-if-fresh
+ailoom handoff --reuse-if-fresh
 ```
 
 ## What to report back
@@ -116,7 +116,7 @@ The most useful feedback includes:
 - project size or rough file count
 - first handoff time
 - reuse handoff time
-- token savings shown by MCP-Skeleton
+- token savings shown by Ailoom Context
 - whether the output made it clear which file to give to AI
 - any confusing or failed command output
 

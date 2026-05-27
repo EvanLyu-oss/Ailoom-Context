@@ -1,10 +1,10 @@
-# MCP-Skeleton
+# Ailoom Context
 
-MCP-Skeleton is a dedicated open-source project for lossless context compression.
+Ailoom Context is a dedicated open-source project for lossless context compression.
 
 It turns long text, source files, and directory trees into two coordinated layers:
 
-1. An AI-facing structural skeleton (`MCP-SKL.v1`)
+1. An AI-facing structural skeleton (`AILOOM-SKL.v1`)
 2. A machine-facing exact restore package
 
 That gives us a practical workflow for large repositories and long documents:
@@ -23,22 +23,22 @@ For macOS, from a cloned or downloaded checkout:
 
 ```bash
 sh install.sh --setup-shell
-mcp-skeleton demo
-mcp-skeleton handoff
-mcp-skeleton handoff --copy --open
-mcp-skeleton quick
-mcp-skeleton recent
+ailoom demo
+ailoom handoff
+ailoom handoff --copy --open
+ailoom quick
+ailoom recent
 ```
 
 For Windows PowerShell, from a cloned or downloaded checkout:
 
 ```powershell
 .\install.ps1 -SetupShell
-mcp-skeleton doctor --install
-mcp-skeleton demo
-mcp-skeleton handoff
-mcp-skeleton quick
-mcp-skeleton recent
+ailoom doctor --install
+ailoom demo
+ailoom handoff
+ailoom quick
+ailoom recent
 ```
 
 What these do:
@@ -79,7 +79,7 @@ The current `0.1.x` line is intended to be usable for early public workflows whe
 
 Stable in `0.1.x`:
 
-- compressing text, one file, or one directory into `MCP-SKL.v1` plus an exact restore package
+- compressing text, one file, or one directory into `AILOOM-SKL.v1` plus an exact restore package
 - inspecting and restoring text, file, directory, and incremental directory bundles
 - full directory restore reconstructs every file, symlink, and empty directory included in the restore package; by default directory compression skips common VCS, dependency, build, virtualenv, and cache directories such as `.git`, `node_modules`, `dist`, `build`, `.next`, `.venv`, `__pycache__`, and `.pytest_cache`
 - non-UTF-8 and UTF-16/BOM text inputs keep original bytes for restore while using best-effort decode fallback for skeleton structure
@@ -126,8 +126,8 @@ macOS one-command local install from a cloned or downloaded checkout:
 sh install.sh
 ```
 
-This creates an isolated virtual environment under `~/.mcp-skeleton`, installs tokenizer-backed metrics, and links the `mcp-skeleton` command into `~/.local/bin`.
-The installer finishes with a command check, PATH status, a first-run self-check, a copy/paste `handoff` command, explicit PATH recovery commands, and `~/.mcp-skeleton/install-readiness.json` so IDEs or automated test machines can confirm the install without parsing terminal text.
+This creates an isolated virtual environment under `~/.ailoom`, installs tokenizer-backed metrics, and links the `ailoom` command into `~/.local/bin`.
+The installer finishes with a command check, PATH status, a first-run self-check, a copy/paste `handoff` command, explicit PATH recovery commands, and `~/.ailoom/install-readiness.json` so IDEs or automated test machines can confirm the install without parsing terminal text.
 
 If you want the installer to add `~/.local/bin` to future zsh terminals for you, run:
 
@@ -135,7 +135,7 @@ If you want the installer to add `~/.local/bin` to future zsh terminals for you,
 sh install.sh --setup-shell
 ```
 
-This appends one managed `mcp-skeleton PATH` block to `~/.zshrc`. It does not rewrite the rest of your shell profile; restart the terminal afterwards, or run the printed `export PATH=...` command for the current shell.
+This appends one managed `ailoom PATH` block to `~/.zshrc`. It does not rewrite the rest of your shell profile; restart the terminal afterwards, or run the printed `export PATH=...` command for the current shell.
 
 Windows PowerShell local install from a cloned or downloaded checkout:
 
@@ -143,25 +143,25 @@ Windows PowerShell local install from a cloned or downloaded checkout:
 .\install.ps1 -SetupShell
 ```
 
-This creates an isolated virtual environment under `%USERPROFILE%\.mcp-skeleton`, installs tokenizer-backed metrics through `.[context-metrics]` when available, writes `%USERPROFILE%\.mcp-skeleton\install-readiness.json`, and creates a local `mcp-skeleton.cmd` shim. `-SetupShell` appends one managed PATH block to your PowerShell profile; restart PowerShell afterwards, or run the printed temporary `$env:PATH = "...;$env:PATH"` command for the current session.
+This creates an isolated virtual environment under `%USERPROFILE%\.ailoom`, installs tokenizer-backed metrics through `.[context-metrics]` when available, writes `%USERPROFILE%\.ailoom\install-readiness.json`, and creates a local `ailoom.cmd` shim. `-SetupShell` appends one managed PATH block to your PowerShell profile; restart PowerShell afterwards, or run the printed temporary `$env:PATH = "...;$env:PATH"` command for the current session.
 
 Check the installed command:
 
 ```bash
-mcp-skeleton version
-mcp-skeleton doctor --install
+ailoom version
+ailoom doctor --install
 ```
 
-`mcp-skeleton version` reports install readiness, Python status, command availability, whether `handoff` is directly runnable from PATH, and the first `handoff` / `doctor` commands to run. If PATH is not ready, it prints both the persistent setup command and the temporary `export PATH=...` command. JSON output also includes `install_readiness_file` and `install_readiness_manifest` for IDE/plugin integration.
-`mcp-skeleton doctor --install` is the first-run self-check: it reports Python support, command availability, installer readiness manifest status, the copy/paste repair command, and the first `handoff` command to run.
+`ailoom version` reports install readiness, Python status, command availability, whether `handoff` is directly runnable from PATH, and the first `handoff` / `doctor` commands to run. If PATH is not ready, it prints both the persistent setup command and the temporary `export PATH=...` command. JSON output also includes `install_readiness_file` and `install_readiness_manifest` for IDE/plugin integration.
+`ailoom doctor --install` is the first-run self-check: it reports Python support, command availability, installer readiness manifest status, the copy/paste repair command, and the first `handoff` command to run.
 
 Current v1.0 readiness contract:
 
-- `sh install.sh` should leave a usable `mcp-skeleton` command or print exact PATH recovery commands.
-- `mcp-skeleton version --json` should expose machine-readable install readiness.
-- `mcp-skeleton doctor --install --json` should expose machine-readable first-run install diagnostics.
-- `mcp-skeleton handoff` should create or reuse a restore-safe skeleton bundle for the current directory without extra flags.
-- `mcp-skeleton safety` should make the “share skeleton, keep restore package local” boundary explicit.
+- `sh install.sh` should leave a usable `ailoom` command or print exact PATH recovery commands.
+- `ailoom version --json` should expose machine-readable install readiness.
+- `ailoom doctor --install --json` should expose machine-readable first-run install diagnostics.
+- `ailoom handoff` should create or reuse a restore-safe skeleton bundle for the current directory without extra flags.
+- `ailoom safety` should make the “share skeleton, keep restore package local” boundary explicit.
 - `testing/release_readiness_check.py` is the release gate for smoke, quickstart, dogfood, doctor, benchmark, and installer readiness.
 
 Update from a newer downloaded checkout:
@@ -210,7 +210,7 @@ If you prefer not to use the Windows installer script, install directly with pip
 
 ```powershell
 py -3 -m pip install '.[context-metrics]'
-mcp-skeleton doctor --install
+ailoom doctor --install
 ```
 
 ## Quick start
@@ -218,18 +218,18 @@ mcp-skeleton doctor --install
 Zero-learning project setup:
 
 ```bash
-mcp-skeleton start
+ailoom start
 ```
 
 `context start` recommends a config, writes `.mcp-skeleton.json`, writes `mcp-skeleton-onboarding.md`, runs a restore-safety doctor check, and prints a copy/paste-ready command plus plain next steps. JSON output also includes `recommended_command_text` and `action_plan` for wrappers or test machines.
-If you do not pass `--preset`, `--focus-mode`, or `--skeleton-density`, MCP-Skeleton now chooses practical defaults from the input type: code directories use codebase/imports/adaptive, prose files use writing/writing-outline/adaptive, and explicit CLI/config choices still win.
+If you do not pass `--preset`, `--focus-mode`, or `--skeleton-density`, Ailoom Context now chooses practical defaults from the input type: code directories use codebase/imports/adaptive, prose files use writing/writing-outline/adaptive, and explicit CLI/config choices still win.
 
 One-command bundle creation:
 
-Try MCP-Skeleton without preparing your own project first:
+Try Ailoom Context without preparing your own project first:
 
 ```bash
-mcp-skeleton demo
+ailoom demo
 ```
 
 `demo` creates a lightweight sample project, builds a safe bundle, verifies restore safety, shows token impact, and prints inspect/restore commands.
@@ -237,18 +237,18 @@ mcp-skeleton demo
 Shortest AI/IDE handoff for your project:
 
 ```bash
-mcp-skeleton handoff
+ailoom handoff
 ```
 
 `handoff` is a top-level shortcut for the restore-safe quick workflow. It defaults to the current directory, creates `context_skeleton.mcp` for AI/IDE context, writes `AI_HANDOFF.md` with plain-language instructions, writes `handoff.json` for future IDE/plugin automation, and keeps `context_manifest.json` plus the restore package available for exact reconstruction.
-Run the same command again during day-to-day work; when the project fingerprint is unchanged, MCP-Skeleton automatically reuses the previous fresh bundle instead of recompressing. The `Daily handoff` panel tells you whether this run created a fresh bundle or reused the last one, why that happened, and whether clipboard copy was automatic or manual.
+Run the same command again during day-to-day work; when the project fingerprint is unchanged, Ailoom Context automatically reuses the previous fresh bundle instead of recompressing. The `Daily handoff` panel tells you whether this run created a fresh bundle or reused the last one, why that happened, and whether clipboard copy was automatic or manual.
 The generated handoff guide includes a recommended prompt you can paste into Cursor, VS Code agents, Claude, ChatGPT, Codex, or similar tools along with `context_skeleton.mcp`.
 `handoff.json` is the machine-readable contract for IDEs and wrappers: it exposes `handoff_status`, `share_with_ai`, `keep_local`, `safety_boundary`, inspect/restore/copy commands, and the recommended prompt.
 
 To copy the skeleton and open the generated bundle folder, use:
 
 ```bash
-mcp-skeleton handoff --copy --open
+ailoom handoff --copy --open
 ```
 
 `--copy` uses `pbcopy` on macOS, `Set-Clipboard` on Windows PowerShell, and `xclip` on Linux when available. `--open` uses `open`, `Start-Process`, or `xdg-open` depending on the platform.
@@ -256,7 +256,7 @@ mcp-skeleton handoff --copy --open
 To force a new handoff bundle even when the previous one is fresh, use:
 
 ```bash
-mcp-skeleton handoff --force-refresh
+ailoom handoff --force-refresh
 ```
 
 This refreshes the bundle and updates the recent-bundle record.
@@ -264,7 +264,7 @@ This refreshes the bundle and updates the recent-bundle record.
 One-command bundle creation for your project:
 
 ```bash
-mcp-skeleton quick
+ailoom quick
 ```
 
 `context quick` runs the zero-friction setup, checks restore safety, writes a full bundle, and prints the bundle path plus inspect/restore commands. It also points out the exact `context_skeleton.mcp` file to give to an AI or IDE, the bundle folder to keep, and a platform-specific copy/paste command for locating the generated files.
@@ -276,7 +276,7 @@ The JSON output also includes `performance_summary`, a stable field intended for
 To preview the plan without writing a bundle:
 
 ```bash
-mcp-skeleton quick --preview
+ailoom quick --preview
 ```
 
 `--preview` checks restore safety, estimates token savings, shows the planned bundle/manifest paths, prints performance advice, and gives the exact command to run for real.
@@ -284,29 +284,29 @@ mcp-skeleton quick --preview
 To open the bundle folder automatically after creation:
 
 ```bash
-mcp-skeleton quick --open
+ailoom quick --open
 ```
 
 To copy the generated skeleton text directly to the platform clipboard:
 
 ```bash
-mcp-skeleton quick --copy
+ailoom quick --copy
 ```
 
 To find the last quick bundle for the current project later:
 
 ```bash
-mcp-skeleton recent
+ailoom recent
 ```
 
 `recent` reads `.workspace_ail/recent_quick.json` and prints the last bundle path, skeleton file, manifest, restore package, bundle size, created time, recommended AI prompt, open command, clipboard command, inspect command, and restore command.
 It also checks whether the project appears to have changed since the last quick bundle; if the bundle may be stale, it prints a copy/paste refresh command.
-Use `mcp-skeleton recent --list` to list the known recent bundle record, and `mcp-skeleton recent --clean-stale --dry-run` to preview safe stale-bundle cleanup candidates without deleting anything.
+Use `ailoom recent --list` to list the known recent bundle record, and `ailoom recent --clean-stale --dry-run` to preview safe stale-bundle cleanup candidates without deleting anything.
 
 For very large directories where you want the fastest safe bundle path, use:
 
 ```bash
-mcp-skeleton quick --fast
+ailoom quick --fast
 ```
 
 `--fast` skips config recommendation/onboarding generation but still runs sandbox restore verification before creating the bundle.
@@ -315,17 +315,17 @@ Standard `quick` will also print a speed tip with a copy/paste `--fast` command 
 If you already created a quick bundle and want to explicitly avoid recompressing unchanged projects:
 
 ```bash
-mcp-skeleton quick --reuse-if-fresh
+ailoom quick --reuse-if-fresh
 ```
 
-When the previous bundle is still fresh, this reuses it immediately and prints the same handoff commands. `handoff` does this automatically by default; if the project changed or the bundle files are missing, MCP-Skeleton falls back to a normal quick run.
+When the previous bundle is still fresh, this reuses it immediately and prints the same handoff commands. `handoff` does this automatically by default; if the project changed or the bundle files are missing, Ailoom Context falls back to a normal quick run.
 
-Generated MCP-Skeleton work artifacts under `.workspace_ail/` are skipped by default so repeated `context quick` or dogfood runs do not pollute later compression or benchmark results.
+Generated Ailoom Context work artifacts under `.workspace_ail/` are skipped by default so repeated `context quick` or dogfood runs do not pollute later compression or benchmark results.
 
 Explain a bundle in plain language:
 
 ```bash
-mcp-skeleton explain \
+ailoom explain \
   --package-file /absolute/path/to/context-bundle/context_manifest.json
 ```
 
@@ -334,25 +334,25 @@ mcp-skeleton explain \
 Check the safety boundary before sharing files or replaying patches:
 
 ```bash
-mcp-skeleton safety
+ailoom safety
 ```
 
 `context safety` explains the core contract in plain language: `context_skeleton.mcp` is the AI-facing file, restore packages preserve raw source bytes and should stay local by default, restore never overwrites your source tree unless you choose an output target, and patch replay should start with `--dry-run --write-dry-run-report`. JSON output exposes the same guarantees for IDEs and wrappers.
 
-MCP-Skeleton is local-first: it does not upload source code, skeletons, restore packages, logs, or usage records to any MCP-Skeleton server, and it does not include telemetry or background log collection. AI-facing skeleton output is redacted for common secret shapes while restore packages remain byte-exact for local recovery. See [SECURITY.md](SECURITY.md) for the full safety model and project identity notes.
+Ailoom Context is local-first: it does not upload source code, skeletons, restore packages, logs, or usage records to any Ailoom Context server, and it does not include telemetry or background log collection. AI-facing skeleton output is redacted for common secret shapes while restore packages remain byte-exact for local recovery. See [SECURITY.md](SECURITY.md) for the full safety model and project identity notes.
 
 Clean local generated artifacts when you want to remove old handoff bundles:
 
 ```bash
-mcp-skeleton clean --dry-run --all
-mcp-skeleton clean --all
+ailoom clean --dry-run --all
+ailoom clean --all
 ```
 It also includes common questions and emergency recovery guidance for changed projects, lost manifests, and safe patch replay.
 
 Compress a directory:
 
 ```bash
-mcp-skeleton compress \
+ailoom compress \
   --preset codebase \
   --input-dir ./cli \
   --exclude "__pycache__/" \
@@ -370,7 +370,7 @@ For repeatable project-level filtering beyond those defaults, add a `.mcp-skelet
 Compress the same directory with one symbols-focused skeleton:
 
 ```bash
-mcp-skeleton compress \
+ailoom compress \
   --preset codebase \
   --focus-mode symbols \
   --input-dir ./cli \
@@ -382,7 +382,7 @@ Presets do not change restore fidelity, but they do change the AI-facing skeleto
 Compress a long book draft with a tighter skeleton budget:
 
 ```bash
-mcp-skeleton compress \
+ailoom compress \
   --preset writing \
   --skeleton-density compact \
   --text-file /absolute/path/to/book-draft.md \
@@ -392,7 +392,7 @@ mcp-skeleton compress \
 Inspect it:
 
 ```bash
-mcp-skeleton inspect \
+ailoom inspect \
   --package-file /absolute/path/to/context-bundle/context_manifest.json \
   --emit-summary
 ```
@@ -400,7 +400,7 @@ mcp-skeleton inspect \
 Restore it:
 
 ```bash
-mcp-skeleton restore \
+ailoom restore \
   --package-file /absolute/path/to/context-bundle/context_manifest.json \
   --output-dir /absolute/path/to/restore-root \
   --json
@@ -409,7 +409,7 @@ mcp-skeleton restore \
 Create a patch bundle:
 
 ```bash
-mcp-skeleton patch \
+ailoom patch \
   --package-file /absolute/path/to/context-bundle/context_manifest.json \
   --input-dir /absolute/path/to/edited-project \
   --output-dir /absolute/path/to/context-patch \
@@ -419,7 +419,7 @@ mcp-skeleton patch \
 Preview replay without writing files:
 
 ```bash
-mcp-skeleton patch-apply \
+ailoom patch-apply \
   --patch-file /absolute/path/to/context-patch/patch_manifest.json \
   --source-package-file /absolute/path/to/context-bundle/context_manifest.json \
   --dry-run \
@@ -431,7 +431,7 @@ mcp-skeleton patch-apply \
 Preview one incremental replay with incremental metadata in the dry-run report:
 
 ```bash
-mcp-skeleton patch-apply \
+ailoom patch-apply \
   --patch-file /absolute/path/to/context-incremental-patch/patch_manifest.json \
   --source-package-file /absolute/path/to/context-incremental-bundle/context_manifest.json \
   --dry-run \
@@ -443,7 +443,7 @@ mcp-skeleton patch-apply \
 Compress only the git change surface:
 
 ```bash
-mcp-skeleton compress \
+ailoom compress \
   --input-dir ./cli \
   --incremental \
   --base-commit HEAD~1 \
@@ -467,8 +467,8 @@ The dogfood self-check recommends an ignored `.mcp-skeleton.json`, writes an onb
 Readiness doctor for one source:
 
 ```bash
-mcp-skeleton doctor --preset codebase --json
-mcp-skeleton doctor --preset codebase --write-report mcp-skeleton-readiness.md --json
+ailoom doctor --preset codebase --json
+ailoom doctor --preset codebase --write-report mcp-skeleton-readiness.md --json
 ```
 
 `context doctor` resolves config defaults, runs compression analysis, emits warnings/recommendations/explanations, restores into a temporary sandbox, and verifies the restored files against the original included hashes. It reports `readiness_status` as `ready`, `watch`, or `blocked`, plus `recommended_command_text` and `action_plan` so users know exactly what to do next.
@@ -476,15 +476,15 @@ mcp-skeleton doctor --preset codebase --write-report mcp-skeleton-readiness.md -
 If something goes wrong:
 
 ```bash
-mcp-skeleton quick --input-dir ./missing --json
+ailoom quick --input-dir ./missing --json
 ```
 
-Error JSON includes `recovery_steps` and, when MCP-Skeleton can suggest one safely, `fix_command_text`. Human-readable errors print the same recovery hints. `context quick` also refuses to write into a non-empty `--output-dir`, so an existing bundle is not overwritten by accident.
+Error JSON includes `recovery_steps` and, when Ailoom Context can suggest one safely, `fix_command_text`. Human-readable errors print the same recovery hints. `context quick` also refuses to write into a non-empty `--output-dir`, so an existing bundle is not overwritten by accident.
 
 Validate one edited incremental surface:
 
 ```bash
-mcp-skeleton apply-check \
+ailoom apply-check \
   --package-file /absolute/path/to/context-incremental-bundle/context_manifest.json \
   --input-dir /absolute/path/to/edited-incremental-surface \
   --json
@@ -493,7 +493,7 @@ mcp-skeleton apply-check \
 Extract one writing-outline skeleton from long-form text:
 
 ```bash
-mcp-skeleton compress \
+ailoom compress \
   --preset writing \
   --focus-mode writing-outline \
   --text-file /absolute/path/to/book-draft.md \
@@ -503,7 +503,7 @@ mcp-skeleton compress \
 Replay one edited incremental surface:
 
 ```bash
-mcp-skeleton patch-apply \
+ailoom patch-apply \
   --patch-file /absolute/path/to/context-incremental-patch/patch_manifest.json \
   --source-package-file /absolute/path/to/context-incremental-bundle/context_manifest.json \
   --output-dir /absolute/path/to/replayed-incremental-surface \
@@ -576,18 +576,18 @@ CLI flags override config values, while config and CLI `--exclude` patterns are 
 Generate or validate a config file from the CLI:
 
 ```bash
-mcp-skeleton config init --json
-mcp-skeleton init --output-file .mcp-skeleton.yaml --json
-mcp-skeleton config --output-file .mcp-skeleton.json --json
-mcp-skeleton config --validate --config .mcp-skeleton.json --json
+ailoom config init --json
+ailoom init --output-file .mcp-skeleton.yaml --json
+ailoom config --output-file .mcp-skeleton.json --json
+ailoom config --validate --config .mcp-skeleton.json --json
 ```
 
 The config command reports supported presets, focus modes, density modes, and resolved defaults, which makes mis-typed values fail early before a long compression run.
 
-Ask MCP-Skeleton to recommend project defaults from a real input:
+Ask Ailoom Context to recommend project defaults from a real input:
 
 ```bash
-mcp-skeleton config --recommend --input-dir . --preset codebase --output-file .mcp-skeleton.json --json
+ailoom config --recommend --input-dir . --preset codebase --output-file .mcp-skeleton.json --json
 ```
 
 Recommendation mode runs the same compression analysis used by `context compress`, then writes a reusable config with the suggested focus, density, and exclude patterns.
@@ -597,7 +597,7 @@ Add `--output-report-file mcp-skeleton-onboarding.md` to write an audit-friendly
 Install a lightweight git pre-commit hook for local self-use:
 
 ```bash
-mcp-skeleton install-hook --json
+ailoom install-hook --json
 ```
 
 The hook validates `.mcp-skeleton.json/yaml/yml` if present and runs CLI syntax checks. It does not apply patches, replay changes, or modify source files.
@@ -648,17 +648,17 @@ Recent repeatable benchmark signals on this repository:
 
 ## Documentation
 
-- `/Users/carwynmac/MCP-Skeleton/CONTEXT_COMPRESSION_PRINCIPLES_20260507.md`
-- `/Users/carwynmac/MCP-Skeleton/CONTEXT_COMPRESSION_SPEC_20260428.md`
-- `/Users/carwynmac/MCP-Skeleton/CONTEXT_PATCH_POLICY_TEMPLATE_20260429.md`
-- `/Users/carwynmac/MCP-Skeleton/CONTEXT_TEST_MATRIX_20260428.md`
-- `/Users/carwynmac/MCP-Skeleton/CONTEXT_REPO_SCALE_PERFORMANCE_REPORT_20260429.md`
-- `/Users/carwynmac/MCP-Skeleton/CONTEXT_TOKENIZER_REPO_SCALE_REPORT_20260429.md`
-- `/Users/carwynmac/MCP-Skeleton/CONTEXT_INCREMENTAL_BENCHMARK_REPORT_20260508.md`
-- `/Users/carwynmac/MCP-Skeleton/CONTEXT_FOCUS_BENCHMARK_REPORT_20260508.md`
-- `/Users/carwynmac/MCP-Skeleton/CONTEXT_CROSS_PLATFORM_VALIDATION_REPORT_20260520.md`
-- `/Users/carwynmac/MCP-Skeleton/CROSS_PLATFORM_TESTING.md`
-- `/Users/carwynmac/MCP-Skeleton/RELEASE_CHECKLIST_0_1.md`
+- `/Users/carwynmac/Ailoom Context/CONTEXT_COMPRESSION_PRINCIPLES_20260507.md`
+- `/Users/carwynmac/Ailoom Context/CONTEXT_COMPRESSION_SPEC_20260428.md`
+- `/Users/carwynmac/Ailoom Context/CONTEXT_PATCH_POLICY_TEMPLATE_20260429.md`
+- `/Users/carwynmac/Ailoom Context/CONTEXT_TEST_MATRIX_20260428.md`
+- `/Users/carwynmac/Ailoom Context/CONTEXT_REPO_SCALE_PERFORMANCE_REPORT_20260429.md`
+- `/Users/carwynmac/Ailoom Context/CONTEXT_TOKENIZER_REPO_SCALE_REPORT_20260429.md`
+- `/Users/carwynmac/Ailoom Context/CONTEXT_INCREMENTAL_BENCHMARK_REPORT_20260508.md`
+- `/Users/carwynmac/Ailoom Context/CONTEXT_FOCUS_BENCHMARK_REPORT_20260508.md`
+- `/Users/carwynmac/Ailoom Context/CONTEXT_CROSS_PLATFORM_VALIDATION_REPORT_20260520.md`
+- `/Users/carwynmac/Ailoom Context/CROSS_PLATFORM_TESTING.md`
+- `/Users/carwynmac/Ailoom Context/RELEASE_CHECKLIST_0_1.md`
 
 ## Scope
 

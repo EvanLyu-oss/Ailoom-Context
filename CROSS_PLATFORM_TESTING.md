@@ -1,4 +1,4 @@
-# MCP-Skeleton Cross-Platform Testing
+# Ailoom Context Cross-Platform Testing
 
 This document describes the repeatable quick and stress validation flow for test machines.
 

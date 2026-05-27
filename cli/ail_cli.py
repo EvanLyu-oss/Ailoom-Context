@@ -38,7 +38,11 @@ EXIT_OK = 0
 EXIT_GENERAL_ERROR = 1
 EXIT_USAGE = 2
 EXIT_VALIDATION = 3
-PACKAGE_NAME = "mcp-skeleton"
+PRODUCT_NAME = "Ailoom Context"
+CLI_NAME = "ailoom"
+LEGACY_CLI_NAME = "mcp-skeleton"
+PACKAGE_NAME = "ailoom-context"
+LEGACY_PACKAGE_NAME = "mcp-skeleton"
 FALLBACK_VERSION = "0.1.0"
 
 CONTEXT_CONFIG_KEYS = [
@@ -105,6 +109,12 @@ def _read_project_version() -> str:
         return version(PACKAGE_NAME)
     except Exception:
         pass
+    try:
+        from importlib.metadata import version
+
+        return version(LEGACY_PACKAGE_NAME)
+    except Exception:
+        pass
     pyproject = _project_root() / "pyproject.toml"
     if pyproject.exists():
         for line in pyproject.read_text(encoding="utf-8").splitlines():
@@ -116,10 +126,10 @@ def _read_project_version() -> str:
 
 
 def _build_version_payload() -> dict[str, Any]:
-    command_path = shutil.which("mcp-skeleton") or ""
+    command_path = shutil.which(CLI_NAME) or shutil.which(LEGACY_CLI_NAME) or ""
     executable = command_path or sys.executable
     python_check = "ok" if sys.version_info >= (3, 10) else "blocked"
-    install_home = os.environ.get("MCP_SKELETON_HOME", str(Path.home() / ".mcp-skeleton"))
+    install_home = os.environ.get("AILOOM_HOME") or os.environ.get("MCP_SKELETON_HOME", str(Path.home() / ".ailoom"))
     install_readiness_file = str(Path(install_home) / "install-readiness.json")
     install_readiness_manifest: dict[str, Any] = {"status": "missing"}
     try:
@@ -132,7 +142,7 @@ def _build_version_payload() -> dict[str, Any]:
         install_readiness_manifest = {"status": "unreadable"}
     bin_dir = str(Path.home() / ".local" / "bin")
     install_readiness_status = "ready" if command_path and python_check == "ok" else "watch"
-    command_prefix = "mcp-skeleton" if command_path else f"{shlex.quote(sys.executable)} -m cli"
+    command_prefix = CLI_NAME if command_path else f"{shlex.quote(sys.executable)} -m cli"
     can_run_handoff = command_path != "" and python_check == "ok"
     path_setup_command_text = "sh install.sh --setup-shell"
     path_export_command_text = f"export PATH={shlex.quote(bin_dir)}:$PATH"
@@ -140,7 +150,11 @@ def _build_version_payload() -> dict[str, Any]:
     payload = {
         "status": "ok",
         "entrypoint": "mcp-skeleton-version",
+        "product_name": PRODUCT_NAME,
+        "cli_name": CLI_NAME,
+        "legacy_cli_name": LEGACY_CLI_NAME,
         "package_name": PACKAGE_NAME,
+        "legacy_package_name": LEGACY_PACKAGE_NAME,
         "version": _read_project_version(),
         "python_version": sys.version.split()[0],
         "python_executable": sys.executable,
@@ -160,11 +174,11 @@ def _build_version_payload() -> dict[str, Any]:
         "can_run_handoff": can_run_handoff,
         "recommended_first_command_text": f"{command_prefix} handoff",
         "doctor_command_text": f"{command_prefix} doctor",
-        "path_hint": "ok" if command_path else "mcp-skeleton command was not found on PATH; use python3 -m cli or run sh install.sh",
+        "path_hint": "ok" if command_path else f"{CLI_NAME} command was not found on PATH; use python3 -m cli or run sh install.sh",
     }
     payload["summary_text"] = "\n".join(
         [
-            "mcp-skeleton version",
+            f"{CLI_NAME} version",
             "",
             f"Install readiness: {payload['install_readiness_status']}",
             f"Python check: {payload['python_check']} - {payload['python_version']} ({payload['python_executable']})",
@@ -200,12 +214,12 @@ def _build_install_doctor_action_plan(
             {
                 "step": "run_first_handoff",
                 "status": "ready",
-                "message": f"run {install.get('recommended_first_command_text', 'mcp-skeleton handoff')} in your project",
+                "message": f"run {install.get('recommended_first_command_text', 'ailoom handoff')} in your project",
             },
             {
                 "step": "verify_safety",
                 "status": "ready",
-                "message": "use mcp-skeleton safety if you are unsure which generated files are safe to share",
+                "message": "use ailoom safety if you are unsure which generated files are safe to share",
             },
         ]
     if install.get("python_check") == "blocked":
@@ -230,7 +244,7 @@ def _build_install_doctor_action_plan(
         {
             "step": "self_check",
             "status": "next",
-            "message": install.get("self_check_command_text", "mcp-skeleton version"),
+            "message": install.get("self_check_command_text", "ailoom version"),
         },
     ]
 
@@ -239,7 +253,7 @@ def _render_context_install_doctor_summary(payload: dict[str, Any]) -> str:
     install = payload.get("install") or {}
     checks = list(payload.get("checks") or [])
     lines = [
-        "MCP-Skeleton Install Doctor",
+        "Ailoom Context Install Doctor",
         "",
         f"Status: {payload.get('install_doctor_status', '')}",
         f"Python: {install.get('python_check', '')} - {install.get('python_version', '')}",
@@ -300,7 +314,7 @@ def _build_context_install_doctor_payload(args: argparse.Namespace) -> tuple[dic
     elif manifest_status != "ready":
         recommended_fix_command_text = str(install.get("install_command_text") or "sh install.sh")
     else:
-        recommended_fix_command_text = str(install.get("recommended_first_command_text") or "mcp-skeleton handoff")
+        recommended_fix_command_text = str(install.get("recommended_first_command_text") or "ailoom handoff")
     action_plan = _build_install_doctor_action_plan(
         install_doctor_status=install_doctor_status,
         install=install,
@@ -313,8 +327,8 @@ def _build_context_install_doctor_payload(args: argparse.Namespace) -> tuple[dic
         "install": install,
         "checks": checks,
         "recommended_fix_command_text": recommended_fix_command_text,
-        "self_check_command_text": str(install.get("self_check_command_text") or "mcp-skeleton version"),
-        "first_run_command_text": str(install.get("recommended_first_command_text") or "mcp-skeleton handoff"),
+        "self_check_command_text": str(install.get("self_check_command_text") or "ailoom version"),
+        "first_run_command_text": str(install.get("recommended_first_command_text") or "ailoom handoff"),
         "action_plan": action_plan,
         "next_steps": [item["message"] for item in action_plan],
     }
@@ -396,9 +410,9 @@ def _build_error_guidance(code: str, message: str) -> dict[str, Any]:
     elif "requires exactly one input source" in lower or "did not receive a usable input source" in lower:
         recovery_steps = [
             "provide exactly one source: --input-dir, --input-file, --text-file, or --text",
-            "for the current repository, try: mcp-skeleton quick",
+            "for the current repository, try: ailoom quick",
         ]
-        fix_command_text = "mcp-skeleton quick"
+        fix_command_text = "ailoom quick"
     elif "requires --output-dir" in lower:
         recovery_steps = [
             "add --output-dir with a safe empty directory for restored or replayed files",
@@ -717,7 +731,7 @@ def _format_cli_command(command_args: list[Any]) -> str:
     if normalized and normalized[0] == "context" and len(normalized) > 1 and normalized[1] in CONTEXT_SUBCOMMANDS:
         normalized = normalized[1:]
     quoted = " ".join(shlex.quote(str(item)) for item in normalized)
-    return f"mcp-skeleton {quoted}"
+    return f"{CLI_NAME} {quoted}"
 
 
 def _normalize_top_level_context_aliases(argv: list[str]) -> list[str]:
@@ -988,7 +1002,7 @@ def _render_context_doctor_report(payload: dict[str, Any]) -> str:
     command_args = list(payload.get("recommended_command_args") or [])
     action_plan = list(payload.get("action_plan") or [])
     lines = [
-        "# MCP-Skeleton Doctor Report",
+        "# Ailoom Context Doctor Report",
         "",
         "## Verdict",
         f"- status: {payload.get('status', '')}",
@@ -1055,7 +1069,7 @@ def _render_context_doctor_summary(payload: dict[str, Any]) -> str:
     metrics = payload.get("metrics") or {}
     install = payload.get("install") or {}
     lines = [
-        "MCP-Skeleton Doctor",
+        "Ailoom Context Doctor",
         "",
         "At a glance:",
         f"- Status: {payload.get('readiness_status', '')}",
@@ -1094,7 +1108,7 @@ def _render_context_start_summary(payload: dict[str, Any]) -> str:
     scale_profile = payload.get("source_scale_profile") or {}
     timings = payload.get("timings_ms") or {}
     lines = [
-        "MCP-Skeleton Start",
+        "Ailoom Context Start",
         "",
         f"Status: {status_label}",
         "",
@@ -1228,7 +1242,7 @@ def _build_quick_handoff_payload(bundle_payload: dict[str, Any], *, bundle_root:
 def _build_ai_handoff_prompt(*, skeleton_file: str, manifest_file: str) -> str:
     return (
         "Use the attached context_skeleton.mcp as compressed project context. "
-        "Treat it as a lossless MCP-Skeleton summary, not as a replacement for the restore package. "
+        "Treat it as a lossless Ailoom Context summary, not as a replacement for the restore package. "
         "Do not ask me to paste the restore package unless I explicitly want to share raw source bytes. "
         f"If exact reconstruction is needed later, use the manifest at {manifest_file or 'context_manifest.json'}. "
         f"The skeleton file is {skeleton_file or 'context_skeleton.mcp'}."
@@ -1277,7 +1291,7 @@ def _render_quick_ai_handoff_guide(payload: dict[str, Any]) -> str:
     handoff = payload.get("handoff") or {}
     keep_files = handoff.get("restore_keep_files") or {}
     return "\n".join([
-        "# MCP-Skeleton AI Handoff",
+        "# Ailoom Context AI Handoff",
         "",
         "Ready to share:",
         f"- Status: {(payload.get('user_outcome') or {}).get('status', 'ready_to_share')}",
@@ -1578,7 +1592,7 @@ def _write_recent_record(args: argparse.Namespace, payload: dict[str, Any]) -> s
 def _render_context_recent_summary(payload: dict[str, Any]) -> str:
     user_outcome = payload.get("user_outcome") or {}
     lines = [
-        "MCP-Skeleton Recent",
+        "Ailoom Context Recent",
         "",
         "At a glance:",
         f"- Status: {payload.get('recent_status', '')}",
@@ -1658,7 +1672,7 @@ def _bundle_lifecycle_from_record(record: dict[str, Any], *, recent_root: Path) 
 
 def _render_context_bundles_summary(payload: dict[str, Any]) -> str:
     lines = [
-        "MCP-Skeleton Bundles",
+        "Ailoom Context Bundles",
         "",
         f"Status: {payload.get('bundles_status', '')}",
         f"Bundle count: {payload.get('bundle_count', 0)}",
@@ -1676,7 +1690,7 @@ def _render_context_bundles_summary(payload: dict[str, Any]) -> str:
 
 def _render_context_bundle_clean_summary(payload: dict[str, Any]) -> str:
     lines = [
-        "MCP-Skeleton Bundle Clean",
+        "Ailoom Context Bundle Clean",
         "",
         f"Status: {payload.get('clean_status', '')}",
         f"Dry run: {payload.get('dry_run', False)}",
@@ -1752,7 +1766,7 @@ def _build_context_recent_payload(args: argparse.Namespace) -> tuple[dict[str, A
             "entrypoint": "context-recent",
             "recent_status": "missing",
             "recent_file": str(recent_file),
-            "message": "no recent quick bundle was found for this project; run mcp-skeleton quick first",
+            "message": "no recent quick bundle was found for this project; run ailoom quick first",
         }
         payload["summary_text"] = _render_context_recent_summary(payload)
         return payload, EXIT_VALIDATION
@@ -2009,7 +2023,7 @@ def _build_quick_experience_payload(*, start_payload: dict[str, Any], timings_ms
         first_run_guidance = {
             "status": "ok",
             "message": "this input is large enough to show the token advantage",
-            "try_next_command_text": "mcp-skeleton quick --reuse-if-fresh",
+            "try_next_command_text": "ailoom quick --reuse-if-fresh",
         }
     elif token_direction == "reduced":
         token_status = "watch"
@@ -2017,7 +2031,7 @@ def _build_quick_experience_payload(*, start_payload: dict[str, Any], timings_ms
         first_run_guidance = {
             "status": "notice",
             "message": "savings are modest on this input; larger projects and long documents usually show clearer benefits",
-            "try_next_command_text": "mcp-skeleton quick --fast",
+            "try_next_command_text": "ailoom quick --fast",
         }
     else:
         token_status = "expanded"
@@ -2025,7 +2039,7 @@ def _build_quick_experience_payload(*, start_payload: dict[str, Any], timings_ms
         first_run_guidance = {
             "status": "notice",
             "message": "tiny input detected; expansion here is not a failure, it just means the project is too small to show the token advantage",
-            "try_next_command_text": "mcp-skeleton demo",
+            "try_next_command_text": "ailoom demo",
         }
 
     recommendation = "use this bundle as the AI/IDE handoff"
@@ -2288,7 +2302,7 @@ def _render_context_quick_summary(payload: dict[str, Any]) -> str:
         dominant_phase = performance_profile.get("dominant_phase") or {}
         recommended_next = performance_summary.get("recommended_next_run") or {}
         lines = [
-            "MCP-Skeleton Quick Preview",
+            "Ailoom Context Quick Preview",
             "",
             "At a glance:",
             f"- Status: {payload.get('quick_status', '')}",
@@ -2363,7 +2377,7 @@ def _render_context_quick_summary(payload: dict[str, Any]) -> str:
     token_result = "reduced" if token_direction == "reduced" else "expanded"
     primary_next = payload.get("inspect_command_text") or payload.get("restore_command_text") or ""
     lines = [
-        "MCP-Skeleton Quick",
+        "Ailoom Context Quick",
         "",
         "At a glance:",
         f"- Status: {payload.get('quick_status', '')}",
@@ -2984,7 +2998,7 @@ def _render_context_explain_summary(payload: dict[str, Any]) -> str:
     metrics = inspect_payload.get("metrics") or {}
     source_summary = inspect_payload.get("source_summary") or {}
     lines = [
-        "MCP-Skeleton Explain",
+        "Ailoom Context Explain",
         "",
         f"Status: {payload.get('explain_status', '')}",
         f"Safe to restore: {'yes' if payload.get('restore_available') else 'no'}",
@@ -3064,7 +3078,7 @@ def _write_demo_project(source_dir: Path) -> None:
     )
     (source_dir / "README.md").write_text(
         "# Demo Project\n\n"
-        "This demo project lets MCP-Skeleton show compression, restore safety, token impact, and next-step guidance "
+        "This demo project lets Ailoom Context show compression, restore safety, token impact, and next-step guidance "
         "without needing your own files first.\n\n"
         "It is intentionally larger than a hello-world example so the first run demonstrates useful token savings "
         "instead of a misleading tiny-project expansion.\n",
@@ -3150,7 +3164,7 @@ def _render_context_demo_summary(payload: dict[str, Any]) -> str:
     start = quick.get("start") or {}
     metrics = start.get("metrics") or {}
     lines = [
-        "MCP-Skeleton Demo",
+        "Ailoom Context Demo",
         "",
         f"Status: {payload.get('demo_status', '')}",
         f"Demo root: {payload.get('demo_root', '')}",
@@ -3172,8 +3186,8 @@ def _render_context_demo_summary(payload: dict[str, Any]) -> str:
         f"- Restore: {quick.get('restore_command_text', '')}",
         "",
         "Use on your project:",
-        "mcp-skeleton quick",
-        "mcp-skeleton quick --fast",
+        "ailoom quick",
+        "ailoom quick --fast",
     ]
     return "\n".join(lines)
 
@@ -3228,7 +3242,7 @@ def _build_context_demo_payload(args: argparse.Namespace) -> tuple[dict[str, Any
         "next_steps": [
             "inspect the demo bundle",
             "restore the demo bundle",
-            "run mcp-skeleton quick in your own project",
+            "run ailoom quick in your own project",
         ],
     }
     payload["summary_text"] = _render_context_demo_summary(payload)
@@ -3245,7 +3259,7 @@ def _render_context_safety_summary(payload: dict[str, Any]) -> str:
     common_questions = payload.get("common_questions") or {}
     emergency_recovery = payload.get("emergency_recovery") or {}
     return "\n".join([
-        "MCP-Skeleton Safety",
+        "Ailoom Context Safety",
         "",
         f"Status: {payload.get('safety_status', '')}",
         "",
@@ -3308,7 +3322,7 @@ def _build_context_safety_payload(args: argparse.Namespace) -> tuple[dict[str, A
             "uploads_source_code": False,
             "telemetry": "none",
             "background_log_collection": False,
-            "promise": "MCP-Skeleton runs compression, restore, patch, replay, and benchmark workflows locally by default and does not upload source, text, or usage logs.",
+            "promise": "Ailoom Context runs compression, restore, patch, replay, and benchmark workflows locally by default and does not upload source, text, or usage logs.",
         },
         "skeleton_redaction": {
             "status": "active",
@@ -3344,7 +3358,7 @@ def _build_context_safety_payload(args: argparse.Namespace) -> tuple[dict[str, A
             },
             "safe_patch_apply": {
                 "answer": "Start with a dry run and inspect the report before writing any output.",
-                "first_command": "mcp-skeleton patch-apply --dry-run --write-dry-run-report patch-dry-run.json --json",
+                "first_command": "ailoom patch-apply --dry-run --write-dry-run-report patch-dry-run.json --json",
             },
         },
         "emergency_recovery": {
@@ -3354,11 +3368,11 @@ def _build_context_safety_payload(args: argparse.Namespace) -> tuple[dict[str, A
             },
             "project_changed": {
                 "status": "refresh",
-                "next_command_text": "mcp-skeleton handoff --force-refresh",
+                "next_command_text": "ailoom handoff --force-refresh",
                 "message": "refresh the bundle before sharing context from a changed project",
             },
         },
-        "recommended_first_commands": ["mcp-skeleton handoff", "mcp-skeleton recent", "mcp-skeleton doctor"],
+        "recommended_first_commands": ["ailoom handoff", "ailoom recent", "ailoom doctor"],
     }
     payload["summary_text"] = _render_context_safety_summary(payload)
     return payload, EXIT_OK
@@ -3386,7 +3400,7 @@ def _directory_size_bytes(path: Path) -> tuple[int, int]:
 
 def _render_context_clean_summary(payload: dict[str, Any]) -> str:
     lines = [
-        "MCP-Skeleton Clean",
+        "Ailoom Context Clean",
         "",
         f"Status: {payload.get('clean_status', '')}",
         f"Mode: {payload.get('mode', '')}",
@@ -3404,7 +3418,7 @@ def _render_context_clean_summary(payload: dict[str, Any]) -> str:
         [
             "",
             "Safety:",
-            "- This command only removes known MCP-Skeleton generated local artifacts.",
+            "- This command only removes known Ailoom Context generated local artifacts.",
             "- It never deletes source files, config files, or restore output unless they live inside the listed generated directories.",
         ]
     )
@@ -3698,7 +3712,7 @@ def _render_context_config_recommend_report(payload: dict[str, Any]) -> str:
     recommendations = list(analysis.get("compression_recommendations") or [])
     exclude_patterns = list(config.get("exclude") or [])
     lines = [
-        "# MCP-Skeleton Config Recommendation",
+        "# Ailoom Context Config Recommendation",
         "",
         "## Source",
         f"- source_kind: {analysis.get('source_kind', '')}",
@@ -3755,8 +3769,8 @@ def _render_context_config_recommend_report(payload: dict[str, Any]) -> str:
             "",
             "## Next Steps",
             "1. Review the generated `.mcp-skeleton.json` before committing it.",
-            "2. Run `mcp-skeleton config --validate --config .mcp-skeleton.json --json`.",
-            "3. Reuse `recommended_command_args` for a direct trial compression, or run `mcp-skeleton compress --input-dir . --json` and confirm the reported config file is used.",
+            "2. Run `ailoom config --validate --config .mcp-skeleton.json --json`.",
+            "3. Reuse `recommended_command_args` for a direct trial compression, or run `ailoom compress --input-dir . --json` and confirm the reported config file is used.",
             "",
         ]
     )
@@ -4394,19 +4408,19 @@ def _render_simple_summary(payload: dict[str, Any], keys: list[str]) -> str:
 
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="mcp-skeleton",
-        description="MCP-Skeleton: lossless context compression, exact restore, patch, and replay workflows",
+        prog=CLI_NAME,
+        description=f"{PRODUCT_NAME}: lossless context compression, exact restore, patch, and replay workflows",
         epilog=(
-            "Common shortcuts: mcp-skeleton quick | "
-            "mcp-skeleton handoff | "
-            "mcp-skeleton start | "
-            "mcp-skeleton doctor | "
-            "mcp-skeleton explain --package-file context_manifest.json"
+            f"Common shortcuts: {CLI_NAME} quick | "
+            f"{CLI_NAME} handoff | "
+            f"{CLI_NAME} start | "
+            f"{CLI_NAME} doctor | "
+            f"{CLI_NAME} explain --package-file context_manifest.json"
         ),
     )
     subparsers = parser.add_subparsers(dest="command")
 
-    version_parser = subparsers.add_parser("version", help="Show MCP-Skeleton version, Python, and install path details")
+    version_parser = subparsers.add_parser("version", help=f"Show {PRODUCT_NAME} version, Python, and install path details")
     version_parser.add_argument("--json", action="store_true")
 
     context_parser = subparsers.add_parser("context", help="Compress long code or text context into an MCP skeleton and restore it later")
@@ -4474,9 +4488,9 @@ def _build_parser() -> argparse.ArgumentParser:
     config.add_argument("--validate", action="store_true", help="Validate an existing config file instead of emitting a template")
     config.add_argument("--recommend", action="store_true", help="Analyze an input and emit recommended project defaults")
     config.add_argument("--text", dest="context_text")
-    config.add_argument("--input-file", dest="input_file", help="Discover .mcp-skeleton config next to this file when validating")
-    config.add_argument("--input-dir", dest="input_dir", help="Discover .mcp-skeleton config inside this directory when validating")
-    config.add_argument("--text-file", dest="text_file", help="Discover .mcp-skeleton config next to this text file when validating")
+    config.add_argument("--input-file", dest="input_file", help="Discover .ailoom config next to this file when validating")
+    config.add_argument("--input-dir", dest="input_dir", help="Discover .ailoom config inside this directory when validating")
+    config.add_argument("--text-file", dest="text_file", help="Discover .ailoom config next to this text file when validating")
     config.add_argument("--preset", dest="preset_id")
     config.add_argument("--focus-mode", dest="focus_mode", choices=["full", "tree", "imports", "symbols", "writing-outline"])
     config.add_argument("--skeleton-density", dest="skeleton_density", choices=["adaptive", "standard", "compact"])
@@ -4589,7 +4603,7 @@ def _build_parser() -> argparse.ArgumentParser:
     safety = context_subparsers.add_parser("safety", help="Show safety boundaries for sharing skeletons, restore packages, and patch replay")
     safety.add_argument("--json", action="store_true")
 
-    clean = context_subparsers.add_parser("clean", help="Preview or remove local MCP-Skeleton generated artifacts")
+    clean = context_subparsers.add_parser("clean", help="Preview or remove local Ailoom Context generated artifacts")
     clean.add_argument("--input-dir", dest="input_dir", help="Project directory to clean; defaults to current directory")
     clean.add_argument("--dry-run", action="store_true", help="Preview cleanup targets without deleting anything")
     clean.add_argument("--all", dest="clean_all", action="store_true", help="Also remove known restore-output artifacts such as mcp-skeleton-restore")

@@ -88,13 +88,13 @@ def build_quickstart_check_payload() -> dict[str, Any]:
         )
         env = os.environ.copy()
         env["HOME"] = str(home)
-        env["MCP_SKELETON_HOME"] = str(home / ".mcp-skeleton")
+        env["AILOOM_HOME"] = str(home / ".ailoom")
         env["PYTHON"] = _python310_plus()
         env["PYTHONPATH"] = str(ROOT)
         env["MCP_SKELETON_IGNORE_CWD_CONFIG"] = "1"
         env["PATH"] = f"{home / '.local' / 'bin'}{os.pathsep}{env.get('PATH', '')}"
 
-        command_path = home / ".local" / "bin" / "mcp-skeleton"
+        command_path = home / ".local" / "bin" / "ailoom"
         install = _run(["sh", str(ROOT / "install.sh"), "--setup-shell"], cwd=ROOT, env=env)
         install.pop("stdout", None)
         demo, demo_json = _json_from_command(
@@ -122,11 +122,11 @@ def build_quickstart_check_payload() -> dict[str, Any]:
             env=env,
         )
 
-        install_passed = bool(install["passed"] and command_path.exists() and "MCP-Skeleton Install Ready" in install["stdout_tail"])
-        readiness_file = home / ".mcp-skeleton" / "install-readiness.json"
+        install_passed = bool(install["passed"] and command_path.exists() and "Ailoom Context Install Ready" in install["stdout_tail"])
+        readiness_file = home / ".ailoom" / "install-readiness.json"
         readiness_json = json.loads(readiness_file.read_text(encoding="utf-8")) if readiness_file.exists() else {}
         readiness_passed = bool(
-            readiness_json.get("schema") == "mcp-skeleton.install-readiness.v1"
+            readiness_json.get("schema") == "ailoom.install-readiness.v1"
             and readiness_json.get("status") == "ready"
             and readiness_json.get("command_path") == str(command_path)
             and str(readiness_json.get("recommended_first_command_text") or "").endswith("handoff")
@@ -155,19 +155,19 @@ def build_quickstart_check_payload() -> dict[str, Any]:
                 **install,
                 "passed": install_passed and readiness_passed,
                 "command_exists": command_path.exists(),
-                "has_ready_panel": "MCP-Skeleton Install Ready" in install["stdout_tail"],
+                "has_ready_panel": "Ailoom Context Install Ready" in install["stdout_tail"],
                 "shell_profile_updated": "Shell profile:" in install["stdout_tail"],
                 "readiness_file_exists": readiness_file.exists(),
                 "readiness_status": readiness_json.get("status", ""),
                 "readiness_recommended_first_command": readiness_json.get("recommended_first_command_text", ""),
             },
-            "mcp_skeleton_demo": {
+            "ailoom_demo": {
                 **demo,
                 "passed": demo_passed,
                 "demo_status": demo_json.get("demo_status", ""),
                 "restore_safe": bool((demo_json.get("quick") or {}).get("restore_safe")),
             },
-            "mcp_skeleton_handoff": {
+            "ailoom_handoff": {
                 **handoff,
                 "passed": handoff_passed,
                 "quick_status": handoff_json.get("quick_status", ""),
@@ -175,14 +175,14 @@ def build_quickstart_check_payload() -> dict[str, Any]:
                 "ai_file_exists": Path(str((handoff_json.get("handoff") or {}).get("ai_file") or "")).exists(),
                 "ai_handoff_file_exists": Path(str((handoff_json.get("handoff") or {}).get("ai_handoff_file") or "")).exists(),
             },
-            "mcp_skeleton_quick": {
+            "ailoom_quick": {
                 **quick,
                 "passed": quick_passed,
                 "quick_status": quick_json.get("quick_status", ""),
                 "restore_safe": bool(quick_json.get("restore_safe")),
                 "manifest_exists": Path(str(quick_json.get("manifest_file") or "")).exists(),
             },
-            "mcp_skeleton_handoff_auto_reuse": {
+            "ailoom_handoff_auto_reuse": {
                 **reuse,
                 "passed": reuse_passed,
                 "quick_status": reuse_json.get("quick_status", ""),

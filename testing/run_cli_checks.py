@@ -580,7 +580,7 @@ def _check_context_config_recommend_json(workspace: Path) -> None:
     assert "--exclude" in recommended_args
     assert recommended_args[-1] == "--json"
     report_text = report_file.read_text(encoding="utf-8")
-    assert "# MCP-Skeleton Config Recommendation" in report_text
+    assert "# Ailoom Context Config Recommendation" in report_text
     assert "## Recommended Config" in report_text
     assert "## Recommendation Estimate" in report_text
     assert "## Recommended Command Args" in report_text
@@ -631,7 +631,7 @@ def _check_context_doctor_json(workspace: Path) -> None:
     assert payload["restore_check"]["missing_count"] == 0
     assert payload["restore_check"]["mismatched_count"] == 0
     assert payload["recommended_command_args"][-1] == "--json"
-    assert payload["recommended_command_text"].startswith("mcp-skeleton compress")
+    assert payload["recommended_command_text"].startswith("ailoom compress")
     assert payload["timings_ms"]["total"] >= payload["timings_ms"]["compress"] >= 0
     assert payload["timings_ms"]["restore_check"] >= 0
     assert "At a glance:" in payload["summary_text"]
@@ -665,7 +665,7 @@ def _check_context_doctor_json(workspace: Path) -> None:
     assert reported["report_written"] is True
     assert reported["report_file"].endswith("doctor-readiness.md")
     report_text = report_file.read_text(encoding="utf-8")
-    assert "# MCP-Skeleton Doctor Report" in report_text
+    assert "# Ailoom Context Doctor Report" in report_text
     assert "## Verdict" in report_text
     assert "restore_status: ok" in report_text
     assert "## Recommended Command" in report_text
@@ -688,7 +688,7 @@ def _check_context_doctor_install_json(workspace: Path) -> None:
     assert payload["self_check_command_text"].endswith(" version")
     assert payload["action_plan"]
     assert payload["next_steps"] == [item["message"] for item in payload["action_plan"]]
-    assert "MCP-Skeleton Install Doctor" in payload["summary_text"]
+    assert "Ailoom Context Install Doctor" in payload["summary_text"]
     assert "Copy/paste fix:" in payload["summary_text"]
     assert "First run:" in payload["summary_text"]
     alias_payload = _run_top_level_cli_json(["doctor", "--install", "--json"])
@@ -717,8 +717,8 @@ def _check_context_start_json(workspace: Path) -> None:
     assert payload["recommended_command_args"][:3] == ["context", "compress", "--input-dir"]
     assert "--config" in payload["recommended_command_args"]
     assert payload["recommended_command_args"][-1] == "--json"
-    assert payload["recommended_command_text"].startswith("mcp-skeleton compress")
-    assert payload["next_command"].startswith("mcp-skeleton compress")
+    assert payload["recommended_command_text"].startswith("ailoom compress")
+    assert payload["next_command"].startswith("ailoom compress")
     assert payload["timings_ms"]["total"] >= payload["timings_ms"]["config_recommend"] >= 0
     assert payload["timings_ms"]["doctor"] >= 0
     assert "Restore safety: OK" in payload["summary_text"]
@@ -788,7 +788,7 @@ def _check_context_quick_json(workspace: Path) -> None:
     assert "Give this to AI/IDE" in ai_handoff_text
     assert "context_skeleton.mcp" in ai_handoff_text
     assert "Keep these for restore" in ai_handoff_text
-    assert "mcp-skeleton restore" in ai_handoff_text
+    assert "ailoom restore" in ai_handoff_text
     assert payload["open_requested"] is False
     assert payload["open_performed"] is False
     assert payload["open_command_text"].startswith("open ")
@@ -803,9 +803,9 @@ def _check_context_quick_json(workspace: Path) -> None:
     if payload["experience"]["token_status"] == "expanded":
         assert payload["experience"]["first_run_guidance"]["status"] == "notice"
         assert "tiny input" in payload["experience"]["first_run_guidance"]["message"]
-        assert "mcp-skeleton demo" in payload["experience"]["first_run_guidance"]["try_next_command_text"]
+        assert "ailoom demo" in payload["experience"]["first_run_guidance"]["try_next_command_text"]
     assert payload["performance_advice"]["speed_status"] in {"fast", "ok", "slow"}
-    assert payload["performance_advice"]["reuse_command_text"].startswith("mcp-skeleton quick --reuse-if-fresh")
+    assert payload["performance_advice"]["reuse_command_text"].startswith("ailoom quick --reuse-if-fresh")
     assert payload["performance_profile"]["status"] == "available"
     assert payload["performance_profile"]["phase_count"] >= 3
     assert payload["performance_profile"]["dominant_phase"]["name"] in {"start_and_doctor", "config_recommendation", "restore_safety_check", "bundle_write", "quick_total"}
@@ -815,17 +815,17 @@ def _check_context_quick_json(workspace: Path) -> None:
     assert payload["performance_summary"]["status"] in {"fast", "ok", "slow"}
     assert payload["performance_summary"]["dominant_phase"]["name"] in {"start_and_doctor", "config_recommendation", "restore_safety_check", "bundle_write", "quick_total"}
     assert payload["performance_summary"]["recommended_next_run"]["strategy"] in {"reuse_if_fresh", "fast_first_run"}
-    assert payload["performance_summary"]["recommended_next_run"]["command_text"].startswith("mcp-skeleton quick")
+    assert payload["performance_summary"]["recommended_next_run"]["command_text"].startswith("ailoom quick")
     assert payload["performance_summary"]["token_impact"]["estimated_source_tokens"] >= 0
     assert payload["performance_summary"]["token_impact"]["estimated_skeleton_tokens"] >= 0
     assert payload["performance_summary"]["noise_protection"]["status"] in {"active", "disabled"}
     assert payload["performance_summary"]["speed_diagnostic"]["dominant_phase"] in {"setup_and_doctor", "config_recommendation", "restore_safety_check", "bundle_write", "quick_total", "start_and_doctor"}
     assert payload["performance_summary"]["speed_diagnostic"]["why_it_may_feel_slow"]
-    assert payload["performance_summary"]["speed_diagnostic"]["best_next_command_text"].startswith("mcp-skeleton quick")
+    assert payload["performance_summary"]["speed_diagnostic"]["best_next_command_text"].startswith("ailoom quick")
     assert payload["user_outcome"]["status"] == "ready_to_share"
     assert payload["user_outcome"]["primary_file"] == payload["handoff"]["skeleton_file"]
     assert payload["user_outcome"]["share_action"] == "give_skeleton_to_ai"
-    assert payload["user_outcome"]["next_command_text"].startswith("mcp-skeleton inspect")
+    assert payload["user_outcome"]["next_command_text"].startswith("ailoom inspect")
     assert payload["user_outcome"]["restore_safety"] == "ok"
     assert "Performance advice:" in payload["summary_text"]
     assert "User outcome:" in payload["summary_text"]
@@ -837,15 +837,15 @@ def _check_context_quick_json(workspace: Path) -> None:
     assert Path(payload["recent_file"]).exists()
     assert payload["inspect_command_args"][:3] == ["context", "inspect", "--package-file"]
     assert payload["restore_command_args"][:3] == ["context", "restore", "--package-file"]
-    assert payload["inspect_command_text"].startswith("mcp-skeleton inspect")
-    assert payload["restore_command_text"].startswith("mcp-skeleton restore")
+    assert payload["inspect_command_text"].startswith("ailoom inspect")
+    assert payload["restore_command_text"].startswith("ailoom restore")
     assert payload["timings_ms"]["total"] >= payload["timings_ms"]["bundle"] >= 0
     assert payload["timings_ms"]["start"] >= 0
     assert payload["timings_ms"]["bundle"] < max(1000, payload["timings_ms"]["start"] * 2)
     assert "_compression_payload" not in payload
     assert "_compression_payload" not in payload["start"]
     assert "_compression_payload" not in payload["start"]["doctor"]
-    assert "MCP-Skeleton Quick" in payload["summary_text"]
+    assert "Ailoom Context Quick" in payload["summary_text"]
     assert "At a glance:" in payload["summary_text"]
     assert "- Status:" in payload["summary_text"]
     assert "- Restore safety:" in payload["summary_text"]
@@ -903,18 +903,18 @@ def _check_context_quick_json(workspace: Path) -> None:
     assert reused["timings_ms"]["bundle"] == 0.0
     assert reused["reuse_guidance"]["status"] == "reused"
     assert reused["reuse_guidance"]["saved_work"] == "skipped recompression and restore recheck"
-    assert reused["reuse_guidance"]["next_handoff_command_text"].startswith("mcp-skeleton handoff --reuse-if-fresh")
+    assert reused["reuse_guidance"]["next_handoff_command_text"].startswith("ailoom handoff --reuse-if-fresh")
     assert reused["performance_summary"]["status"] == "fast"
     assert reused["performance_summary"]["recommended_next_run"]["strategy"] == "reuse_if_fresh"
-    assert reused["performance_summary"]["recommended_next_run"]["command_text"].startswith("mcp-skeleton handoff")
+    assert reused["performance_summary"]["recommended_next_run"]["command_text"].startswith("ailoom handoff")
     assert reused["user_outcome"]["status"] == "reused_ready_to_share"
     assert reused["user_outcome"]["primary_file"] == reused["handoff"]["skeleton_file"]
-    assert reused["user_outcome"]["next_command_text"].startswith("mcp-skeleton handoff")
-    assert reused["restore_command_text"].startswith("mcp-skeleton restore --package-file")
+    assert reused["user_outcome"]["next_command_text"].startswith("ailoom handoff")
+    assert reused["restore_command_text"].startswith("ailoom restore --package-file")
     _assert_command_contains_option(reused["restore_command_text"], "--package-file", reused["manifest_file"])
     assert "Reused previous bundle:" in reused["summary_text"]
     assert "Saved time:" in reused["summary_text"]
-    assert "mcp-skeleton handoff --reuse-if-fresh" in reused["summary_text"]
+    assert "ailoom handoff --reuse-if-fresh" in reused["summary_text"]
     assert "At a glance:" in reused["summary_text"]
     assert "- Status:" in reused["summary_text"]
     assert "- Next command:" in reused["summary_text"]
@@ -949,16 +949,16 @@ def _check_context_quick_json(workspace: Path) -> None:
     assert preview["manifest_file"].endswith("context_manifest.json")
     assert preview["write_performed"] is False
     assert preview["performance_advice"]["speed_status"] in {"fast", "ok", "slow"}
-    assert preview["performance_advice"]["fast_command_text"].startswith("mcp-skeleton quick --fast")
+    assert preview["performance_advice"]["fast_command_text"].startswith("ailoom quick --fast")
     assert preview["performance_summary"]["status"] in {"fast", "ok", "slow"}
-    assert preview["performance_summary"]["recommended_next_run"]["command_text"].startswith("mcp-skeleton quick")
+    assert preview["performance_summary"]["recommended_next_run"]["command_text"].startswith("ailoom quick")
     assert "Performance advice:" in preview["summary_text"]
     assert "Performance summary:" in preview["summary_text"]
     assert "--fast" in preview["summary_text"]
     assert not preview_dir.exists()
     assert not Path(preview["recent_file"]).exists()
-    assert preview["run_command_text"].startswith("mcp-skeleton quick --input-dir")
-    assert "MCP-Skeleton Quick Preview" in preview["summary_text"]
+    assert preview["run_command_text"].startswith("ailoom quick --input-dir")
+    assert "Ailoom Context Quick Preview" in preview["summary_text"]
     assert "At a glance:" in preview["summary_text"]
     assert "- Status:" in preview["summary_text"]
     assert "- Restore safety:" in preview["summary_text"]
@@ -999,12 +999,12 @@ def _check_context_recent_json(workspace: Path) -> None:
     assert recent["metadata_file"].endswith("handoff.json")
     assert recent["open_command_text"].startswith("open ")
     assert "| pbcopy" in recent["copy_command_text"]
-    assert recent["inspect_command_text"].startswith("mcp-skeleton inspect")
-    assert recent["restore_command_text"].startswith("mcp-skeleton restore")
+    assert recent["inspect_command_text"].startswith("ailoom inspect")
+    assert recent["restore_command_text"].startswith("ailoom restore")
     assert recent["user_outcome"]["status"] == "fresh_ready_to_share"
     assert recent["user_outcome"]["primary_file"] == recent["skeleton_file"]
-    assert recent["user_outcome"]["next_command_text"].startswith("mcp-skeleton handoff")
-    assert "MCP-Skeleton Recent" in recent["summary_text"]
+    assert recent["user_outcome"]["next_command_text"].startswith("ailoom handoff")
+    assert "Ailoom Context Recent" in recent["summary_text"]
     assert "At a glance:" in recent["summary_text"]
     assert "- Status:" in recent["summary_text"]
     assert "- Freshness:" in recent["summary_text"]
@@ -1027,9 +1027,9 @@ def _check_context_recent_json(workspace: Path) -> None:
     assert stale["recent_status"] == "ready"
     assert stale["freshness_status"] == "stale"
     assert stale["user_outcome"]["status"] == "stale_refresh_needed"
-    assert stale["user_outcome"]["next_command_text"].startswith("mcp-skeleton quick --input-dir")
+    assert stale["user_outcome"]["next_command_text"].startswith("ailoom quick --input-dir")
     assert stale["source_fingerprint"] != stale["recorded_source_fingerprint"]
-    assert stale["refresh_command_text"].startswith("mcp-skeleton quick --input-dir")
+    assert stale["refresh_command_text"].startswith("ailoom quick --input-dir")
     assert "Bundle may be stale:" in stale["summary_text"]
     assert "Refresh bundle:" in stale["summary_text"]
 
@@ -1040,7 +1040,7 @@ def _check_context_recent_json(workspace: Path) -> None:
     assert listed["bundles"][0]["bundle_root"] == quick["bundle_root"]
     assert listed["bundles"][0]["bundle_size_bytes"] > 0
     assert listed["bundles"][0]["freshness_status"] == "stale"
-    assert "MCP-Skeleton Bundles" in listed["summary_text"]
+    assert "Ailoom Context Bundles" in listed["summary_text"]
 
     clean = _run_top_level_cli_json(["recent", "--input-dir", str(project), "--clean-stale", "--dry-run", "--json"])
     assert clean["status"] == "ok"
@@ -1085,7 +1085,7 @@ def _check_windows_installer_script_json(workspace: Path) -> None:
     assert "Uninstall" in text
     assert "install-readiness.json" in text
     assert "context-metrics" in text
-    assert "mcp-skeleton doctor --install" in text
+    assert "ailoom doctor --install" in text
 
 
 def _check_context_quick_fast_json(workspace: Path) -> None:
@@ -1155,10 +1155,10 @@ def _check_context_quick_speed_tip_json(workspace: Path) -> None:
     assert payload["fast_path"] is False
     assert payload["speed_tip"]["status"] == "available"
     assert payload["speed_tip"]["total_files"] >= 100
-    assert "mcp-skeleton quick --fast" in payload["speed_tip"]["suggested_command_text"]
+    assert "ailoom quick --fast" in payload["speed_tip"]["suggested_command_text"]
     assert payload["performance_advice"]["dominant_phase"] in {"setup_and_doctor", "config_recommendation", "restore_safety_check", "bundle_write", "quick_total"}
     assert payload["performance_advice"]["why_it_may_feel_slow"]
-    assert payload["performance_advice"]["next_best_command_text"].startswith("mcp-skeleton quick")
+    assert payload["performance_advice"]["next_best_command_text"].startswith("ailoom quick")
     assert payload["performance_summary"]["speed_diagnostic"]["dominant_phase"] == payload["performance_advice"]["dominant_phase"]
     assert payload["performance_summary"]["speed_diagnostic"]["best_next_command_text"] == payload["performance_advice"]["next_best_command_text"]
     assert "Speed tip:" in payload["summary_text"]
@@ -1180,7 +1180,7 @@ def _check_context_demo_json(workspace: Path) -> None:
     assert quick["fast_path"] is True
     assert quick["restore_safe"] is True
     assert Path(quick["manifest_file"]).exists()
-    assert "MCP-Skeleton Demo" in payload["summary_text"]
+    assert "Ailoom Context Demo" in payload["summary_text"]
     assert "Token impact:" in payload["summary_text"]
     assert "Use on your project:" in payload["summary_text"]
     inspect = _run_cli_json(quick["inspect_command_args"])
@@ -1208,10 +1208,10 @@ def _check_context_safety_json(workspace: Path) -> None:
     assert ".workspace_ail" in payload["default_noise_protection"]["skipped_dir_names"]
     assert payload["common_questions"]["what_to_share_with_ai"]["answer"].startswith("Share context_skeleton.mcp")
     assert payload["common_questions"]["what_to_keep_local"]["answer"]
-    assert payload["common_questions"]["safe_patch_apply"]["first_command"].startswith("mcp-skeleton patch-apply --dry-run")
+    assert payload["common_questions"]["safe_patch_apply"]["first_command"].startswith("ailoom patch-apply --dry-run")
     assert payload["emergency_recovery"]["lost_manifest"]["status"] == "blocked"
-    assert payload["emergency_recovery"]["project_changed"]["next_command_text"].startswith("mcp-skeleton handoff --force-refresh")
-    assert "MCP-Skeleton Safety" in payload["summary_text"]
+    assert payload["emergency_recovery"]["project_changed"]["next_command_text"].startswith("ailoom handoff --force-refresh")
+    assert "Ailoom Context Safety" in payload["summary_text"]
     assert "Local privacy:" in payload["summary_text"]
     assert "Skeleton redaction:" in payload["summary_text"]
     assert "Do not paste restore packages into AI" in payload["summary_text"]
@@ -1288,14 +1288,14 @@ def _check_context_clean_json(workspace: Path) -> None:
     assert dry_run["total_files"] == 2
     assert workspace_dir.exists()
     assert restore_dir.exists()
-    assert dry_run["next_command_text"].startswith("mcp-skeleton clean --input-dir")
+    assert dry_run["next_command_text"].startswith("ailoom clean --input-dir")
     cleaned = _run_top_level_cli_json(["clean", "--input-dir", str(project), "--all", "--json"])
     assert cleaned["status"] == "ok"
     assert cleaned["clean_status"] == "cleaned"
     assert cleaned["deleted_count"] == 2
     assert not (project / ".workspace_ail").exists()
     assert not restore_dir.exists()
-    assert "MCP-Skeleton Clean" in cleaned["summary_text"]
+    assert "Ailoom Context Clean" in cleaned["summary_text"]
 
 
 def _check_top_level_version_json(workspace: Path) -> None:
@@ -1303,7 +1303,7 @@ def _check_top_level_version_json(workspace: Path) -> None:
     payload = _run_top_level_cli_json(["version", "--json"])
     assert payload["status"] == "ok"
     assert payload["entrypoint"] == "mcp-skeleton-version"
-    assert payload["package_name"] == "mcp-skeleton"
+    assert payload["package_name"] == "ailoom-context"
     assert payload["version"]
     assert payload["python_version"]
     assert payload["executable"]
@@ -1317,7 +1317,7 @@ def _check_top_level_version_json(workspace: Path) -> None:
     assert payload["self_check_command_text"].endswith(" version")
     assert payload["recommended_first_command_text"].endswith("handoff")
     assert payload["doctor_command_text"].endswith("doctor")
-    assert "mcp-skeleton version" in payload["summary_text"]
+    assert "ailoom version" in payload["summary_text"]
     assert "Can run handoff:" in payload["summary_text"]
     assert "PATH fix command:" in payload["summary_text"]
     assert "Self-check command:" in payload["summary_text"]
@@ -1345,10 +1345,10 @@ def _check_installer_lifecycle_json(workspace: Path) -> None:
         capture_output=True,
     )
     assert install.returncode == 0, install.stderr + install.stdout
-    command = home / ".local" / "bin" / "mcp-skeleton"
+    command = home / ".local" / "bin" / "ailoom"
     assert command.exists()
     assert "Installed successfully." in install.stdout
-    assert "MCP-Skeleton Install Ready" in install.stdout
+    assert "Ailoom Context Install Ready" in install.stdout
     assert "PATH status:" in install.stdout
     assert "Command check:" in install.stdout
     assert "First run self-check:" in install.stdout
@@ -1357,15 +1357,15 @@ def _check_installer_lifecycle_json(workspace: Path) -> None:
     assert "Self-check command:" in install.stdout
     assert "Install doctor:" in install.stdout
     assert "Copy/paste next:" in install.stdout
-    assert "mcp-skeleton version" in install.stdout
-    assert "mcp-skeleton doctor --install" in install.stdout
-    assert "mcp-skeleton handoff" in install.stdout
-    assert "mcp-skeleton quick" in install.stdout
-    assert "mcp-skeleton handoff --input-dir ." not in install.stdout
+    assert "ailoom version" in install.stdout
+    assert "ailoom doctor --install" in install.stdout
+    assert "ailoom handoff" in install.stdout
+    assert "ailoom quick" in install.stdout
+    assert "ailoom handoff --input-dir ." not in install.stdout
     readiness_file = home / ".mcp-skeleton" / "install-readiness.json"
     assert readiness_file.exists()
     readiness = json.loads(readiness_file.read_text(encoding="utf-8"))
-    assert readiness["schema"] == "mcp-skeleton.install-readiness.v1"
+    assert readiness["schema"] == "ailoom.install-readiness.v1"
     assert readiness["status"] == "ready"
     assert readiness["command_path"] == str(command)
     assert readiness["command_check"] == "ok"
@@ -1386,7 +1386,7 @@ def _check_installer_lifecycle_json(workspace: Path) -> None:
     assert version_proc.returncode == 0, version_proc.stderr + version_proc.stdout
     version_payload = json.loads(version_proc.stdout)
     assert version_payload["install_readiness_file"] == str(readiness_file)
-    assert version_payload["install_readiness_manifest"]["schema"] == "mcp-skeleton.install-readiness.v1"
+    assert version_payload["install_readiness_manifest"]["schema"] == "ailoom.install-readiness.v1"
     assert version_payload["install_readiness_manifest"]["recommended_first_command_text"].endswith("handoff")
 
     shell_home = workspace / "installer_shell_home"
@@ -1406,7 +1406,7 @@ def _check_installer_lifecycle_json(workspace: Path) -> None:
     shell_profile = shell_home / ".zshrc"
     assert shell_profile.exists()
     shell_profile_text = shell_profile.read_text(encoding="utf-8")
-    assert "mcp-skeleton PATH" in shell_profile_text
+    assert "ailoom PATH" in shell_profile_text
     assert "export PATH=" in shell_profile_text
     assert "Shell profile: updated" in shell_install.stdout
     assert "Restart your terminal" in shell_install.stdout
@@ -1424,7 +1424,7 @@ def _check_installer_lifecycle_json(workspace: Path) -> None:
     assert update.returncode == 0, update.stderr + update.stdout
     assert command.exists()
     assert "Updated successfully." in update.stdout
-    assert "MCP-Skeleton Install Ready" in update.stdout
+    assert "Ailoom Context Install Ready" in update.stdout
 
     uninstall = subprocess.run(
         ["sh", str(ROOT / "install.sh"), "--uninstall"],
@@ -1474,8 +1474,8 @@ def _check_context_explain_json(workspace: Path) -> None:
     assert payload["inspect"]["source_label"] == project.name
     assert payload["action_plan"]
     assert payload["next_steps"] == [item["message"] for item in payload["action_plan"]]
-    assert any("mcp-skeleton restore" in item["message"] for item in payload["action_plan"])
-    assert "MCP-Skeleton Explain" in payload["summary_text"]
+    assert any("ailoom restore" in item["message"] for item in payload["action_plan"])
+    assert "Ailoom Context Explain" in payload["summary_text"]
     assert "What this is:" in payload["summary_text"]
     assert "Why it is useful:" in payload["summary_text"]
     assert "Next steps:" in payload["summary_text"]
@@ -1580,9 +1580,9 @@ def _check_top_level_cli_alias_json(workspace: Path) -> None:
     assert payload["status"] == "ok"
     assert payload["entrypoint"] == "context-quick"
     assert payload["quick_status"] == "ready"
-    assert payload["inspect_command_text"].startswith("mcp-skeleton inspect")
-    assert payload["restore_command_text"].startswith("mcp-skeleton restore")
-    assert payload["start"]["recommended_command_text"].startswith("mcp-skeleton compress")
+    assert payload["inspect_command_text"].startswith("ailoom inspect")
+    assert payload["restore_command_text"].startswith("ailoom restore")
+    assert payload["start"]["recommended_command_text"].startswith("ailoom compress")
 
     handoff_dir = workspace / "alias_handoff_bundle"
     handoff = _run_top_level_cli_json(["handoff", "--input-dir", str(project), "--output-dir", str(handoff_dir), "--copy", "--json"])
@@ -1594,7 +1594,7 @@ def _check_top_level_cli_alias_json(workspace: Path) -> None:
     assert handoff["handoff"]["ai_handoff_file"].endswith("AI_HANDOFF.md")
     assert Path(handoff["handoff"]["ai_handoff_file"]).exists()
     assert handoff["copy_requested"] is True
-    assert handoff["performance_advice"]["reuse_command_text"].startswith("mcp-skeleton handoff --reuse-if-fresh")
+    assert handoff["performance_advice"]["reuse_command_text"].startswith("ailoom handoff --reuse-if-fresh")
     assert "AI handoff:" in handoff["summary_text"]
     assert "Keep for restore:" in handoff["summary_text"]
 
@@ -1697,7 +1697,7 @@ def _check_handoff_daily_output_json(workspace: Path) -> None:
     assert first["daily_handoff"]["clipboard"]["status"] == "manual"
     assert first["daily_handoff"]["clipboard"]["command_text"].startswith("cat ")
     assert first["daily_handoff"]["clipboard"]["requested"] is False
-    assert first["daily_handoff"]["next_command_text"].startswith("mcp-skeleton inspect")
+    assert first["daily_handoff"]["next_command_text"].startswith("ailoom inspect")
     assert "Daily handoff:" in first["summary_text"]
     assert "- What happened:" in first["summary_text"]
     assert "- Why:" in first["summary_text"]
@@ -2829,7 +2829,7 @@ def _check_error_recovery_guidance_json(workspace: Path) -> None:
     assert conflict["error"]["code"] == "output_dir_not_empty"
     assert conflict["error"]["details"]["recovery_steps"]
     fix_command = conflict["error"]["details"]["fix_command_text"]
-    assert "mcp-skeleton quick" in fix_command
+    assert "ailoom quick" in fix_command
     assert fix_command.count("--output-dir") == 1
     assert f" --output-dir {output_dir} " not in f" {fix_command} "
     assert f"{output_dir}-new" in fix_command
@@ -3053,7 +3053,7 @@ def run_checks(*, results_json: Path) -> dict[str, Any]:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Run cross-platform MCP-Skeleton CLI smoke checks.")
+    parser = argparse.ArgumentParser(description="Run cross-platform Ailoom Context CLI smoke checks.")
     parser.add_argument("--results-json", default=str(DEFAULT_RESULTS_JSON), help="Where to write the smoke result JSON.")
     args = parser.parse_args()
     payload = run_checks(results_json=Path(args.results_json).expanduser())

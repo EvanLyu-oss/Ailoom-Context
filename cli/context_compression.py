@@ -16,8 +16,8 @@ from functools import lru_cache
 from pathlib import Path, PurePosixPath
 from typing import Any
 
-MANIFEST_VERSION = "mcp_context_bundle.v1"
-SKELETON_LANGUAGE = "MCP-SKL.v1"
+MANIFEST_VERSION = "ailoom_context_bundle.v1"
+SKELETON_LANGUAGE = "AILOOM-SKL.v1"
 SKIP_DIR_NAMES = {
     ".git",
     "__pycache__",

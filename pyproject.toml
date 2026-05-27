@@ -3,16 +3,16 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "mcp-skeleton"
+name = "ailoom-context"
 version = "0.1.0"
-description = "Lossless context compression, exact restore, patch, and replay workflows for long code and text inputs."
+description = "Ailoom Context: lossless context compression, exact restore, patch, and replay workflows for long code and text inputs."
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
 authors = [
   { name = "Carwyn Mac" }
 ]
-keywords = ["mcp", "context", "compression", "llm", "token-optimization", "patch-replay"]
+keywords = ["ailoom", "context", "compression", "llm", "token-optimization", "patch-replay"]
 classifiers = [
   "License :: OSI Approved :: MIT License",
   "Programming Language :: Python :: 3",
@@ -28,6 +28,7 @@ classifiers = [
 context-metrics = ["tiktoken>=0.7"]
 
 [project.scripts]
+ailoom = "cli.ail_cli:main"
 mcp-skeleton = "cli.ail_cli:main"
 
 [tool.setuptools.packages.find]

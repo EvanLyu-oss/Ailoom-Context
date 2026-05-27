@@ -1,6 +1,6 @@
-# MCP-Skeleton Beta Feedback Template
+# Ailoom Context Beta Feedback Template
 
-Thank you for trying MCP-Skeleton.
+Thank you for trying Ailoom Context.
 
 Please copy this template, fill in what you can, and attach any command output that looks relevant.
 
@@ -9,7 +9,7 @@ Please copy this template, fill in what you can, and attach any command output t
 - OS:
 - CPU/RAM if known:
 - Python version:
-- MCP-Skeleton commit or version:
+- Ailoom Context commit or version:
 - Install method:
 
 ## Project tested
@@ -23,11 +23,11 @@ Please copy this template, fill in what you can, and attach any command output t
 ## Commands run
 
 ```bash
-mcp-skeleton version
-mcp-skeleton doctor --install
-mcp-skeleton handoff
-mcp-skeleton handoff
-mcp-skeleton safety
+ailoom version
+ailoom doctor --install
+ailoom handoff
+ailoom handoff
+ailoom safety
 ```
 
 Add any other commands you tried:

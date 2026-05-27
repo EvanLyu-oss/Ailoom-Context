@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- added a public beta trial guide and feedback template for early users testing MCP-Skeleton before formal v1.0
 - made the Python smoke reuse restore-command assertion parse quoted command arguments so Windows paths wrapped by shell quoting pass correctly
 - made Windows regression runs skip macOS `sh install.sh` quickstart/installer lifecycle checks instead of failing when `sh` is unavailable, while preserving macOS coverage
 - improved Python smoke failure reporting with full tracebacks so cross-platform assertion failures identify the exact failing line

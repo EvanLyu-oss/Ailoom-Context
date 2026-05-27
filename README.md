@@ -17,6 +17,8 @@ That gives us a practical workflow for large repositories and long documents:
 
 ## Quickstart
 
+Trying the beta with a real project? Start with [BETA_TRIAL_GUIDE.md](BETA_TRIAL_GUIDE.md), then send feedback with [FEEDBACK_TEMPLATE.md](FEEDBACK_TEMPLATE.md).
+
 For macOS, from a cloned or downloaded checkout:
 
 ```bash

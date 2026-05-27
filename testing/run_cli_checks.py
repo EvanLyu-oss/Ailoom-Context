@@ -1141,6 +1141,12 @@ def _check_context_safety_json(workspace: Path) -> None:
     assert payload["safety_status"] == "ready"
     assert payload["guarantees"]["lossless_restore_package"] is True
     assert payload["guarantees"]["no_source_overwrite_by_default"] is True
+    assert payload["guarantees"]["local_only_processing"] is True
+    assert payload["guarantees"]["no_telemetry"] is True
+    assert payload["local_only"]["uploads_source_code"] is False
+    assert payload["local_only"]["telemetry"] == "none"
+    assert payload["skeleton_redaction"]["status"] == "active"
+    assert payload["skeleton_redaction"]["restore_package_preserves_original"] is True
     assert payload["restore_package"]["share_with_ai_default"] == "no"
     assert payload["patch_replay"]["recommended_first_mode"] == "dry-run"
     assert ".workspace_ail" in payload["default_noise_protection"]["skipped_dir_names"]
@@ -1150,12 +1156,90 @@ def _check_context_safety_json(workspace: Path) -> None:
     assert payload["emergency_recovery"]["lost_manifest"]["status"] == "blocked"
     assert payload["emergency_recovery"]["project_changed"]["next_command_text"].startswith("mcp-skeleton handoff --force-refresh")
     assert "MCP-Skeleton Safety" in payload["summary_text"]
+    assert "Local privacy:" in payload["summary_text"]
+    assert "Skeleton redaction:" in payload["summary_text"]
     assert "Do not paste restore packages into AI" in payload["summary_text"]
     assert "Common questions:" in payload["summary_text"]
     assert "Emergency recovery:" in payload["summary_text"]
     alias_payload = _run_top_level_cli_json(["safety", "--json"])
     assert alias_payload["status"] == "ok"
     assert alias_payload["entrypoint"] == "context-safety"
+
+
+def _check_context_redaction_json(workspace: Path) -> None:
+    source_file = workspace / "secret.env"
+    original_text = (
+        "# Local secrets that must not appear in AI-facing skeletons\n\n"
+        "OPENAI_API_KEY=sk-test-secret-value-123456\n\n"
+        "password = 'super-private-password'\n\n"
+        "normal_setting = enabled\n"
+    )
+    source_file.write_text(original_text, encoding="utf-8")
+    bundle_dir = workspace / "secret_bundle"
+    payload = _run_cli_json(
+        [
+            "context",
+            "compress",
+            "--text-file",
+            str(source_file),
+            "--output-dir",
+            str(bundle_dir),
+            "--json",
+        ]
+    )
+    skeleton_text = payload["skeleton_text"]
+    assert payload["status"] == "ok"
+    assert payload["redaction_summary"]["enabled"] is True
+    assert payload["redaction_summary"]["redacted_count"] >= 2
+    assert payload["redaction_summary"]["restore_package_preserves_original"] is True
+    assert "sk-test-secret-value-123456" not in skeleton_text
+    assert "super-private-password" not in skeleton_text
+    assert "[REDACTED_" in skeleton_text
+    skeleton_file = bundle_dir / "context_skeleton.mcp"
+    assert skeleton_file.exists()
+    skeleton_on_disk = skeleton_file.read_text(encoding="utf-8")
+    assert "sk-test-secret-value-123456" not in skeleton_on_disk
+    assert "super-private-password" not in skeleton_on_disk
+    restored_file = workspace / "secret_restored.env"
+    restore = _run_cli_json(
+        [
+            "context",
+            "restore",
+            "--package-file",
+            str(bundle_dir / "context_manifest.json"),
+            "--output-file",
+            str(restored_file),
+            "--json",
+        ]
+    )
+    assert restore["status"] == "ok"
+    assert restored_file.read_text(encoding="utf-8") == original_text
+
+
+def _check_context_clean_json(workspace: Path) -> None:
+    project = workspace / "clean_project"
+    workspace_dir = project / ".workspace_ail" / "context_bundles" / "old"
+    restore_dir = project / "mcp-skeleton-restore"
+    workspace_dir.mkdir(parents=True)
+    restore_dir.mkdir(parents=True)
+    (workspace_dir / "context_skeleton.mcp").write_text("temporary skeleton\n", encoding="utf-8")
+    (restore_dir / "restored.txt").write_text("temporary restore\n", encoding="utf-8")
+    dry_run = _run_top_level_cli_json(["clean", "--input-dir", str(project), "--dry-run", "--all", "--json"])
+    assert dry_run["status"] == "ok"
+    assert dry_run["entrypoint"] == "context-clean"
+    assert dry_run["clean_status"] == "preview"
+    assert dry_run["deleted_count"] == 0
+    assert dry_run["total_files"] == 2
+    assert workspace_dir.exists()
+    assert restore_dir.exists()
+    assert dry_run["next_command_text"].startswith("mcp-skeleton clean --input-dir")
+    cleaned = _run_top_level_cli_json(["clean", "--input-dir", str(project), "--all", "--json"])
+    assert cleaned["status"] == "ok"
+    assert cleaned["clean_status"] == "cleaned"
+    assert cleaned["deleted_count"] == 2
+    assert not (project / ".workspace_ail").exists()
+    assert not restore_dir.exists()
+    assert "MCP-Skeleton Clean" in cleaned["summary_text"]
 
 
 def _check_top_level_version_json(workspace: Path) -> None:
@@ -2845,6 +2929,8 @@ CHECKS: list[tuple[str, Callable[[Path], None]]] = [
     ("context_quick_speed_tip_json_ok", _check_context_quick_speed_tip_json),
     ("context_demo_json_ok", _check_context_demo_json),
     ("context_safety_json_ok", _check_context_safety_json),
+    ("context_redaction_json_ok", _check_context_redaction_json),
+    ("context_clean_json_ok", _check_context_clean_json),
     ("top_level_version_json_ok", _check_top_level_version_json),
     ("installer_lifecycle_json_ok", _check_installer_lifecycle_json),
     ("context_explain_json_ok", _check_context_explain_json),

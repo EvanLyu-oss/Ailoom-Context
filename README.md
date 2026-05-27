@@ -305,6 +305,15 @@ mcp-skeleton safety
 ```
 
 `context safety` explains the core contract in plain language: `context_skeleton.mcp` is the AI-facing file, restore packages preserve raw source bytes and should stay local by default, restore never overwrites your source tree unless you choose an output target, and patch replay should start with `--dry-run --write-dry-run-report`. JSON output exposes the same guarantees for IDEs and wrappers.
+
+MCP-Skeleton is local-first: it does not upload source code, skeletons, restore packages, logs, or usage records to any MCP-Skeleton server, and it does not include telemetry or background log collection. AI-facing skeleton output is redacted for common secret shapes while restore packages remain byte-exact for local recovery. See [SECURITY.md](SECURITY.md) for the full safety model and project identity notes.
+
+Clean local generated artifacts when you want to remove old handoff bundles:
+
+```bash
+mcp-skeleton clean --dry-run --all
+mcp-skeleton clean --all
+```
 It also includes common questions and emergency recovery guidance for changed projects, lost manifests, and safe patch replay.
 
 Compress a directory:

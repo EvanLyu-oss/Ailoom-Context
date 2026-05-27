@@ -41,6 +41,31 @@ SKIP_DIR_NAMES = {
     "mcp-skeleton-restore",
 }
 
+SECRET_REDACTION_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
+    (
+        "private_key_block",
+        re.compile(
+            r"-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----.*?-----END [A-Z0-9 ]*PRIVATE KEY-----",
+            re.IGNORECASE | re.DOTALL,
+        ),
+    ),
+    (
+        "common_secret_assignment",
+        re.compile(
+            r"(?im)(\b(?:api[_-]?key|secret|token|password|passwd|pwd|auth[_-]?code|client[_-]?secret|"
+            r"database[_-]?url|db[_-]?password|access[_-]?key|secret[_-]?key)\b\s*[:=]\s*)"
+            r"([\"']?)([^\s,\"']{6,})(\2)",
+        ),
+    ),
+    (
+        "well_known_token",
+        re.compile(
+            r"\b(?:sk-[A-Za-z0-9_-]{10,}|ghp_[A-Za-z0-9_]{10,}|github_pat_[A-Za-z0-9_]{10,}|"
+            r"xox[baprs]-[A-Za-z0-9-]{10,}|AKIA[0-9A-Z]{12,})\b"
+        ),
+    ),
+)
+
 
 def _default_skip_dir_names(*, include_default_skips: bool = False) -> set[str]:
     return set() if include_default_skips else set(SKIP_DIR_NAMES)
@@ -272,6 +297,7 @@ def build_context_compress_payload(
         focus_mode=resolved_focus_mode,
         skeleton_density=resolved_skeleton_density,
     )
+    skeleton_text, redaction_summary = _redact_skeleton_text(skeleton_text)
     restore_blob = _encode_restore_blob(source["restore_blob"])
     metrics = _build_context_metrics(
         source["source_summary"],
@@ -325,6 +351,7 @@ def build_context_compress_payload(
         "incremental_diagnostics": source.get("incremental_diagnostics") or {},
         "skeleton_text": skeleton_text,
         "skeleton_char_count": len(skeleton_text),
+        "redaction_summary": redaction_summary,
         "restore_package": restore_blob,
         "compression_ratio": metrics["char_reduction_ratio"],
         "metrics": metrics,
@@ -2586,6 +2613,33 @@ def _decode_restore_blob(payload: dict[str, Any]) -> dict[str, Any]:
     if expected_sha and expected_sha != actual_sha:
         raise ValueError("Context restore blob checksum mismatch")
     return decoded
+
+
+def _redact_skeleton_text(skeleton_text: str) -> tuple[str, dict[str, Any]]:
+    redacted_text = skeleton_text
+    redacted_types: Counter[str] = Counter()
+    redacted_count = 0
+    for secret_type, pattern in SECRET_REDACTION_PATTERNS:
+        placeholder = f"[REDACTED_{secret_type.upper()}]"
+
+        def replace(match: re.Match[str]) -> str:
+            nonlocal redacted_count
+            redacted_count += 1
+            redacted_types[secret_type] += 1
+            if secret_type == "common_secret_assignment":
+                return f"{match.group(1)}{match.group(2)}{placeholder}{match.group(4)}"
+            return placeholder
+
+        redacted_text = pattern.sub(replace, redacted_text)
+    summary = {
+        "enabled": True,
+        "redacted_count": redacted_count,
+        "redacted_types": dict(sorted(redacted_types.items())),
+        "ai_facing_surface": "skeleton_text/context_skeleton.mcp",
+        "restore_package_preserves_original": True,
+        "note": "Only AI-facing skeleton text is redacted; restore packages keep exact local bytes for lossless restore.",
+    }
+    return redacted_text, summary
 
 
 def _render_skeleton_text(

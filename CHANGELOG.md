@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- added `SECURITY.md` with the local-only/no-telemetry safety model, share-vs-keep-local boundary, artifact cleanup guidance, and MCP-SKL project identity notes
+- added default AI-facing skeleton redaction for common secret shapes while preserving byte-exact local restore packages
+- added `context clean` / `mcp-skeleton clean` to preview or remove known local MCP-Skeleton generated artifacts such as `.workspace_ail/`
 - added a public beta trial guide and feedback template for early users testing MCP-Skeleton before formal v1.0
 - made the Python smoke reuse restore-command assertion parse quoted command arguments so Windows paths wrapped by shell quoting pass correctly
 - made Windows regression runs skip macOS `sh install.sh` quickstart/installer lifecycle checks instead of failing when `sh` is unavailable, while preserving macOS coverage

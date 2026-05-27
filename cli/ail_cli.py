@@ -77,6 +77,7 @@ CONTEXT_SUBCOMMANDS = {
     "recent",
     "demo",
     "safety",
+    "clean",
     "bundle",
     "patch",
     "patch-apply",
@@ -3205,6 +3206,8 @@ def _build_context_demo_payload(args: argparse.Namespace) -> tuple[dict[str, Any
 
 def _render_context_safety_summary(payload: dict[str, Any]) -> str:
     guarantees = payload.get("guarantees") or {}
+    local_only = payload.get("local_only") or {}
+    redaction = payload.get("skeleton_redaction") or {}
     restore_package = payload.get("restore_package") or {}
     patch_replay = payload.get("patch_replay") or {}
     noise = payload.get("default_noise_protection") or {}
@@ -3219,6 +3222,18 @@ def _render_context_safety_summary(payload: dict[str, Any]) -> str:
         f"- Lossless restore package: {guarantees.get('lossless_restore_package', False)}",
         f"- No source overwrite by default: {guarantees.get('no_source_overwrite_by_default', False)}",
         f"- Restore requires explicit output target: {guarantees.get('restore_requires_explicit_output', False)}",
+        f"- Local-only processing: {guarantees.get('local_only_processing', False)}",
+        f"- No telemetry: {guarantees.get('no_telemetry', False)}",
+        "",
+        "Local privacy:",
+        f"- Network required: {local_only.get('network_required', '')}",
+        f"- Uploads source code: {local_only.get('uploads_source_code', '')}",
+        f"- Telemetry: {local_only.get('telemetry', '')}",
+        "",
+        "Skeleton redaction:",
+        f"- Status: {redaction.get('status', '')}",
+        f"- AI-facing surface: {redaction.get('ai_facing_surface', '')}",
+        f"- Restore package preserves original: {redaction.get('restore_package_preserves_original', False)}",
         "",
         "Restore package:",
         "- Do not paste restore packages into AI unless you intentionally want to share raw source bytes.",
@@ -3254,11 +3269,27 @@ def _build_context_safety_payload(args: argparse.Namespace) -> tuple[dict[str, A
             "no_source_overwrite_by_default": True,
             "restore_requires_explicit_output": True,
             "quick_writes_to_workspace_artifacts": True,
+            "local_only_processing": True,
+            "no_telemetry": True,
+        },
+        "local_only": {
+            "network_required": False,
+            "uploads_source_code": False,
+            "telemetry": "none",
+            "background_log_collection": False,
+            "promise": "MCP-Skeleton runs compression, restore, patch, replay, and benchmark workflows locally by default and does not upload source, text, or usage logs.",
+        },
+        "skeleton_redaction": {
+            "status": "active",
+            "ai_facing_surface": "context_skeleton.mcp / skeleton_text",
+            "restore_package_preserves_original": True,
+            "redacted_secret_examples": ["api_key", "token", "password", "private_key", "client_secret"],
+            "boundary": "AI-facing skeletons are redacted; local restore packages preserve exact bytes and should stay local.",
         },
         "restore_package": {
             "share_with_ai_default": "no",
             "safe_ai_file": "context_skeleton.mcp",
-            "keep_local_files": ["context_manifest.json", "context_restore_package.*", "AI_HANDOFF.md", "handoff.json"],
+            "keep_local_files": ["context_manifest.json", "context_restore.json", "AI_HANDOFF.md", "handoff.json"],
             "reason": "restore packages preserve raw source bytes for exact reconstruction",
         },
         "patch_replay": {
@@ -3277,7 +3308,7 @@ def _build_context_safety_payload(args: argparse.Namespace) -> tuple[dict[str, A
                 "safe_file_label": "context_skeleton.mcp",
             },
             "what_to_keep_local": {
-                "answer": "Keep context_manifest.json, context_restore_package.*, AI_HANDOFF.md, and handoff.json locally for exact restore and future reuse.",
+                "answer": "Keep context_manifest.json, context_restore.json, AI_HANDOFF.md, and handoff.json locally for exact restore and future reuse.",
                 "reason": "restore packages preserve raw source bytes",
             },
             "safe_patch_apply": {
@@ -3299,6 +3330,109 @@ def _build_context_safety_payload(args: argparse.Namespace) -> tuple[dict[str, A
         "recommended_first_commands": ["mcp-skeleton handoff", "mcp-skeleton recent", "mcp-skeleton doctor"],
     }
     payload["summary_text"] = _render_context_safety_summary(payload)
+    return payload, EXIT_OK
+
+
+def _directory_size_bytes(path: Path) -> tuple[int, int]:
+    if not path.exists():
+        return 0, 0
+    if path.is_file():
+        try:
+            return path.stat().st_size, 1
+        except OSError:
+            return 0, 1
+    total_bytes = 0
+    file_count = 0
+    for root, _, files in os.walk(path):
+        for filename in files:
+            file_count += 1
+            try:
+                total_bytes += (Path(root) / filename).stat().st_size
+            except OSError:
+                continue
+    return total_bytes, file_count
+
+
+def _render_context_clean_summary(payload: dict[str, Any]) -> str:
+    lines = [
+        "MCP-Skeleton Clean",
+        "",
+        f"Status: {payload.get('clean_status', '')}",
+        f"Mode: {payload.get('mode', '')}",
+        f"Project root: {payload.get('project_root', '')}",
+        f"Total reclaimable bytes: {payload.get('total_bytes', 0)}",
+        f"Deleted targets: {payload.get('deleted_count', 0)}",
+        "",
+        "Targets:",
+    ]
+    for target in payload.get("targets") or []:
+        action = "deleted" if target.get("deleted") else "kept"
+        exists = "exists" if target.get("exists") else "missing"
+        lines.append(f"- {target.get('label', '')}: {exists}, {action}, {target.get('path', '')}")
+    lines.extend(
+        [
+            "",
+            "Safety:",
+            "- This command only removes known MCP-Skeleton generated local artifacts.",
+            "- It never deletes source files, config files, or restore output unless they live inside the listed generated directories.",
+        ]
+    )
+    if payload.get("next_command_text"):
+        lines.extend(["", f"Next command: {payload.get('next_command_text')}"])
+    return "\n".join(lines)
+
+
+def _build_context_clean_payload(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
+    project_root = (_opt_path(args, "input_dir") or Path.cwd()).resolve()
+    dry_run = bool(getattr(args, "dry_run", False))
+    clean_all = bool(getattr(args, "clean_all", False))
+    target_specs = [
+        ("workspace_artifacts", project_root / ".workspace_ail"),
+    ]
+    if clean_all:
+        target_specs.append(("restore_outputs", project_root / "mcp-skeleton-restore"))
+    targets = []
+    total_bytes = 0
+    total_files = 0
+    deleted_count = 0
+    for label, path in target_specs:
+        exists = path.exists()
+        size_bytes, file_count = _directory_size_bytes(path)
+        deleted = False
+        if exists and not dry_run:
+            if path.is_dir():
+                shutil.rmtree(path)
+            else:
+                path.unlink()
+            deleted = True
+            deleted_count += 1
+        total_bytes += size_bytes
+        total_files += file_count
+        targets.append(
+            {
+                "label": label,
+                "path": str(path),
+                "exists": exists,
+                "bytes": size_bytes,
+                "file_count": file_count,
+                "deleted": deleted,
+            }
+        )
+    payload = {
+        "status": "ok",
+        "entrypoint": "context-clean",
+        "clean_status": "preview" if dry_run else "cleaned",
+        "mode": "all" if clean_all else "workspace",
+        "project_root": str(project_root),
+        "dry_run": dry_run,
+        "all": clean_all,
+        "targets": targets,
+        "total_bytes": total_bytes,
+        "total_files": total_files,
+        "deleted_count": deleted_count,
+        "next_command_text": "" if not dry_run else _format_cli_command(["clean", "--input-dir", str(project_root), "--all"]),
+    }
+    payload["summary_text"] = _render_context_clean_summary(payload)
     return payload, EXIT_OK
 
 
@@ -3892,7 +4026,7 @@ def cmd_context(args: argparse.Namespace) -> int:
     command = getattr(args, "context_command", None)
     supported = CONTEXT_SUBCOMMANDS
     if command not in supported:
-        return _emit_command_error(args, EXIT_USAGE, "invalid_usage", "supported context subcommands: compress, restore, inspect, explain, apply-check, preset, config, init, install-hook, doctor, start, quick, recent, demo, safety, bundle, patch, patch-apply")
+        return _emit_command_error(args, EXIT_USAGE, "invalid_usage", "supported context subcommands: compress, restore, inspect, explain, apply-check, preset, config, init, install-hook, doctor, start, quick, recent, demo, safety, clean, bundle, patch, patch-apply")
 
     if command == "preset":
         payload = build_context_preset_payload(getattr(args, "preset_id", None))
@@ -3941,6 +4075,10 @@ def cmd_context(args: argparse.Namespace) -> int:
 
     if command == "safety":
         payload, exit_code = _build_context_safety_payload(args)
+        return _emit_simple_result(args, payload, text=str(payload.get("summary_text", "")), exit_code=exit_code)
+
+    if command == "clean":
+        payload, exit_code = _build_context_clean_payload(args)
         return _emit_simple_result(args, payload, text=str(payload.get("summary_text", "")), exit_code=exit_code)
 
     if command == "explain":
@@ -4419,6 +4557,12 @@ def _build_parser() -> argparse.ArgumentParser:
 
     safety = context_subparsers.add_parser("safety", help="Show safety boundaries for sharing skeletons, restore packages, and patch replay")
     safety.add_argument("--json", action="store_true")
+
+    clean = context_subparsers.add_parser("clean", help="Preview or remove local MCP-Skeleton generated artifacts")
+    clean.add_argument("--input-dir", dest="input_dir", help="Project directory to clean; defaults to current directory")
+    clean.add_argument("--dry-run", action="store_true", help="Preview cleanup targets without deleting anything")
+    clean.add_argument("--all", dest="clean_all", action="store_true", help="Also remove known restore-output artifacts such as mcp-skeleton-restore")
+    clean.add_argument("--json", action="store_true")
 
     bundle = context_subparsers.add_parser("bundle", help="Export a full context bundle with compression, inspect, and optional apply-check artifacts")
     bundle.add_argument("--text", dest="context_text")

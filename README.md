@@ -1,56 +1,85 @@
 # Ailoom Context
 
-Ailoom Context is a dedicated open-source project for lossless context compression.
+<p align="center">
+  <strong>Lossless context compression for AI coding, long documents, and large repositories.</strong>
+</p>
 
-It turns long text, source files, and directory trees into two coordinated layers:
+<p align="center">
+  Turn a heavy project into a compact AI-facing skeleton, while keeping the exact restore package local.
+</p>
 
-1. An AI-facing structural skeleton (`AILOOM-SKL.v1`)
-2. A machine-facing exact restore package
+<p align="center">
+  <code>local-first</code>
+  <code>zero telemetry</code>
+  <code>lossless restore</code>
+  <code>patch/replay</code>
+  <code>benchmark-ready</code>
+</p>
 
-That gives us a practical workflow for large repositories and long documents:
+Ailoom Context helps you hand large codebases or long manuscripts to an AI/IDE without dumping the whole source tree into context. It creates two coordinated artifacts:
 
-- lower token pressure
-- exact reconstruction
-- structural drift checks
-- patch export and controlled replay
-- incremental compression for git-scoped change surfaces
+- `AILOOM-SKL.v1`: a small structural skeleton you can share with AI tools.
+- Restore package: an exact machine-readable package you keep locally for byte-safe restore, patching, and replay.
+
+```mermaid
+flowchart LR
+    A["Large repo or long document"] --> B["ailoom handoff"]
+    B --> C["AI-facing skeleton"]
+    B --> D["Local restore package"]
+    C --> E["Review with AI / IDE"]
+    D --> F["Restore, apply-check, patch, replay"]
+```
+
+| What you get | Why it matters |
+| --- | --- |
+| Compact skeletons | Lower token pressure on large projects and long writing |
+| Exact restore packages | Reconstruct text, files, directories, symlinks, and empty dirs |
+| Local-only workflow | No cloud upload, telemetry, or background data collection |
+| Patch and replay gates | Dry-run, policy-aware, and merge-aware update flows |
+| Incremental handoff | Compress only the git-scoped change surface when you need speed |
+| Benchmarks and diagnostics | See token savings, speed profile, warnings, and restore safety |
 
 ## Quickstart
 
 Trying the beta with a real project? Start with [BETA_TRIAL_GUIDE.md](BETA_TRIAL_GUIDE.md), then send feedback with [FEEDBACK_TEMPLATE.md](FEEDBACK_TEMPLATE.md).
 
-For macOS, from a cloned or downloaded checkout:
+### macOS
+
+From a cloned or downloaded checkout:
 
 ```bash
 sh install.sh --setup-shell
 ailoom demo
 ailoom handoff
-ailoom handoff --copy --open
-ailoom quick
-ailoom recent
 ```
 
-For Windows PowerShell, from a cloned or downloaded checkout:
+### Windows PowerShell
+
+From a cloned or downloaded checkout:
 
 ```powershell
 .\install.ps1 -SetupShell
 ailoom doctor --install
 ailoom demo
 ailoom handoff
-ailoom quick
-ailoom recent
 ```
 
-What these do:
+### The first real command
 
-- `install.sh --setup-shell` installs an isolated local command and adds one managed PATH block for future zsh terminals.
-- `install.ps1 -SetupShell` installs an isolated local command, writes `install-readiness.json`, and adds one managed PATH block for future PowerShell sessions.
-- `demo` runs a safe sample bundle so you can see the workflow before using your own project.
-- `handoff` is the shortest “give this project to AI/IDE” command; it creates the same restore-safe bundle as `quick`.
-- Running `handoff` again automatically reuses the last fresh bundle when the project has not changed.
-- `handoff --copy --open` uses the native clipboard/open command for your platform where available.
-- `quick` creates a restore-safe bundle for the current directory and prints the skeleton, manifest, inspect, and restore commands.
-- `recent` shows the latest bundle, skeleton, manifest, restore command, and freshness status for the current directory.
+```bash
+ailoom handoff --copy --open
+```
+
+`handoff` is the shortest "give this project to AI/IDE" command. It creates or reuses a restore-safe bundle for the current directory, writes an `AI_HANDOFF.md` prompt, separates the skeleton you can share from restore files you keep local, and prints the next command to copy.
+
+| Command | Use it when |
+| --- | --- |
+| `ailoom demo` | You want a safe sample before touching your own project |
+| `ailoom handoff` | You want the fastest project-to-AI handoff |
+| `ailoom handoff --copy --open` | You want the handoff file opened and copied where possible |
+| `ailoom quick` | You want explicit bundle, manifest, inspect, and restore paths |
+| `ailoom recent` | You want to rediscover the latest bundle for this project |
+| `ailoom doctor` | You want readiness, restore safety, and install diagnostics |
 
 The human output for `quick`, `handoff`, `doctor`, and `recent` starts with an `At a glance` card so first-time users can immediately see status, restore safety, token savings, speed/freshness, and the next command to copy. `handoff` also includes a `Daily handoff` panel that says whether it created or reused a bundle, why, and whether the skeleton was copied automatically or needs the shown manual copy command. `quick` / `handoff` also write `AI_HANDOFF.md` and `handoff.json` beside the bundle, include a recommended AI/IDE prompt, separate the skeleton file to share from restore files to keep locally, explain the slowest visible phase, show a stable `Performance summary` plus detailed `Performance profile`, report default noise protection, suggest the best next command (`--fast` or `--reuse-if-fresh`) for large or slower runs, and explain why tiny projects may expand instead of saving tokens.
 

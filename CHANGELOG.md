@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- added `ailoom savings` / `context savings` to show source tokens, skeleton tokens, and savings from the latest handoff
+- added `INSTALL.md` and `docs/USER_GUIDE.md` so first-time users can install, run a demo, and understand AI handoff safety with less learning cost
+- expanded generated `AI_HANDOFF.md` files with token savings, source/skeleton token counts, savings lookup, and reuse guidance for daily AI/IDE handoff
 - renamed the public product surface to Ailoom Context, with `ailoom` as the primary CLI and `mcp-skeleton` retained as a compatibility alias
 - prepared the benchmark guardrails and cross-platform validation report for the GitHub slug migration to `Ailoom-Context`
 - updated new bundle metadata to `ailoom_context_bundle.v1` and `AILOOM-SKL.v1` while keeping restore workflows compatible through the same package reader

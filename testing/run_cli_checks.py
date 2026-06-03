@@ -1052,6 +1052,57 @@ def _check_context_recent_json(workspace: Path) -> None:
     assert "Dry run:" in clean["summary_text"]
 
 
+def _check_context_savings_json(workspace: Path) -> None:
+    project = workspace / "savings_project"
+    (project / "src").mkdir(parents=True)
+    (project / "docs").mkdir()
+    (project / "src" / "app.py").write_text(
+        "def run() -> str:\n"
+        "    return 'savings-ready'\n",
+        encoding="utf-8",
+    )
+    (project / "docs" / "notes.md").write_text(
+        "# Notes\n\n" + "Ailoom Context savings visibility for real users.\n\n" * 80,
+        encoding="utf-8",
+    )
+    quick = _run_top_level_cli_json(["handoff", "--input-dir", str(project), "--json"])
+    assert quick["status"] == "ok"
+    savings = _run_top_level_cli_json(["savings", "--input-dir", str(project), "--json"])
+    assert savings["status"] == "ok"
+    assert savings["entrypoint"] == "context-savings"
+    assert savings["savings_status"] == "ready"
+    assert savings["source_tokens"] > 0
+    assert savings["skeleton_tokens"] > 0
+    assert savings["tokens_saved"] >= 0
+    assert savings["savings_percent"] >= 0
+    assert savings["freshness_status"] == "fresh"
+    assert savings["next_command_text"].startswith("ailoom handoff")
+    assert "Ailoom Context Savings" in savings["summary_text"]
+    assert "Token savings:" in savings["summary_text"]
+    assert "Source tokens:" in savings["summary_text"]
+    assert "Skeleton tokens:" in savings["summary_text"]
+    assert "Use again:" in savings["summary_text"]
+
+
+def _check_user_guides_docs_ok(workspace: Path) -> None:
+    del workspace
+    install_doc = ROOT / "INSTALL.md"
+    user_guide = ROOT / "docs" / "USER_GUIDE.md"
+    assert install_doc.exists()
+    assert user_guide.exists()
+    install_text = install_doc.read_text(encoding="utf-8")
+    user_text = user_guide.read_text(encoding="utf-8")
+    assert "Install in 30 seconds" in install_text
+    assert "macOS" in install_text
+    assert "Windows PowerShell" in install_text
+    assert "ailoom demo" in install_text
+    assert "ailoom handoff" in install_text
+    assert "AI coding handoff" in user_text
+    assert "Large repository" in user_text
+    assert "Long manuscript" in user_text
+    assert "Patch replay" in user_text
+
+
 def _check_context_quick_windows_command_text_json(workspace: Path) -> None:
     project = workspace / "windows_commands_project"
     project.mkdir()
@@ -1744,6 +1795,11 @@ def _check_handoff_ai_prompt_json(workspace: Path) -> None:
     assert metadata_payload["skeleton_file"] == handoff["skeleton_file"]
     assert metadata_payload["share_with_ai"]["file"] == handoff["skeleton_file"]
     assert "Ready to share:" in guide_text
+    assert "Token savings:" in guide_text
+    assert "Source tokens:" in guide_text
+    assert "Skeleton tokens:" in guide_text
+    assert "Savings: ailoom savings" in guide_text
+    assert "Next fast/reuse command:" in guide_text
     assert "Recommended prompt:" in guide_text
     assert "IDE metadata:" in guide_text
     assert "Recommended prompt:" in payload["summary_text"]
@@ -2982,6 +3038,7 @@ CHECKS: list[tuple[str, Callable[[Path], None]]] = [
     ("context_quick_json_ok", _check_context_quick_json),
     ("context_quick_windows_command_text_json_ok", _check_context_quick_windows_command_text_json),
     ("context_recent_json_ok", _check_context_recent_json),
+    ("context_savings_json_ok", _check_context_savings_json),
     ("context_quick_fast_json_ok", _check_context_quick_fast_json),
     ("context_quick_speed_tip_json_ok", _check_context_quick_speed_tip_json),
     ("context_demo_json_ok", _check_context_demo_json),
@@ -3018,6 +3075,7 @@ CHECKS: list[tuple[str, Callable[[Path], None]]] = [
     ("context_error_recovery_guidance_json_ok", _check_error_recovery_guidance_json),
     ("context_restore_invalid_relpath_json_ok", _check_restore_invalid_relpath),
     ("context_scale_benchmark_quick_json_ok", _check_scale_benchmark_quick),
+    ("user_guides_docs_ok", _check_user_guides_docs_ok),
 ]
 
 

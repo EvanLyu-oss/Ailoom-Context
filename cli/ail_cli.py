@@ -80,6 +80,7 @@ CONTEXT_SUBCOMMANDS = {
     "start",
     "quick",
     "recent",
+    "savings",
     "demo",
     "safety",
     "clean",
@@ -1290,12 +1291,19 @@ def _build_ai_handoff_metadata(payload: dict[str, Any]) -> dict[str, Any]:
 def _render_quick_ai_handoff_guide(payload: dict[str, Any]) -> str:
     handoff = payload.get("handoff") or {}
     keep_files = handoff.get("restore_keep_files") or {}
+    start = payload.get("start") or {}
+    metrics = start.get("metrics") or {}
+    performance_summary = payload.get("performance_summary") or {}
+    recommended_next = performance_summary.get("recommended_next_run") or {}
     return "\n".join([
         "# Ailoom Context AI Handoff",
         "",
         "Ready to share:",
         f"- Status: {(payload.get('user_outcome') or {}).get('status', 'ready_to_share')}",
         f"- Share file: {handoff.get('ai_file') or handoff.get('skeleton_file') or '(not available)'}",
+        f"- Token savings: {metrics.get('estimated_tokens_saved', 0)} tokens ({metrics.get('estimated_savings_percent', 0)}%)",
+        f"- Source tokens: {metrics.get('estimated_token_count_source', 0)}",
+        f"- Skeleton tokens: {metrics.get('estimated_token_count_skeleton', 0)}",
         "- Keep restore packages local unless you intentionally want to share raw source bytes.",
         "",
         "Give this to AI/IDE:",
@@ -1317,8 +1325,10 @@ def _render_quick_ai_handoff_guide(payload: dict[str, Any]) -> str:
         "Useful commands:",
         f"- Inspect: {payload.get('inspect_command_text') or '(not available)'}",
         f"- Restore: {payload.get('restore_command_text') or '(not available)'}",
+        f"- Savings: {CLI_NAME} savings",
         f"- Copy skeleton: {payload.get('copy_command_text') or '(not available)'}",
         f"- Open bundle: {payload.get('open_command_text') or '(not available)'}",
+        f"- Next fast/reuse command: {recommended_next.get('command_text') or '(not available)'}",
         "",
         "Next step:",
         "- Attach or paste context_skeleton.mcp into your AI/IDE, and keep this bundle directory locally.",
@@ -1577,6 +1587,9 @@ def _build_recent_record(args: argparse.Namespace, payload: dict[str, Any]) -> d
         "refresh_command_text": _recent_refresh_command_text(args),
         "estimated_tokens_saved": metrics.get("estimated_tokens_saved", 0),
         "estimated_savings_percent": metrics.get("estimated_savings_percent", 0),
+        "source_tokens": metrics.get("estimated_token_count_source", 0),
+        "skeleton_tokens": metrics.get("estimated_token_count_skeleton", 0),
+        "token_direction": metrics.get("estimated_token_direction", ""),
         "experience": payload.get("experience") or {},
         "user_outcome": payload.get("user_outcome") or {},
     }
@@ -1826,10 +1839,84 @@ def _build_context_recent_payload(args: argparse.Namespace) -> tuple[dict[str, A
         **lifecycle,
         "estimated_tokens_saved": record.get("estimated_tokens_saved", 0),
         "estimated_savings_percent": record.get("estimated_savings_percent", 0),
+        "source_tokens": record.get("source_tokens", 0),
+        "skeleton_tokens": record.get("skeleton_tokens", 0),
+        "token_direction": record.get("token_direction", ""),
         "experience": record.get("experience") or {},
         "user_outcome": user_outcome,
     }
     payload["summary_text"] = _render_context_recent_summary(payload)
+    return payload, EXIT_OK
+
+
+def _render_context_savings_summary(payload: dict[str, Any]) -> str:
+    lines = [
+        "Ailoom Context Savings",
+        "",
+        "At a glance:",
+        f"- Status: {payload.get('savings_status', '')}",
+        f"- Freshness: {payload.get('freshness_status', 'unknown')}",
+        f"- Token savings: {payload.get('tokens_saved', 0)} tokens ({payload.get('savings_percent', 0)}%)",
+        f"- Source tokens: {payload.get('source_tokens', 0)}",
+        f"- Skeleton tokens: {payload.get('skeleton_tokens', 0)}",
+        "",
+        "Last handoff:",
+        f"- Created: {payload.get('created_at', '') or '(unknown)'}",
+        f"- Bundle: {payload.get('bundle_root', '') or '(not available)'}",
+        f"- Skeleton: {payload.get('skeleton_file', '') or '(not available)'}",
+        "",
+        "Use again:",
+        payload.get("next_command_text") or "(not available)",
+    ]
+    if payload.get("freshness_status") == "stale":
+        lines.extend([
+            "",
+            "Refresh first:",
+            payload.get("refresh_command_text") or "(not available)",
+        ])
+    return "\n".join(lines)
+
+
+def _build_context_savings_payload(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
+    recent_payload, recent_exit = _build_context_recent_payload(args)
+    if recent_exit != EXIT_OK:
+        payload = {
+            "status": "error",
+            "entrypoint": "context-savings",
+            "savings_status": "missing",
+            "message": "no recent handoff savings were found for this project; run ailoom handoff first",
+            "recent": recent_payload,
+        }
+        payload["summary_text"] = _render_context_savings_summary(payload)
+        return payload, recent_exit
+    source_tokens = int(recent_payload.get("source_tokens") or 0)
+    skeleton_tokens = int(recent_payload.get("skeleton_tokens") or 0)
+    tokens_saved = int(recent_payload.get("estimated_tokens_saved") or max(0, source_tokens - skeleton_tokens))
+    savings_percent = float(recent_payload.get("estimated_savings_percent") or 0.0)
+    if not savings_percent and source_tokens:
+        savings_percent = round((tokens_saved / source_tokens) * 100, 2)
+    user_outcome = recent_payload.get("user_outcome") or {}
+    payload = {
+        "status": "ok",
+        "entrypoint": "context-savings",
+        "savings_status": "ready",
+        "source_root": recent_payload.get("source_root", ""),
+        "recent_file": recent_payload.get("recent_file", ""),
+        "created_at": recent_payload.get("created_at", ""),
+        "freshness_status": recent_payload.get("freshness_status", "unknown"),
+        "bundle_root": recent_payload.get("bundle_root", ""),
+        "skeleton_file": recent_payload.get("skeleton_file", ""),
+        "manifest_file": recent_payload.get("manifest_file", ""),
+        "source_tokens": source_tokens,
+        "skeleton_tokens": skeleton_tokens,
+        "tokens_saved": tokens_saved,
+        "savings_percent": savings_percent,
+        "token_direction": recent_payload.get("token_direction", ""),
+        "next_command_text": user_outcome.get("next_command_text") or recent_payload.get("inspect_command_text", ""),
+        "refresh_command_text": recent_payload.get("refresh_command_text", ""),
+        "recent": recent_payload,
+    }
+    payload["summary_text"] = _render_context_savings_summary(payload)
     return payload, EXIT_OK
 
 
@@ -3186,8 +3273,9 @@ def _render_context_demo_summary(payload: dict[str, Any]) -> str:
         f"- Restore: {quick.get('restore_command_text', '')}",
         "",
         "Use on your project:",
-        "ailoom quick",
-        "ailoom quick --fast",
+        "ailoom handoff --copy --open",
+        "ailoom savings",
+        "ailoom handoff --reuse-if-fresh",
     ]
     return "\n".join(lines)
 
@@ -4071,7 +4159,7 @@ def cmd_context(args: argparse.Namespace) -> int:
     command = getattr(args, "context_command", None)
     supported = CONTEXT_SUBCOMMANDS
     if command not in supported:
-        return _emit_command_error(args, EXIT_USAGE, "invalid_usage", "supported context subcommands: compress, restore, inspect, explain, apply-check, preset, config, init, install-hook, doctor, start, quick, recent, demo, safety, clean, bundle, patch, patch-apply")
+        return _emit_command_error(args, EXIT_USAGE, "invalid_usage", "supported context subcommands: compress, restore, inspect, explain, apply-check, preset, config, init, install-hook, doctor, start, quick, recent, savings, demo, safety, clean, bundle, patch, patch-apply")
 
     if command == "preset":
         payload = build_context_preset_payload(getattr(args, "preset_id", None))
@@ -4112,6 +4200,11 @@ def cmd_context(args: argparse.Namespace) -> int:
     if command == "recent":
         _apply_current_dir_default(args)
         payload, exit_code = _build_context_recent_payload(args)
+        return _emit_simple_result(args, payload, text=str(payload.get("summary_text", "")), exit_code=exit_code)
+
+    if command == "savings":
+        _apply_current_dir_default(args)
+        payload, exit_code = _build_context_savings_payload(args)
         return _emit_simple_result(args, payload, text=str(payload.get("summary_text", "")), exit_code=exit_code)
 
     if command == "demo":
@@ -4594,6 +4687,12 @@ def _build_parser() -> argparse.ArgumentParser:
     recent.add_argument("--clean-stale", action="store_true", help="Clean stale known bundles for this project")
     recent.add_argument("--dry-run", action="store_true", help="Show bundle cleanup candidates without deleting anything")
     recent.add_argument("--json", action="store_true")
+
+    savings = context_subparsers.add_parser("savings", help="Show token savings from the most recent handoff for this project")
+    savings.add_argument("--input-dir", dest="input_dir", help="Project directory whose recent handoff should be read; defaults to current directory")
+    savings.add_argument("--input-file", dest="input_file", help="Read recent savings next to this file")
+    savings.add_argument("--text-file", dest="text_file", help="Read recent savings next to this text file")
+    savings.add_argument("--json", action="store_true")
 
     demo = context_subparsers.add_parser("demo", help="Run a one-command demo that creates a sample project, safe bundle, and restore guidance")
     demo.add_argument("--output-dir", dest="output_dir", help="Demo root directory; defaults under .workspace_ail/demo_runs")

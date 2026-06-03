@@ -39,6 +39,31 @@ flowchart LR
 | Incremental handoff | Compress only the git-scoped change surface when you need speed |
 | Benchmarks and diagnostics | See token savings, speed profile, warnings, and restore safety |
 
+## Install in 30 Seconds
+
+For the shortest install path, see [INSTALL.md](INSTALL.md).
+
+```bash
+sh install.sh --setup-shell
+ailoom demo
+ailoom handoff
+ailoom savings
+```
+
+New-user guide: [docs/USER_GUIDE.md](docs/USER_GUIDE.md)
+
+## Security Model
+
+| Boundary | Default |
+| --- | --- |
+| Source processing | Local-only |
+| Telemetry | None |
+| AI-facing file | `context_skeleton.mcp` |
+| Keep-local files | `context_manifest.json`, `context_restore.json`, bundle directory |
+| Cleanup | `ailoom clean --dry-run` then `ailoom clean` |
+
+Run `ailoom safety` for the full local privacy, redaction, restore-package, and patch replay boundary.
+
 ## Quickstart
 
 Trying the beta with a real project? Start with [BETA_TRIAL_GUIDE.md](BETA_TRIAL_GUIDE.md), then send feedback with [FEEDBACK_TEMPLATE.md](FEEDBACK_TEMPLATE.md).

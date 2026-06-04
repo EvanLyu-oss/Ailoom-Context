@@ -300,7 +300,7 @@ Try Ailoom Context without preparing your own project first:
 ailoom first-run
 ```
 
-`first-run` is the install-aftercare command: it checks local install readiness, runs a safe demo bundle, verifies restore safety, shows estimated token savings, explains the slowest visible step, and prints the exact `handoff`, `storage`, and cleanup commands to use next.
+`first-run` is the install-aftercare command: it checks local install readiness, runs a safe demo bundle, verifies restore safety, shows estimated token savings, explains the slowest visible step, and prints the exact `handoff`, `savings`, `trial-report`, `storage`, safety, and cleanup commands to use next. Its first screen is designed as a new-user cockpit: follow the "First real project loop" section when you are ready to try Ailoom Context on your own repository.
 
 ```bash
 ailoom demo

@@ -3493,38 +3493,58 @@ def _render_context_demo_summary(payload: dict[str, Any]) -> str:
 def _render_context_first_run_summary(payload: dict[str, Any]) -> str:
     savings = payload.get("token_savings") or {}
     speed = payload.get("speed_guidance") or {}
-    return "\n".join(
-        [
-            "Ailoom Context First Run",
-            "",
-            f"Status: {payload.get('first_run_status', '')}",
-            f"Install check: {payload.get('install_status', '')}",
-            f"Safe demo: {payload.get('demo_status', '')}",
-            f"Restore safety: {'OK' if payload.get('restore_safe') else 'CHECK'}",
-            f"Token savings: {savings.get('estimated_tokens_saved', 0)} tokens ({savings.get('estimated_savings_percent', 0)}%)",
-            f"Speed: {speed.get('status', '')} - {speed.get('message', '')}",
-            "",
-            "What happened:",
-            f"- Created a safe demo bundle: {payload.get('demo_root', '')}",
-            f"- AI-facing skeleton: {payload.get('skeleton_file', '')}",
-            "- Restore package stayed local.",
-            "",
-            "Speed guidance:",
-            f"- Slowest visible step: {speed.get('slowest_phase', '')} ({speed.get('slowest_phase_ms', 0)} ms)",
-            f"- Why: {speed.get('why_it_may_feel_slow', '')}",
-            f"- Best next command: {speed.get('best_next_command_text', '') or '(not available)'}",
-            f"- Reuse unchanged project: {speed.get('reuse_command_text', '') or '(not available)'}",
-            "",
-            "Try your project:",
-            payload.get("try_project_command_text") or "ailoom handoff --copy --open",
-            "",
-            "Check local storage:",
-            payload.get("check_storage_command_text") or "ailoom doctor --storage",
-            "",
-            "Clean demo later:",
-            payload.get("clean_demo_command_text") or "ailoom clean --dry-run --all",
-        ]
-    )
+    storage = payload.get("storage_overview") or {}
+    boundary = payload.get("share_boundary") or {}
+    lines = [
+        "Ailoom Context First Run",
+        "",
+        f"Status: {payload.get('first_run_status', '')}",
+        f"Install check: {payload.get('install_status', '')}",
+        f"Safe demo: {payload.get('demo_status', '')}",
+        f"Restore safety: {'OK' if payload.get('restore_safe') else 'CHECK'}",
+        f"Token savings: {savings.get('estimated_tokens_saved', 0)} tokens ({savings.get('estimated_savings_percent', 0)}%)",
+        f"Speed: {speed.get('status', '')} - {speed.get('message', '')}",
+        "",
+        "What happened:",
+        f"- Created a safe demo bundle: {payload.get('demo_root', '')}",
+        f"- AI-facing skeleton: {payload.get('skeleton_file', '')}",
+        "- Restore package stayed local.",
+        "",
+        "First real project loop:",
+    ]
+    for item in payload.get("first_project_loop") or []:
+        lines.append(f"- {item.get('label', '')}: {item.get('command_text', '')}")
+    lines.extend([
+        "",
+        "Local files and cache:",
+        f"- Generated artifact bytes: {storage.get('total_bytes', 0)}",
+        f"- Generated artifact files: {storage.get('total_files', 0)}",
+        f"- Cleanup preview: {storage.get('cleanup_preview_command_text', '') or '(not available)'}",
+        "",
+        "Safety boundary:",
+        f"- Share with AI: {', '.join(boundary.get('safe_to_share') or [])}",
+        f"- Keep local: {', '.join(boundary.get('keep_local') or [])}",
+        f"- Check anytime: {payload.get('safety_command_text') or 'ailoom safety'}",
+        "",
+        "Beta feedback:",
+        payload.get("feedback_report_command_text") or "ailoom trial-report --write-report ailoom-trial-report.md",
+        "",
+        "Speed guidance:",
+        f"- Slowest visible step: {speed.get('slowest_phase', '')} ({speed.get('slowest_phase_ms', 0)} ms)",
+        f"- Why: {speed.get('why_it_may_feel_slow', '')}",
+        f"- Best next command: {speed.get('best_next_command_text', '') or '(not available)'}",
+        f"- Reuse unchanged project: {speed.get('reuse_command_text', '') or '(not available)'}",
+        "",
+        "Try your project:",
+        payload.get("try_project_command_text") or "ailoom handoff --copy --open",
+        "",
+        "Check local storage:",
+        payload.get("check_storage_command_text") or "ailoom doctor --storage",
+        "",
+        "Clean demo later:",
+        payload.get("clean_demo_command_text") or "ailoom clean --dry-run --all",
+    ])
+    return "\n".join(lines)
 
 
 def _build_context_first_run_speed_guidance(quick_payload: dict[str, Any]) -> dict[str, Any]:
@@ -3561,6 +3581,10 @@ def _build_context_first_run_action_plan(payload: dict[str, Any]) -> list[dict[s
             "step": "clean_when_done",
             "message": f"Preview cleanup with `{payload.get('clean_demo_command_text')}` before deleting generated files.",
         },
+        {
+            "step": "send_beta_feedback",
+            "message": f"After a real handoff, run `{payload.get('feedback_report_command_text')}` and send the report if you are testing the beta.",
+        },
     ]
 
 
@@ -3588,6 +3612,50 @@ def _build_context_first_run_payload(args: argparse.Namespace) -> tuple[dict[str
     demo_status = str(demo_payload.get("demo_status") or "blocked")
     first_run_status = "ready" if install_status == "ready" and install_exit == EXIT_OK and demo_exit == EXIT_OK and restore_safe else "watch"
     project_root = (_opt_path(args, "input_dir") or Path.cwd()).resolve()
+    try_project_command_text = "ailoom handoff --copy --open"
+    check_storage_command_text = "ailoom doctor --storage"
+    feedback_report_command_text = "ailoom trial-report --write-report ailoom-trial-report.md"
+    safety_command_text = "ailoom safety"
+    clean_demo_command_text = _format_cli_command(["clean", "--dry-run", "--all", "--older-than", "7d", "--input-dir", str(project_root)])
+    first_project_loop = [
+        {
+            "step": "handoff",
+            "label": "Create AI handoff",
+            "command_text": try_project_command_text,
+            "why": "creates context_skeleton.mcp plus local restore files",
+        },
+        {
+            "step": "savings",
+            "label": "Check token savings",
+            "command_text": "ailoom savings",
+            "why": "shows source tokens, skeleton tokens, and estimated savings",
+        },
+        {
+            "step": "trial_report",
+            "label": "Write beta report",
+            "command_text": feedback_report_command_text,
+            "why": "packages savings, storage, safety, and feedback fields into one Markdown report",
+        },
+        {
+            "step": "storage",
+            "label": "Check generated storage",
+            "command_text": check_storage_command_text,
+            "why": "shows generated artifact size before cleanup",
+        },
+    ]
+    storage_overview = {
+        "entrypoint": storage_payload.get("entrypoint", "context-storage-doctor"),
+        "storage_status": storage_payload.get("storage_status", ""),
+        "total_bytes": storage_payload.get("total_bytes", 0),
+        "total_files": storage_payload.get("total_files", 0),
+        "targets": storage_payload.get("targets", []),
+        "cleanup_preview_command_text": storage_payload.get("recommended_clean_command_text") or clean_demo_command_text,
+    }
+    share_boundary = {
+        "safe_to_share": ["context_skeleton.mcp", "AI_HANDOFF.md recommended prompt"],
+        "keep_local": ["context_manifest.json", "context_restore.json", "bundle directory", "handoff.json"],
+        "why": "restore packages preserve raw source bytes for exact local recovery",
+    }
     payload = {
         "status": "ok" if demo_exit == EXIT_OK else "error",
         "entrypoint": "context-first-run",
@@ -3607,9 +3675,14 @@ def _build_context_first_run_payload(args: argparse.Namespace) -> tuple[dict[str
             "estimated_savings_percent": metrics.get("estimated_savings_percent", 0),
         },
         "speed_guidance": speed_guidance,
-        "try_project_command_text": "ailoom handoff --copy --open",
-        "check_storage_command_text": "ailoom doctor --storage",
-        "clean_demo_command_text": _format_cli_command(["clean", "--dry-run", "--all", "--older-than", "7d", "--input-dir", str(project_root)]),
+        "try_project_command_text": try_project_command_text,
+        "check_storage_command_text": check_storage_command_text,
+        "feedback_report_command_text": feedback_report_command_text,
+        "safety_command_text": safety_command_text,
+        "clean_demo_command_text": clean_demo_command_text,
+        "first_project_loop": first_project_loop,
+        "storage_overview": storage_overview,
+        "share_boundary": share_boundary,
         "install_check": install_payload,
         "demo": demo_payload,
         "storage": storage_payload,

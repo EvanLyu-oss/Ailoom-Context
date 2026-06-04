@@ -1819,7 +1819,17 @@ def _check_first_run_json(workspace: Path) -> None:
     assert Path(payload["skeleton_file"]).exists()
     assert payload["try_project_command_text"] == "ailoom handoff --copy --open"
     assert payload["check_storage_command_text"] == "ailoom doctor --storage"
+    assert payload["feedback_report_command_text"] == "ailoom trial-report --write-report ailoom-trial-report.md"
+    assert payload["safety_command_text"] == "ailoom safety"
     assert payload["clean_demo_command_text"].startswith("ailoom clean --dry-run --all")
+    assert payload["first_project_loop"][0]["command_text"] == "ailoom handoff --copy --open"
+    assert payload["first_project_loop"][1]["command_text"] == "ailoom savings"
+    assert payload["first_project_loop"][2]["command_text"] == "ailoom trial-report --write-report ailoom-trial-report.md"
+    assert payload["first_project_loop"][3]["command_text"].startswith("ailoom doctor --storage")
+    assert payload["share_boundary"]["safe_to_share"] == ["context_skeleton.mcp", "AI_HANDOFF.md recommended prompt"]
+    assert "context_manifest.json" in payload["share_boundary"]["keep_local"]
+    assert payload["storage_overview"]["entrypoint"] == "context-storage-doctor"
+    assert payload["storage_overview"]["cleanup_preview_command_text"].startswith("ailoom clean --dry-run")
     assert payload["speed_guidance"]["status"] in {"fast", "ok", "slow"}
     assert payload["speed_guidance"]["observed_total_ms"] >= 0
     assert payload["speed_guidance"]["slowest_phase"]
@@ -1832,6 +1842,10 @@ def _check_first_run_json(workspace: Path) -> None:
     assert "Install check:" in payload["summary_text"]
     assert "Safe demo:" in payload["summary_text"]
     assert "Speed guidance:" in payload["summary_text"]
+    assert "First real project loop:" in payload["summary_text"]
+    assert "Local files and cache:" in payload["summary_text"]
+    assert "Safety boundary:" in payload["summary_text"]
+    assert "Beta feedback:" in payload["summary_text"]
     assert "Try your project:" in payload["summary_text"]
     assert "Clean demo later:" in payload["summary_text"]
 
@@ -1839,6 +1853,8 @@ def _check_first_run_json(workspace: Path) -> None:
     assert human.returncode == 0
     assert "Ailoom Context First Run" in human.stdout
     assert "Speed guidance:" in human.stdout
+    assert "First real project loop:" in human.stdout
+    assert "Beta feedback:" in human.stdout
     assert "Try your project:" in human.stdout
     assert "ailoom handoff --copy --open" in human.stdout
 

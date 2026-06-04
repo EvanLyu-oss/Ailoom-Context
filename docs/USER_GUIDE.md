@@ -6,6 +6,14 @@ This guide focuses on real workflows: AI coding handoff, large repository review
 
 Use this when you want an AI assistant or IDE agent to understand a project without pasting the whole source tree.
 
+If you just installed Ailoom Context, run the guided first screen once:
+
+```bash
+ailoom first-run
+```
+
+Then follow its `First real project loop`: `handoff`, `savings`, `trial-report`, and `doctor --storage`.
+
 ```bash
 ailoom handoff --copy --open
 ```

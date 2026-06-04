@@ -54,6 +54,8 @@ New-user guide: [docs/USER_GUIDE.md](docs/USER_GUIDE.md)
 
 Beta users: start here with [docs/BETA_TESTING.md](docs/BETA_TESTING.md), then send results with [FEEDBACK_TEMPLATE.md](FEEDBACK_TEMPLATE.md).
 
+Release checklist and notes template: [docs/RELEASE_CHECKLIST.md](docs/RELEASE_CHECKLIST.md), [docs/GITHUB_RELEASE_TEMPLATE.md](docs/GITHUB_RELEASE_TEMPLATE.md).
+
 ## Security Model
 
 | Boundary | Default |
@@ -63,6 +65,7 @@ Beta users: start here with [docs/BETA_TESTING.md](docs/BETA_TESTING.md), then s
 | AI-facing file | `context_skeleton.mcp` |
 | Keep-local files | `context_manifest.json`, `context_restore.json`, bundle directory |
 | Cleanup | `ailoom clean --dry-run` then `ailoom clean` |
+| Storage check | `ailoom doctor --storage` |
 
 Run `ailoom safety` for the full local privacy, redaction, restore-package, and patch replay boundary.
 

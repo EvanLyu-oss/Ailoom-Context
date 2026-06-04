@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- added `ailoom clean --older-than` and `ailoom doctor --storage` for safer generated-artifact cleanup and storage visibility
+- added release checklist and GitHub release template docs for beta/v1.0 distribution
 - added `ailoom savings --write-report` for shareable Markdown token-savings reports during beta trials
 - added `docs/BETA_TESTING.md` and expanded beta feedback prompts around savings reports, restore verification, speed, and safety clarity
 - added `ailoom savings` / `context savings` to show source tokens, skeleton tokens, and savings from the latest handoff

@@ -1102,13 +1102,19 @@ def _check_user_guides_docs_ok(workspace: Path) -> None:
     install_doc = ROOT / "INSTALL.md"
     user_guide = ROOT / "docs" / "USER_GUIDE.md"
     beta_testing = ROOT / "docs" / "BETA_TESTING.md"
+    release_checklist = ROOT / "docs" / "RELEASE_CHECKLIST.md"
+    release_template = ROOT / "docs" / "GITHUB_RELEASE_TEMPLATE.md"
     feedback_template = ROOT / "FEEDBACK_TEMPLATE.md"
     assert install_doc.exists()
     assert user_guide.exists()
     assert beta_testing.exists()
+    assert release_checklist.exists()
+    assert release_template.exists()
     install_text = install_doc.read_text(encoding="utf-8")
     user_text = user_guide.read_text(encoding="utf-8")
     beta_text = beta_testing.read_text(encoding="utf-8")
+    release_checklist_text = release_checklist.read_text(encoding="utf-8")
+    release_template_text = release_template.read_text(encoding="utf-8")
     feedback_text = feedback_template.read_text(encoding="utf-8")
     assert "Install in 30 seconds" in install_text
     assert "macOS" in install_text
@@ -1122,6 +1128,10 @@ def _check_user_guides_docs_ok(workspace: Path) -> None:
     assert "Beta users: start here" in beta_text
     assert "ailoom savings --write-report" in beta_text
     assert "Restore verification" in beta_text
+    assert "Release Checklist" in release_checklist_text
+    assert "python3 testing/release_readiness_check.py" in release_checklist_text
+    assert "GitHub Release Template" in release_template_text
+    assert "ailoom savings --write-report" in release_template_text
     assert "Attach or paste the savings report" in feedback_text
     assert "Was the token savings report useful" in feedback_text
 
@@ -1360,9 +1370,21 @@ def _check_context_clean_json(workspace: Path) -> None:
     assert dry_run["clean_status"] == "preview"
     assert dry_run["deleted_count"] == 0
     assert dry_run["total_files"] == 2
+    assert dry_run["total_bytes"] > 0
+    assert "Total reclaimable bytes:" in dry_run["summary_text"]
     assert workspace_dir.exists()
     assert restore_dir.exists()
     assert dry_run["next_command_text"].startswith("ailoom clean --input-dir")
+
+    old_timestamp = 946684800
+    os.utime(project / ".workspace_ail", (old_timestamp, old_timestamp))
+    os.utime(workspace_dir, (old_timestamp, old_timestamp))
+    os.utime(workspace_dir / "context_skeleton.mcp", (old_timestamp, old_timestamp))
+    older_preview = _run_top_level_cli_json(["clean", "--input-dir", str(project), "--dry-run", "--all", "--older-than", "7d", "--json"])
+    assert older_preview["older_than"] == "7d"
+    assert older_preview["targets"][0]["eligible"] is True
+    assert older_preview["targets"][0]["skipped_reason"] == ""
+
     cleaned = _run_top_level_cli_json(["clean", "--input-dir", str(project), "--all", "--json"])
     assert cleaned["status"] == "ok"
     assert cleaned["clean_status"] == "cleaned"
@@ -1370,6 +1392,14 @@ def _check_context_clean_json(workspace: Path) -> None:
     assert not (project / ".workspace_ail").exists()
     assert not restore_dir.exists()
     assert "Ailoom Context Clean" in cleaned["summary_text"]
+
+    storage = _run_top_level_cli_json(["doctor", "--storage", "--input-dir", str(project), "--json"])
+    assert storage["status"] == "ok"
+    assert storage["entrypoint"] == "context-storage-doctor"
+    assert storage["storage_status"] in {"ok", "watch"}
+    assert storage["total_bytes"] >= 0
+    assert storage["recommended_clean_command_text"].startswith("ailoom clean --dry-run")
+    assert "Ailoom Context Storage Doctor" in storage["summary_text"]
 
 
 def _check_top_level_version_json(workspace: Path) -> None:

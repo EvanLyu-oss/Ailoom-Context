@@ -1083,15 +1083,33 @@ def _check_context_savings_json(workspace: Path) -> None:
     assert "Skeleton tokens:" in savings["summary_text"]
     assert "Use again:" in savings["summary_text"]
 
+    report_file = workspace / "savings-report.md"
+    reported = _run_top_level_cli_json(["savings", "--input-dir", str(project), "--write-report", str(report_file), "--json"])
+    assert reported["status"] == "ok"
+    assert reported["report_written"] is True
+    assert reported["report_file"].endswith("savings-report.md")
+    report_text = report_file.read_text(encoding="utf-8")
+    assert "# Ailoom Context Savings Report" in report_text
+    assert "## Token Impact" in report_text
+    assert "source_tokens:" in report_text
+    assert "skeleton_tokens:" in report_text
+    assert "savings_percent:" in report_text
+    assert "## Share With Beta Feedback" in report_text
+
 
 def _check_user_guides_docs_ok(workspace: Path) -> None:
     del workspace
     install_doc = ROOT / "INSTALL.md"
     user_guide = ROOT / "docs" / "USER_GUIDE.md"
+    beta_testing = ROOT / "docs" / "BETA_TESTING.md"
+    feedback_template = ROOT / "FEEDBACK_TEMPLATE.md"
     assert install_doc.exists()
     assert user_guide.exists()
+    assert beta_testing.exists()
     install_text = install_doc.read_text(encoding="utf-8")
     user_text = user_guide.read_text(encoding="utf-8")
+    beta_text = beta_testing.read_text(encoding="utf-8")
+    feedback_text = feedback_template.read_text(encoding="utf-8")
     assert "Install in 30 seconds" in install_text
     assert "macOS" in install_text
     assert "Windows PowerShell" in install_text
@@ -1101,6 +1119,11 @@ def _check_user_guides_docs_ok(workspace: Path) -> None:
     assert "Large repository" in user_text
     assert "Long manuscript" in user_text
     assert "Patch replay" in user_text
+    assert "Beta users: start here" in beta_text
+    assert "ailoom savings --write-report" in beta_text
+    assert "Restore verification" in beta_text
+    assert "Attach or paste the savings report" in feedback_text
+    assert "Was the token savings report useful" in feedback_text
 
 
 def _check_context_quick_windows_command_text_json(workspace: Path) -> None:

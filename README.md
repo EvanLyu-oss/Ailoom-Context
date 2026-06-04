@@ -52,6 +52,8 @@ ailoom savings
 
 New-user guide: [docs/USER_GUIDE.md](docs/USER_GUIDE.md)
 
+Beta users: start here with [docs/BETA_TESTING.md](docs/BETA_TESTING.md), then send results with [FEEDBACK_TEMPLATE.md](FEEDBACK_TEMPLATE.md).
+
 ## Security Model
 
 | Boundary | Default |

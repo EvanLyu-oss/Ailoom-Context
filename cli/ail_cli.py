@@ -1877,6 +1877,38 @@ def _render_context_savings_summary(payload: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
+def _render_context_savings_report(payload: dict[str, Any]) -> str:
+    return "\n".join([
+        "# Ailoom Context Savings Report",
+        "",
+        "## Verdict",
+        f"status: {payload.get('savings_status', '')}",
+        f"freshness_status: {payload.get('freshness_status', '')}",
+        f"created_at: {payload.get('created_at', '')}",
+        "",
+        "## Token Impact",
+        f"source_tokens: {payload.get('source_tokens', 0)}",
+        f"skeleton_tokens: {payload.get('skeleton_tokens', 0)}",
+        f"tokens_saved: {payload.get('tokens_saved', 0)}",
+        f"savings_percent: {payload.get('savings_percent', 0)}",
+        f"token_direction: {payload.get('token_direction', '')}",
+        "",
+        "## Files",
+        f"source_root: {payload.get('source_root', '')}",
+        f"bundle_root: {payload.get('bundle_root', '')}",
+        f"skeleton_file: {payload.get('skeleton_file', '')}",
+        f"manifest_file: {payload.get('manifest_file', '')}",
+        "",
+        "## Next Command",
+        payload.get("next_command_text") or "(not available)",
+        "",
+        "## Share With Beta Feedback",
+        "Attach or paste this report when reporting Ailoom Context beta results.",
+        "Keep restore packages local unless you intentionally want to share raw source bytes.",
+        "",
+    ])
+
+
 def _build_context_savings_payload(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
     recent_payload, recent_exit = _build_context_recent_payload(args)
     if recent_exit != EXIT_OK:
@@ -1916,6 +1948,13 @@ def _build_context_savings_payload(args: argparse.Namespace) -> tuple[dict[str, 
         "refresh_command_text": recent_payload.get("refresh_command_text", ""),
         "recent": recent_payload,
     }
+    report_path, report_written = _write_text_report_file(
+        _opt_path(args, "output_report_file"),
+        _render_context_savings_report(payload),
+        force=bool(getattr(args, "force", False)),
+    )
+    payload["report_file"] = report_path
+    payload["report_written"] = report_written
     payload["summary_text"] = _render_context_savings_summary(payload)
     return payload, EXIT_OK
 
@@ -4692,6 +4731,8 @@ def _build_parser() -> argparse.ArgumentParser:
     savings.add_argument("--input-dir", dest="input_dir", help="Project directory whose recent handoff should be read; defaults to current directory")
     savings.add_argument("--input-file", dest="input_file", help="Read recent savings next to this file")
     savings.add_argument("--text-file", dest="text_file", help="Read recent savings next to this text file")
+    savings.add_argument("--write-report", dest="output_report_file", help="Write a Markdown savings report for beta feedback or local review")
+    savings.add_argument("--force", action="store_true", help="Overwrite --write-report if it already exists")
     savings.add_argument("--json", action="store_true")
 
     demo = context_subparsers.add_parser("demo", help="Run a one-command demo that creates a sample project, safe bundle, and restore guidance")

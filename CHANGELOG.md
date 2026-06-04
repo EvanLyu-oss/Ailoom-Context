@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- added `ailoom savings --write-report` for shareable Markdown token-savings reports during beta trials
+- added `docs/BETA_TESTING.md` and expanded beta feedback prompts around savings reports, restore verification, speed, and safety clarity
 - added `ailoom savings` / `context savings` to show source tokens, skeleton tokens, and savings from the latest handoff
 - added `INSTALL.md` and `docs/USER_GUIDE.md` so first-time users can install, run a demo, and understand AI handoff safety with less learning cost
 - expanded generated `AI_HANDOFF.md` files with token savings, source/skeleton token counts, savings lookup, and reuse guidance for daily AI/IDE handoff

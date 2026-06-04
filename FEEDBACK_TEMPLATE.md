@@ -27,6 +27,8 @@ ailoom version
 ailoom doctor --install
 ailoom handoff
 ailoom handoff
+ailoom savings
+ailoom savings --write-report ailoom-savings-report.md
 ailoom safety
 ```
 
@@ -48,6 +50,8 @@ Add any other commands you tried:
 - Skeleton tokens shown:
 - Estimated tokens saved:
 - Estimated savings percent:
+- Was the token savings report useful:
+- Attach or paste the savings report:
 - Did `handoff` clearly identify the file to give to AI:
 - Did `handoff` clearly identify files to keep local:
 
@@ -80,5 +84,6 @@ If a command failed, include:
 - Was the first successful command obvious:
 - Was the safety boundary clear:
 - Was the speed acceptable:
+- Did the second `handoff --reuse-if-fresh` feel faster:
 - Would you keep using this during development:
 - What is the one thing that should improve before v1.0:

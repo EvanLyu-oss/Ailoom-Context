@@ -3330,6 +3330,7 @@ def _render_context_demo_summary(payload: dict[str, Any]) -> str:
 
 def _render_context_first_run_summary(payload: dict[str, Any]) -> str:
     savings = payload.get("token_savings") or {}
+    speed = payload.get("speed_guidance") or {}
     return "\n".join(
         [
             "Ailoom Context First Run",
@@ -3339,11 +3340,18 @@ def _render_context_first_run_summary(payload: dict[str, Any]) -> str:
             f"Safe demo: {payload.get('demo_status', '')}",
             f"Restore safety: {'OK' if payload.get('restore_safe') else 'CHECK'}",
             f"Token savings: {savings.get('estimated_tokens_saved', 0)} tokens ({savings.get('estimated_savings_percent', 0)}%)",
+            f"Speed: {speed.get('status', '')} - {speed.get('message', '')}",
             "",
             "What happened:",
             f"- Created a safe demo bundle: {payload.get('demo_root', '')}",
             f"- AI-facing skeleton: {payload.get('skeleton_file', '')}",
             "- Restore package stayed local.",
+            "",
+            "Speed guidance:",
+            f"- Slowest visible step: {speed.get('slowest_phase', '')} ({speed.get('slowest_phase_ms', 0)} ms)",
+            f"- Why: {speed.get('why_it_may_feel_slow', '')}",
+            f"- Best next command: {speed.get('best_next_command_text', '') or '(not available)'}",
+            f"- Reuse unchanged project: {speed.get('reuse_command_text', '') or '(not available)'}",
             "",
             "Try your project:",
             payload.get("try_project_command_text") or "ailoom handoff --copy --open",
@@ -3355,6 +3363,26 @@ def _render_context_first_run_summary(payload: dict[str, Any]) -> str:
             payload.get("clean_demo_command_text") or "ailoom clean --dry-run --all",
         ]
     )
+
+
+def _build_context_first_run_speed_guidance(quick_payload: dict[str, Any]) -> dict[str, Any]:
+    performance_summary = quick_payload.get("performance_summary") or {}
+    performance_advice = quick_payload.get("performance_advice") or {}
+    speed_diagnostic = performance_summary.get("speed_diagnostic") or {}
+    recommended_next = performance_summary.get("recommended_next_run") or {}
+    dominant_phase = performance_summary.get("dominant_phase") or {}
+    profile_next_run = (quick_payload.get("performance_profile") or {}).get("next_run") or {}
+    return {
+        "status": str(performance_summary.get("status") or performance_advice.get("speed_status") or ""),
+        "message": str(performance_summary.get("message") or performance_advice.get("speed_message") or ""),
+        "observed_total_ms": float(performance_summary.get("total_ms") or performance_advice.get("observed_total_ms") or 0.0),
+        "slowest_phase": str(speed_diagnostic.get("dominant_phase_label") or dominant_phase.get("label") or speed_diagnostic.get("dominant_phase") or ""),
+        "slowest_phase_ms": float(speed_diagnostic.get("dominant_phase_ms") or dominant_phase.get("duration_ms") or 0.0),
+        "why_it_may_feel_slow": str(speed_diagnostic.get("why_it_may_feel_slow") or performance_advice.get("why_it_may_feel_slow") or ""),
+        "best_next_command_text": str(speed_diagnostic.get("best_next_command_text") or recommended_next.get("command_text") or performance_advice.get("next_best_command_text") or ""),
+        "reuse_command_text": str(performance_advice.get("reuse_command_text") or profile_next_run.get("reuse_command_text") or ""),
+        "recommended_strategy": str(recommended_next.get("strategy") or ""),
+    }
 
 
 def _build_context_first_run_action_plan(payload: dict[str, Any]) -> list[dict[str, str]]:
@@ -3386,6 +3414,7 @@ def _build_context_first_run_payload(args: argparse.Namespace) -> tuple[dict[str
     storage_payload, _storage_exit = _build_context_storage_payload(args)
     quick_payload = demo_payload.get("quick") or {}
     handoff = quick_payload.get("handoff") or {}
+    speed_guidance = _build_context_first_run_speed_guidance(quick_payload)
     metrics = (
         (quick_payload.get("performance_summary") or {}).get("token_impact")
         or (quick_payload.get("experience") or {}).get("token_impact")
@@ -3415,6 +3444,7 @@ def _build_context_first_run_payload(args: argparse.Namespace) -> tuple[dict[str
             "estimated_tokens_saved": metrics.get("estimated_tokens_saved", 0),
             "estimated_savings_percent": metrics.get("estimated_savings_percent", 0),
         },
+        "speed_guidance": speed_guidance,
         "try_project_command_text": "ailoom handoff --copy --open",
         "check_storage_command_text": "ailoom doctor --storage",
         "clean_demo_command_text": _format_cli_command(["clean", "--dry-run", "--all", "--older-than", "7d", "--input-dir", str(project_root)]),

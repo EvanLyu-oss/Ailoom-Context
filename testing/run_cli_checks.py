@@ -1773,17 +1773,25 @@ def _check_first_run_json(workspace: Path) -> None:
     assert payload["try_project_command_text"] == "ailoom handoff --copy --open"
     assert payload["check_storage_command_text"] == "ailoom doctor --storage"
     assert payload["clean_demo_command_text"].startswith("ailoom clean --dry-run --all")
+    assert payload["speed_guidance"]["status"] in {"fast", "ok", "slow"}
+    assert payload["speed_guidance"]["observed_total_ms"] >= 0
+    assert payload["speed_guidance"]["slowest_phase"]
+    assert payload["speed_guidance"]["why_it_may_feel_slow"]
+    assert payload["speed_guidance"]["best_next_command_text"].startswith("ailoom")
+    assert payload["speed_guidance"]["reuse_command_text"].startswith("ailoom")
     assert payload["action_plan"]
     assert payload["next_steps"] == [item["message"] for item in payload["action_plan"]]
     assert "Ailoom Context First Run" in payload["summary_text"]
     assert "Install check:" in payload["summary_text"]
     assert "Safe demo:" in payload["summary_text"]
+    assert "Speed guidance:" in payload["summary_text"]
     assert "Try your project:" in payload["summary_text"]
     assert "Clean demo later:" in payload["summary_text"]
 
     human = _run([sys.executable, "-m", "cli", "first-run", "--output-dir", str(workspace / "first_run_human")], cwd=workspace)
     assert human.returncode == 0
     assert "Ailoom Context First Run" in human.stdout
+    assert "Speed guidance:" in human.stdout
     assert "Try your project:" in human.stdout
     assert "ailoom handoff --copy --open" in human.stdout
 

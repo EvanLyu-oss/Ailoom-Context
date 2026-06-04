@@ -291,7 +291,7 @@ Try Ailoom Context without preparing your own project first:
 ailoom first-run
 ```
 
-`first-run` is the install-aftercare command: it checks local install readiness, runs a safe demo bundle, verifies restore safety, shows estimated token savings, and prints the exact `handoff`, `storage`, and cleanup commands to use next.
+`first-run` is the install-aftercare command: it checks local install readiness, runs a safe demo bundle, verifies restore safety, shows estimated token savings, explains the slowest visible step, and prints the exact `handoff`, `storage`, and cleanup commands to use next.
 
 ```bash
 ailoom demo

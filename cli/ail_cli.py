@@ -1500,6 +1500,73 @@ def _build_quick_user_outcome(payload: dict[str, Any], *, reused: bool = False) 
     }
 
 
+def _classify_value_summary(*, tokens_saved: int, savings_percent: float, source_tokens: int, reused: bool) -> str:
+    if reused:
+        return "strong" if savings_percent >= 30 or tokens_saved >= 1000 else "useful"
+    if source_tokens < 500 and savings_percent <= 0:
+        return "tiny_project"
+    if savings_percent >= 50 or tokens_saved >= 5000:
+        return "strong"
+    if savings_percent >= 10 or tokens_saved >= 500:
+        return "useful"
+    return "watch"
+
+
+def _build_value_summary(
+    *,
+    tokens_saved: int,
+    savings_percent: float,
+    source_tokens: int,
+    skeleton_tokens: int,
+    elapsed_ms: float,
+    reused: bool,
+    next_best_command_text: str,
+    share_file: str = "",
+) -> dict[str, Any]:
+    status = _classify_value_summary(
+        tokens_saved=tokens_saved,
+        savings_percent=savings_percent,
+        source_tokens=source_tokens,
+        reused=reused,
+    )
+    if status == "strong":
+        headline = f"strong token value: saved about {tokens_saved} tokens ({savings_percent}%)"
+        recommendation = "keep using handoff for this project; reuse unchanged bundles for faster daily work"
+    elif status == "useful":
+        headline = f"useful token value: saved about {tokens_saved} tokens ({savings_percent}%)"
+        recommendation = "use this skeleton for AI/IDE context, then check savings again after larger changes"
+    elif status == "tiny_project":
+        headline = "tiny project: token savings may not show until the input is larger"
+        recommendation = "try Ailoom Context on a larger repository or long document to see the advantage"
+    else:
+        headline = f"watch token value: saved about {tokens_saved} tokens ({savings_percent}%)"
+        recommendation = "review recommended focus/density or use this mainly for restore-safe handoff on this input"
+    if reused:
+        headline = f"reused fresh handoff: {headline}"
+        recommendation = "this run avoided recompression; keep using reuse while the project is unchanged"
+    return {
+        "status": status,
+        "headline": headline,
+        "recommendation": recommendation,
+        "next_best_command_text": next_best_command_text,
+        "token_savings": {
+            "source_tokens": source_tokens,
+            "skeleton_tokens": skeleton_tokens,
+            "tokens_saved": tokens_saved,
+            "savings_percent": savings_percent,
+        },
+        "speed": {
+            "elapsed_ms": elapsed_ms,
+            "status": "fast" if elapsed_ms < 500 else "ok" if elapsed_ms < 2500 else "slow",
+            "reused": reused,
+        },
+        "handoff": {
+            "status": "reused" if reused else "created",
+            "share_file": share_file,
+        },
+    }
+
+
 def _recent_root_from_args(args: argparse.Namespace) -> Path:
     input_dir = _opt_path(args, "input_dir")
     if input_dir is not None:
@@ -1860,6 +1927,7 @@ def _build_context_recent_payload(args: argparse.Namespace) -> tuple[dict[str, A
 
 
 def _render_context_savings_summary(payload: dict[str, Any]) -> str:
+    value_summary = payload.get("value_summary") or {}
     lines = [
         "Ailoom Context Savings",
         "",
@@ -1869,6 +1937,12 @@ def _render_context_savings_summary(payload: dict[str, Any]) -> str:
         f"- Token savings: {payload.get('tokens_saved', 0)} tokens ({payload.get('savings_percent', 0)}%)",
         f"- Source tokens: {payload.get('source_tokens', 0)}",
         f"- Skeleton tokens: {payload.get('skeleton_tokens', 0)}",
+        "",
+        "Value summary:",
+        f"- Status: {value_summary.get('status', '')}",
+        f"- Headline: {value_summary.get('headline', '')}",
+        f"- Recommendation: {value_summary.get('recommendation', '')}",
+        f"- Next command: {value_summary.get('next_best_command_text', '') or '(not available)'}",
         "",
         "Last handoff:",
         f"- Created: {payload.get('created_at', '') or '(unknown)'}",
@@ -1958,6 +2032,16 @@ def _build_context_savings_payload(args: argparse.Namespace) -> tuple[dict[str, 
         "refresh_command_text": recent_payload.get("refresh_command_text", ""),
         "recent": recent_payload,
     }
+    payload["value_summary"] = _build_value_summary(
+        tokens_saved=tokens_saved,
+        savings_percent=savings_percent,
+        source_tokens=source_tokens,
+        skeleton_tokens=skeleton_tokens,
+        elapsed_ms=float(((recent_payload.get("experience") or {}).get("performance_summary") or {}).get("total_ms") or 0.0),
+        reused=str((recent_payload.get("user_outcome") or {}).get("status") or "").startswith("reused"),
+        next_best_command_text=str(payload["next_command_text"] or payload["refresh_command_text"] or "ailoom handoff"),
+        share_file=str(recent_payload.get("skeleton_file") or ""),
+    )
     report_path, report_written = _write_text_report_file(
         _opt_path(args, "output_report_file"),
         _render_context_savings_report(payload),
@@ -2261,6 +2345,16 @@ def _build_reused_quick_payload(args: argparse.Namespace, *, started_at: float) 
         preferred_next_command_text=reuse_guidance["next_handoff_command_text"],
     )
     payload["user_outcome"] = _build_quick_user_outcome(payload, reused=True)
+    payload["value_summary"] = _build_value_summary(
+        tokens_saved=int(recent_payload.get("estimated_tokens_saved") or 0),
+        savings_percent=float(recent_payload.get("estimated_savings_percent") or 0.0),
+        source_tokens=int(recent_payload.get("source_tokens") or 0),
+        skeleton_tokens=int(recent_payload.get("skeleton_tokens") or 0),
+        elapsed_ms=float(timings_ms.get("total") or 0.0),
+        reused=True,
+        next_best_command_text=str(reuse_guidance.get("next_handoff_command_text") or "ailoom handoff --reuse-if-fresh"),
+        share_file=skeleton_file,
+    )
     _write_quick_ai_handoff_guide(payload)
     payload["daily_handoff"] = _build_daily_handoff_payload(
         payload,
@@ -2661,6 +2755,7 @@ def _render_context_quick_summary(payload: dict[str, Any]) -> str:
     performance_profile = payload.get("performance_profile") or {}
     performance_summary = payload.get("performance_summary") or {}
     user_outcome = payload.get("user_outcome") or {}
+    value_summary = payload.get("value_summary") or {}
     dominant_phase = performance_profile.get("dominant_phase") or {}
     default_noise = performance_profile.get("default_noise_protection") or {}
     next_run = performance_profile.get("next_run") or {}
@@ -2695,6 +2790,15 @@ def _render_context_quick_summary(payload: dict[str, Any]) -> str:
             f"- Why: {daily_handoff.get('reason', '')}",
             f"- Copy status: {clipboard.get('status', '')} - {clipboard.get('message', '')}",
             f"- Copy command: {clipboard.get('command_text', '') or '(not available)'}",
+        ])
+    if value_summary:
+        lines.extend([
+            "",
+            "Value summary:",
+            f"- Status: {value_summary.get('status', '')}",
+            f"- Headline: {value_summary.get('headline', '')}",
+            f"- Recommendation: {value_summary.get('recommendation', '')}",
+            f"- Next best command: {value_summary.get('next_best_command_text', '') or '(not available)'}",
         ])
     lines.extend([
         "",
@@ -3245,6 +3349,18 @@ def _build_context_quick_payload(args: argparse.Namespace) -> tuple[dict[str, An
         reuse_status="created",
     )
     payload["user_outcome"] = _build_quick_user_outcome(payload, reused=False)
+    value_metrics = ((payload.get("performance_summary") or {}).get("token_impact") or {})
+    start_metrics = start_payload.get("metrics") or {}
+    payload["value_summary"] = _build_value_summary(
+        tokens_saved=int(value_metrics.get("estimated_tokens_saved") or start_metrics.get("estimated_tokens_saved") or 0),
+        savings_percent=float(value_metrics.get("estimated_savings_percent") or start_metrics.get("estimated_savings_percent") or 0.0),
+        source_tokens=int(value_metrics.get("estimated_source_tokens") or start_metrics.get("estimated_token_count_source") or 0),
+        skeleton_tokens=int(value_metrics.get("estimated_skeleton_tokens") or start_metrics.get("estimated_token_count_skeleton") or 0),
+        elapsed_ms=float(timings_ms.get("total") or 0.0),
+        reused=False,
+        next_best_command_text=str((payload.get("performance_summary") or {}).get("recommended_next_run", {}).get("command_text") or payload.get("inspect_command_text") or "ailoom handoff"),
+        share_file=str(handoff.get("skeleton_file") or ""),
+    )
     _write_quick_ai_handoff_guide(payload)
     payload["daily_handoff"] = _build_daily_handoff_payload(
         payload,

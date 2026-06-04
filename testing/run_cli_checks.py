@@ -828,8 +828,16 @@ def _check_context_quick_json(workspace: Path) -> None:
     assert payload["user_outcome"]["share_action"] == "give_skeleton_to_ai"
     assert payload["user_outcome"]["next_command_text"].startswith("ailoom inspect")
     assert payload["user_outcome"]["restore_safety"] == "ok"
+    assert payload["value_summary"]["status"] in {"strong", "useful", "watch", "tiny_project"}
+    assert payload["value_summary"]["headline"]
+    assert payload["value_summary"]["recommendation"]
+    assert payload["value_summary"]["next_best_command_text"].startswith("ailoom")
+    assert payload["value_summary"]["token_savings"]["tokens_saved"] >= 0
+    assert payload["value_summary"]["speed"]["elapsed_ms"] >= 0
+    assert payload["value_summary"]["handoff"]["status"] == "created"
     assert "Performance advice:" in payload["summary_text"]
     assert "User outcome:" in payload["summary_text"]
+    assert "Value summary:" in payload["summary_text"]
     assert "Performance summary:" in payload["summary_text"]
     assert "Performance profile:" in payload["summary_text"]
     assert "Default noise protection:" in payload["summary_text"]
@@ -911,6 +919,8 @@ def _check_context_quick_json(workspace: Path) -> None:
     assert reused["user_outcome"]["status"] == "reused_ready_to_share"
     assert reused["user_outcome"]["primary_file"] == reused["handoff"]["skeleton_file"]
     assert reused["user_outcome"]["next_command_text"].startswith("ailoom handoff")
+    assert reused["value_summary"]["handoff"]["status"] == "reused"
+    assert reused["value_summary"]["next_best_command_text"].startswith("ailoom handoff")
     assert reused["restore_command_text"].startswith("ailoom restore --package-file")
     _assert_command_contains_option(reused["restore_command_text"], "--package-file", reused["manifest_file"])
     assert "Reused previous bundle:" in reused["summary_text"]
@@ -1078,7 +1088,13 @@ def _check_context_savings_json(workspace: Path) -> None:
     assert savings["savings_percent"] >= 0
     assert savings["freshness_status"] == "fresh"
     assert savings["next_command_text"].startswith("ailoom handoff")
+    assert savings["value_summary"]["status"] in {"strong", "useful", "watch", "tiny_project"}
+    assert savings["value_summary"]["headline"]
+    assert savings["value_summary"]["next_best_command_text"].startswith("ailoom")
+    assert savings["value_summary"]["token_savings"]["source_tokens"] == savings["source_tokens"]
+    assert savings["value_summary"]["token_savings"]["skeleton_tokens"] == savings["skeleton_tokens"]
     assert "Ailoom Context Savings" in savings["summary_text"]
+    assert "Value summary:" in savings["summary_text"]
     assert "Token savings:" in savings["summary_text"]
     assert "Source tokens:" in savings["summary_text"]
     assert "Skeleton tokens:" in savings["summary_text"]

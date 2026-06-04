@@ -35,6 +35,8 @@ Check the latest savings:
 ailoom savings
 ```
 
+Read the `Value summary` first. It tells you whether the current project shows strong token value, useful token value, a watch-level result, or a tiny-project result where the skeleton may not look smaller yet.
+
 ## Large repository
 
 Large repositories usually benefit most from `imports` or `tree` focus with adaptive density.

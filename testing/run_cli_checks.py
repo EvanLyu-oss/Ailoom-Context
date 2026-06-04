@@ -1462,8 +1462,19 @@ def _check_context_clean_json(workspace: Path) -> None:
     assert storage["entrypoint"] == "context-storage-doctor"
     assert storage["storage_status"] in {"ok", "watch"}
     assert storage["total_bytes"] >= 0
+    assert storage["human_total_size"]
+    assert storage["risk_level"] in {"ok", "notice", "watch", "large"}
+    assert storage["storage_summary"]["target_count"] == 3
+    assert storage["storage_summary"]["largest_target"]["label"] in {"workspace_artifacts", "restore_outputs", "test_results"}
+    assert storage["cleanup_safety"]["safe_to_delete"] is True
+    assert ".workspace_ail" in storage["cleanup_safety"]["targets"]
+    assert "source files" in " ".join(storage["cleanup_safety"]["never_deletes"])
+    assert storage["recommended_actions"]
+    assert storage["recommended_actions"][0]["command_text"].startswith("ailoom clean --dry-run")
     assert storage["recommended_clean_command_text"].startswith("ailoom clean --dry-run")
     assert "Ailoom Context Storage Doctor" in storage["summary_text"]
+    assert "Storage summary:" in storage["summary_text"]
+    assert "Cleanup safety:" in storage["summary_text"]
 
 
 def _check_top_level_version_json(workspace: Path) -> None:

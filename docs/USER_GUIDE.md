@@ -89,6 +89,14 @@ Ailoom Context is designed around a simple boundary:
 - Run dry-run before patch replay.
 - Use `ailoom clean --dry-run` before deleting generated artifacts.
 
+For long development sessions or beta testing, check generated storage first:
+
+```bash
+ailoom doctor --storage
+```
+
+Read the `Cleanup safety` section before running the suggested clean command. The clean path only targets known generated Ailoom Context artifact roots.
+
 For a machine-readable check, run:
 
 ```bash

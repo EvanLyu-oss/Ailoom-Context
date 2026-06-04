@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- expanded `ailoom doctor --storage` into a storage health report with human sizes, risk level, cleanup safety, and recommended cleanup actions
 - added a shared `value_summary` to handoff/quick and savings output so users can quickly judge token value, speed, reuse status, and next command
 - expanded `ailoom first-run` into a new-user cockpit with the first real project loop, cache/storage overview, safety boundary, and beta report command
 - added `ailoom trial-report --write-report` to generate a beta feedback report with token savings, storage, safety boundary, and next-command guidance

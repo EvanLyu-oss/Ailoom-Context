@@ -24,11 +24,12 @@ Redaction only applies to the skeleton surface. It does not modify original file
 Generated bundle and handoff artifacts normally live under `.workspace_ail/`. To preview or remove local generated artifacts:
 
 ```bash
+ailoom doctor --storage
 ailoom clean --dry-run --all
 ailoom clean --all
 ```
 
-The clean command targets known Ailoom Context generated directories such as `.workspace_ail/` and, with `--all`, `mcp-skeleton-restore/`. It does not delete source files or config files.
+`doctor --storage` reports generated artifact size, risk level, largest target, and cleanup safety before anything is deleted. The clean command targets known Ailoom Context generated directories such as `.workspace_ail/` and, with `--all`, `mcp-skeleton-restore/`. It does not delete source files, config files, or files outside known generated artifact roots.
 
 ## Import And Replay Safety
 

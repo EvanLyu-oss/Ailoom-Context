@@ -418,9 +418,12 @@ Ailoom Context is local-first: it does not upload source code, skeletons, restor
 Clean local generated artifacts when you want to remove old handoff bundles:
 
 ```bash
+ailoom doctor --storage
 ailoom clean --dry-run --all
 ailoom clean --all
 ```
+
+`doctor --storage` prints a storage summary, risk level, largest generated target, cleanup safety boundary, and copy/paste cleanup commands. It is designed for long beta runs where generated handoff bundles can grow into many GB if never cleaned.
 It also includes common questions and emergency recovery guidance for changed projects, lost manifests, and safe patch replay.
 
 Compress a directory:

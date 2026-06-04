@@ -10,7 +10,7 @@ readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
 authors = [
-  { name = "Carwyn Mac" }
+  { name = "Evan", email = "carwyn910@gmail.com" }
 ]
 keywords = ["ailoom", "context", "compression", "llm", "token-optimization", "patch-replay"]
 classifiers = [

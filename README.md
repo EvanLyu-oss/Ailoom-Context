@@ -56,6 +56,12 @@ Beta users: start here with [docs/BETA_TESTING.md](docs/BETA_TESTING.md), then s
 
 Release checklist and notes template: [docs/RELEASE_CHECKLIST.md](docs/RELEASE_CHECKLIST.md), [docs/GITHUB_RELEASE_TEMPLATE.md](docs/GITHUB_RELEASE_TEMPLATE.md).
 
+## Author
+
+Created and maintained by Evan.
+
+Contact: [carwyn910@gmail.com](mailto:carwyn910@gmail.com)
+
 ## Security Model
 
 | Boundary | Default |

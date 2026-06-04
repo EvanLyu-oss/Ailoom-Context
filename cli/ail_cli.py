@@ -82,6 +82,7 @@ CONTEXT_SUBCOMMANDS = {
     "first-run",
     "recent",
     "savings",
+    "trial-report",
     "demo",
     "safety",
     "clean",
@@ -1965,6 +1966,167 @@ def _build_context_savings_payload(args: argparse.Namespace) -> tuple[dict[str, 
     payload["report_file"] = report_path
     payload["report_written"] = report_written
     payload["summary_text"] = _render_context_savings_summary(payload)
+    return payload, EXIT_OK
+
+
+def _trial_report_project_root(args: argparse.Namespace) -> Path:
+    input_dir = _opt_path(args, "input_dir")
+    if input_dir is not None:
+        return input_dir.resolve()
+    source_file = _opt_path(args, "input_file") or _opt_path(args, "text_file")
+    if source_file is not None:
+        return source_file.parent.resolve()
+    return Path.cwd().resolve()
+
+
+def _render_context_trial_report_summary(payload: dict[str, Any]) -> str:
+    savings = payload.get("savings") or {}
+    storage = payload.get("storage") or {}
+    if payload.get("trial_report_status") != "ready":
+        return "\n".join([
+            "Ailoom Context Trial Report",
+            "",
+            f"Status: {payload.get('trial_report_status', '')}",
+            payload.get("message") or "run ailoom handoff first, then rerun this report",
+            "",
+            "Next command:",
+            payload.get("next_command_text") or "ailoom handoff",
+        ])
+    lines = [
+        "Ailoom Context Trial Report",
+        "",
+        "At a glance:",
+        f"- Status: {payload.get('trial_report_status', '')}",
+        f"- Project: {payload.get('project_root', '')}",
+        f"- Token savings: {savings.get('tokens_saved', 0)} tokens ({savings.get('savings_percent', 0)}%)",
+        f"- Storage status: {storage.get('storage_status', '')}",
+        f"- Safety status: {(payload.get('safety') or {}).get('safety_status', '')}",
+    ]
+    if payload.get("report_written"):
+        lines.append(f"- Report file: {payload.get('report_file', '')}")
+    lines.extend([
+        "",
+        "Next command:",
+        payload.get("next_command_text") or "(not available)",
+        "",
+        "Feedback email:",
+        payload.get("feedback_email", ""),
+        "",
+        "Attach this report when sending beta feedback.",
+    ])
+    return "\n".join(lines)
+
+
+def _render_context_trial_report(payload: dict[str, Any]) -> str:
+    savings = payload.get("savings") or {}
+    storage = payload.get("storage") or {}
+    safety = payload.get("safety") or {}
+    install = payload.get("install") or {}
+    generated_at = time.strftime("%Y-%m-%d %H:%M:%S %z")
+    storage_targets = storage.get("targets") or []
+    storage_lines = [
+        f"- {item.get('label', '')}: {item.get('bytes', 0)} bytes, {item.get('file_count', 0)} files, {item.get('path', '')}"
+        for item in storage_targets
+    ] or ["- (no generated artifacts found)"]
+    return "\n".join([
+        "# Ailoom Context Trial Report",
+        "",
+        "## Environment",
+        f"generated_at: {generated_at}",
+        f"product_name: {install.get('product_name', PRODUCT_NAME)}",
+        f"version: {install.get('version', '')}",
+        f"python_version: {install.get('python_version', '')}",
+        f"platform: {platform.platform()}",
+        f"project_root: {payload.get('project_root', '')}",
+        "",
+        "## Token Savings",
+        f"status: {savings.get('savings_status', '')}",
+        f"freshness_status: {savings.get('freshness_status', '')}",
+        f"created_at: {savings.get('created_at', '')}",
+        f"source_tokens: {savings.get('source_tokens', 0)}",
+        f"skeleton_tokens: {savings.get('skeleton_tokens', 0)}",
+        f"tokens_saved: {savings.get('tokens_saved', 0)}",
+        f"savings_percent: {savings.get('savings_percent', 0)}",
+        f"token_direction: {savings.get('token_direction', '')}",
+        f"bundle_root: {savings.get('bundle_root', '')}",
+        f"skeleton_file: {savings.get('skeleton_file', '')}",
+        f"manifest_file: {savings.get('manifest_file', '')}",
+        "",
+        "## Storage",
+        f"storage_status: {storage.get('storage_status', '')}",
+        f"total_bytes: {storage.get('total_bytes', 0)}",
+        f"total_files: {storage.get('total_files', 0)}",
+        *storage_lines,
+        f"cleanup_preview_command: {storage.get('recommended_clean_command_text', '')}",
+        "",
+        "## Safety Boundary",
+        f"safety_status: {safety.get('safety_status', '')}",
+        f"local_only_processing: {(safety.get('guarantees') or {}).get('local_only_processing', False)}",
+        f"no_telemetry: {(safety.get('guarantees') or {}).get('no_telemetry', False)}",
+        f"safe_ai_file: {(safety.get('restore_package') or {}).get('safe_ai_file', 'context_skeleton.mcp')}",
+        "keep_local: context_manifest.json, context_restore.json, AI_HANDOFF.md, handoff.json",
+        "",
+        "## Recommended Next Commands",
+        payload.get("next_command_text") or "(not available)",
+        payload.get("storage_command_text") or "(not available)",
+        payload.get("safety_command_text") or "(not available)",
+        "",
+        "## Feedback Prompt",
+        f"Feedback email: {payload.get('feedback_email', '')}",
+        "Attach this report when sending beta feedback.",
+        "Please add one sentence about whether install, speed, token savings, and safety boundaries felt clear.",
+        "",
+    ])
+
+
+def _build_context_trial_report_payload(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
+    savings_args = argparse.Namespace(**vars(args))
+    setattr(savings_args, "output_report_file", None)
+    savings_payload, savings_exit = _build_context_savings_payload(savings_args)
+    project_root = _trial_report_project_root(args)
+    next_command_text = str(savings_payload.get("refresh_command_text") or _format_cli_command(["handoff", "--input-dir", str(project_root)]))
+    if savings_exit != EXIT_OK:
+        payload = {
+            "status": "error",
+            "entrypoint": "context-trial-report",
+            "trial_report_status": "missing_handoff",
+            "project_root": str(project_root),
+            "feedback_email": "carwyn910@gmail.com",
+            "message": "no recent handoff was found; run ailoom handoff first, then rerun ailoom trial-report",
+            "savings": savings_payload,
+            "next_command_text": next_command_text,
+            "report_file": "",
+            "report_written": False,
+        }
+        payload["summary_text"] = _render_context_trial_report_summary(payload)
+        return payload, savings_exit
+
+    storage_payload, _ = _build_context_storage_payload(args)
+    safety_payload, _ = _build_context_safety_payload(args)
+    payload = {
+        "status": "ok",
+        "entrypoint": "context-trial-report",
+        "trial_report_status": "ready",
+        "project_root": str(project_root),
+        "feedback_email": "carwyn910@gmail.com",
+        "savings": savings_payload,
+        "storage": storage_payload,
+        "safety": safety_payload,
+        "install": _build_version_payload(),
+        "next_command_text": savings_payload.get("refresh_command_text") or _format_cli_command(["handoff", "--input-dir", str(project_root), "--reuse-if-fresh"]),
+        "storage_command_text": _format_cli_command(["doctor", "--storage", "--input-dir", str(project_root)]),
+        "safety_command_text": _format_cli_command(["safety"]),
+        "report_file": "",
+        "report_written": False,
+    }
+    report_path, report_written = _write_text_report_file(
+        _opt_path(args, "output_report_file"),
+        _render_context_trial_report(payload),
+        force=bool(getattr(args, "force", False)),
+    )
+    payload["report_file"] = report_path
+    payload["report_written"] = report_written
+    payload["summary_text"] = _render_context_trial_report_summary(payload)
     return payload, EXIT_OK
 
 
@@ -4427,7 +4589,7 @@ def cmd_context(args: argparse.Namespace) -> int:
     command = getattr(args, "context_command", None)
     supported = CONTEXT_SUBCOMMANDS
     if command not in supported:
-        return _emit_command_error(args, EXIT_USAGE, "invalid_usage", "supported context subcommands: compress, restore, inspect, explain, apply-check, preset, config, init, install-hook, doctor, start, quick, first-run, recent, savings, demo, safety, clean, bundle, patch, patch-apply")
+        return _emit_command_error(args, EXIT_USAGE, "invalid_usage", "supported context subcommands: compress, restore, inspect, explain, apply-check, preset, config, init, install-hook, doctor, start, quick, first-run, recent, savings, trial-report, demo, safety, clean, bundle, patch, patch-apply")
 
     if command == "preset":
         payload = build_context_preset_payload(getattr(args, "preset_id", None))
@@ -4480,6 +4642,11 @@ def cmd_context(args: argparse.Namespace) -> int:
     if command == "savings":
         _apply_current_dir_default(args)
         payload, exit_code = _build_context_savings_payload(args)
+        return _emit_simple_result(args, payload, text=str(payload.get("summary_text", "")), exit_code=exit_code)
+
+    if command == "trial-report":
+        _apply_current_dir_default(args)
+        payload, exit_code = _build_context_trial_report_payload(args)
         return _emit_simple_result(args, payload, text=str(payload.get("summary_text", "")), exit_code=exit_code)
 
     if command == "demo":
@@ -4799,6 +4966,7 @@ def _build_parser() -> argparse.ArgumentParser:
         ("demo", "Run a safe sample before touching your own project"),
         ("doctor", "Check readiness, restore safety, install status, or storage"),
         ("savings", "Show token savings from the most recent handoff"),
+        ("trial-report", "Write a beta trial report from the most recent handoff"),
         ("recent", "Show the most recent handoff bundle"),
         ("safety", "Explain local-only safety and share-vs-keep-local boundaries"),
         ("clean", "Preview or remove generated Ailoom Context artifacts"),
@@ -4991,6 +5159,14 @@ def _build_parser() -> argparse.ArgumentParser:
     savings.add_argument("--write-report", dest="output_report_file", help="Write a Markdown savings report for beta feedback or local review")
     savings.add_argument("--force", action="store_true", help="Overwrite --write-report if it already exists")
     savings.add_argument("--json", action="store_true")
+
+    trial_report = context_subparsers.add_parser("trial-report", help="Write a beta trial report from the most recent handoff")
+    trial_report.add_argument("--input-dir", dest="input_dir", help="Project directory whose recent handoff should be reported; defaults to current directory")
+    trial_report.add_argument("--input-file", dest="input_file", help="Read recent trial data next to this file")
+    trial_report.add_argument("--text-file", dest="text_file", help="Read recent trial data next to this text file")
+    trial_report.add_argument("--write-report", dest="output_report_file", help="Write a Markdown beta trial report")
+    trial_report.add_argument("--force", action="store_true", help="Overwrite --write-report if it already exists")
+    trial_report.add_argument("--json", action="store_true")
 
     demo = context_subparsers.add_parser("demo", help="Run a one-command demo that creates a sample project, safe bundle, and restore guidance")
     demo.add_argument("--output-dir", dest="output_dir", help="Demo root directory; defaults under .workspace_ail/demo_runs")

@@ -1098,6 +1098,51 @@ def _check_context_savings_json(workspace: Path) -> None:
     assert "## Share With Beta Feedback" in report_text
 
 
+def _check_trial_report_json(workspace: Path) -> None:
+    project = workspace / "trial_report_project"
+    (project / "src").mkdir(parents=True)
+    (project / "docs").mkdir()
+    (project / "src" / "app.py").write_text(
+        "def run() -> str:\n"
+        "    return 'trial-report-ready'\n",
+        encoding="utf-8",
+    )
+    (project / "docs" / "notes.md").write_text(
+        "# Trial Notes\n\n" + "Ailoom Context beta trial report coverage.\n\n" * 90,
+        encoding="utf-8",
+    )
+    quick = _run_top_level_cli_json(["handoff", "--input-dir", str(project), "--json"])
+    assert quick["status"] == "ok"
+
+    report_file = workspace / "ailoom-trial-report.md"
+    payload = _run_top_level_cli_json(["trial-report", "--input-dir", str(project), "--write-report", str(report_file), "--json"])
+    assert payload["status"] == "ok"
+    assert payload["entrypoint"] == "context-trial-report"
+    assert payload["trial_report_status"] == "ready"
+    assert payload["savings"]["entrypoint"] == "context-savings"
+    assert payload["savings"]["savings_status"] == "ready"
+    assert payload["storage"]["entrypoint"] == "context-storage-doctor"
+    assert payload["safety"]["entrypoint"] == "context-safety"
+    assert payload["report_written"] is True
+    assert Path(payload["report_file"]).exists()
+    assert payload["feedback_email"] == "carwyn910@gmail.com"
+    assert payload["next_command_text"].startswith("ailoom handoff")
+    assert "Ailoom Context Trial Report" in payload["summary_text"]
+    assert "Feedback email:" in payload["summary_text"]
+    assert "Attach this report" in payload["summary_text"]
+
+    report_text = report_file.read_text(encoding="utf-8")
+    assert "# Ailoom Context Trial Report" in report_text
+    assert "## Environment" in report_text
+    assert "## Token Savings" in report_text
+    assert "## Storage" in report_text
+    assert "## Safety Boundary" in report_text
+    assert "## Feedback Prompt" in report_text
+    assert "carwyn910@gmail.com" in report_text
+    assert "source_tokens:" in report_text
+    assert "savings_percent:" in report_text
+
+
 def _check_user_guides_docs_ok(workspace: Path) -> None:
     del workspace
     install_doc = ROOT / "INSTALL.md"
@@ -1127,6 +1172,7 @@ def _check_user_guides_docs_ok(workspace: Path) -> None:
     assert "Long manuscript" in user_text
     assert "Patch replay" in user_text
     assert "Beta users: start here" in beta_text
+    assert "ailoom trial-report --write-report" in beta_text
     assert "ailoom savings --write-report" in beta_text
     assert "Restore verification" in beta_text
     assert "Release Checklist" in release_checklist_text
@@ -1134,6 +1180,7 @@ def _check_user_guides_docs_ok(workspace: Path) -> None:
     assert "GitHub Release Template" in release_template_text
     assert "ailoom savings --write-report" in release_template_text
     assert "Attach or paste the savings report" in feedback_text
+    assert "ailoom trial-report --write-report" in feedback_text
     assert "Was the token savings report useful" in feedback_text
 
 
@@ -3147,6 +3194,7 @@ CHECKS: list[tuple[str, Callable[[Path], None]]] = [
     ("context_quick_windows_command_text_json_ok", _check_context_quick_windows_command_text_json),
     ("context_recent_json_ok", _check_context_recent_json),
     ("context_savings_json_ok", _check_context_savings_json),
+    ("trial_report_json_ok", _check_trial_report_json),
     ("context_quick_fast_json_ok", _check_context_quick_fast_json),
     ("context_quick_speed_tip_json_ok", _check_context_quick_speed_tip_json),
     ("context_demo_json_ok", _check_context_demo_json),

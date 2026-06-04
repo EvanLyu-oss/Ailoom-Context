@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- added `ailoom trial-report --write-report` to generate a beta feedback report with token savings, storage, safety boundary, and next-command guidance
 - added first-run speed guidance so new users see the slowest visible step and the best next command after the safe demo
 - added `ailoom first-run` as an install-aftercare command that checks readiness, runs a safe demo, shows savings, and prints next steps
 - added `ailoom clean --older-than` and `ailoom doctor --storage` for safer generated-artifact cleanup and storage visibility

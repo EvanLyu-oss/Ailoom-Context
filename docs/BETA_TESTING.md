@@ -46,6 +46,7 @@ Run this from a real project directory:
 ```bash
 ailoom handoff --copy --open
 ailoom savings --write-report ailoom-savings-report.md
+ailoom trial-report --write-report ailoom-trial-report.md
 ```
 
 Expected result:
@@ -53,6 +54,7 @@ Expected result:
 - `context_skeleton.mcp` is the file to share with AI or an IDE
 - restore package files are clearly marked as keep-local
 - the savings report contains source tokens, skeleton tokens, tokens saved, and savings percent
+- the trial report combines token savings, generated storage, safety boundaries, and feedback prompts
 
 ## 4. Restore verification
 
@@ -89,6 +91,7 @@ Please send:
 - first `ailoom doctor --install` result
 - first `ailoom handoff` result
 - `ailoom savings --write-report ailoom-savings-report.md` output
+- `ailoom trial-report --write-report ailoom-trial-report.md` output
 - whether speed felt acceptable
 - whether the safety boundary was clear
 

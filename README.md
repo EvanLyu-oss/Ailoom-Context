@@ -48,6 +48,7 @@ sh install.sh --setup-shell
 ailoom first-run
 ailoom handoff
 ailoom savings
+ailoom trial-report --write-report ailoom-trial-report.md
 ```
 
 New-user guide: [docs/USER_GUIDE.md](docs/USER_GUIDE.md)
@@ -115,6 +116,8 @@ ailoom handoff --copy --open
 | `ailoom handoff --copy --open` | You want the handoff file opened and copied where possible |
 | `ailoom quick` | You want explicit bundle, manifest, inspect, and restore paths |
 | `ailoom recent` | You want to rediscover the latest bundle for this project |
+| `ailoom savings` | You want to see token savings from the latest handoff |
+| `ailoom trial-report --write-report ailoom-trial-report.md` | You are testing the beta and want one report to send back |
 | `ailoom doctor` | You want readiness, restore safety, and install diagnostics |
 
 The human output for `quick`, `handoff`, `doctor`, and `recent` starts with an `At a glance` card so first-time users can immediately see status, restore safety, token savings, speed/freshness, and the next command to copy. `handoff` also includes a `Daily handoff` panel that says whether it created or reused a bundle, why, and whether the skeleton was copied automatically or needs the shown manual copy command. `quick` / `handoff` also write `AI_HANDOFF.md` and `handoff.json` beside the bundle, include a recommended AI/IDE prompt, separate the skeleton file to share from restore files to keep locally, explain the slowest visible phase, show a stable `Performance summary` plus detailed `Performance profile`, report default noise protection, suggest the best next command (`--fast` or `--reuse-if-fresh`) for large or slower runs, and explain why tiny projects may expand instead of saving tokens.

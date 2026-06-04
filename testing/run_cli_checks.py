@@ -684,7 +684,8 @@ def _check_context_doctor_install_json(workspace: Path) -> None:
     check_names = {item["name"] for item in payload["checks"]}
     assert {"python_version_supported", "command_available", "readiness_manifest_available"}.issubset(check_names)
     assert payload["recommended_fix_command_text"]
-    assert payload["first_run_command_text"].endswith("handoff")
+    assert payload["first_run_command_text"].endswith("first-run")
+    assert payload["install"]["recommended_project_command_text"].endswith("handoff")
     assert payload["self_check_command_text"].endswith(" version")
     assert payload["action_plan"]
     assert payload["next_steps"] == [item["message"] for item in payload["action_plan"]]
@@ -1419,7 +1420,8 @@ def _check_top_level_version_json(workspace: Path) -> None:
     assert payload["install_readiness_file"].endswith("install-readiness.json")
     assert payload["install_readiness_manifest"]["status"] in {"ready", "missing"}
     assert payload["self_check_command_text"].endswith(" version")
-    assert payload["recommended_first_command_text"].endswith("handoff")
+    assert payload["recommended_first_command_text"].endswith("first-run")
+    assert payload["recommended_project_command_text"].endswith("handoff")
     assert payload["doctor_command_text"].endswith("doctor")
     assert "ailoom version" in payload["summary_text"]
     assert "Can run handoff:" in payload["summary_text"]
@@ -1430,6 +1432,7 @@ def _check_top_level_version_json(workspace: Path) -> None:
     assert "Command check:" in payload["summary_text"]
     assert "Install command:" in payload["summary_text"]
     assert "First run command:" in payload["summary_text"]
+    assert "Project handoff command:" in payload["summary_text"]
 
 
 def _check_installer_lifecycle_json(workspace: Path) -> None:
@@ -1463,6 +1466,7 @@ def _check_installer_lifecycle_json(workspace: Path) -> None:
     assert "Copy/paste next:" in install.stdout
     assert "ailoom version" in install.stdout
     assert "ailoom doctor --install" in install.stdout
+    assert "ailoom first-run" in install.stdout
     assert "ailoom handoff" in install.stdout
     assert "ailoom quick" in install.stdout
     assert "ailoom handoff --input-dir ." not in install.stdout
@@ -1474,7 +1478,8 @@ def _check_installer_lifecycle_json(workspace: Path) -> None:
     assert readiness["command_path"] == str(command)
     assert readiness["command_check"] == "ok"
     assert readiness["path_status"] in {"ready", "needs_shell_setup"}
-    assert readiness["recommended_first_command_text"].endswith("handoff")
+    assert readiness["recommended_first_command_text"].endswith("first-run")
+    assert readiness["recommended_project_command_text"].endswith("handoff")
     assert readiness["doctor_command_text"].endswith("doctor")
     assert readiness["install_doctor_command_text"].endswith("doctor --install")
     assert readiness["path_export_command_text"].startswith("export PATH=")
@@ -1491,7 +1496,8 @@ def _check_installer_lifecycle_json(workspace: Path) -> None:
     version_payload = json.loads(version_proc.stdout)
     assert version_payload["install_readiness_file"] == str(readiness_file)
     assert version_payload["install_readiness_manifest"]["schema"] == "ailoom.install-readiness.v1"
-    assert version_payload["install_readiness_manifest"]["recommended_first_command_text"].endswith("handoff")
+    assert version_payload["install_readiness_manifest"]["recommended_first_command_text"].endswith("first-run")
+    assert version_payload["install_readiness_manifest"]["recommended_project_command_text"].endswith("handoff")
 
     shell_home = workspace / "installer_shell_home"
     shell_home.mkdir()
@@ -1604,7 +1610,7 @@ def _check_release_readiness_summary_json(workspace: Path) -> None:
         },
         "quickstart_check": {
             "passed": True,
-            "stdout_json": {"passed": 5, "check_count": 5, "failed": 0},
+            "stdout_json": {"passed": 6, "check_count": 6, "failed": 0},
         },
         "dogfood_self_check": {
             "passed": True,
@@ -1644,7 +1650,7 @@ def _check_release_readiness_summary_json(workspace: Path) -> None:
     assert summary["passed"] == 7
     assert summary["failed"] == 0
     assert summary["python_smoke"] == "44/44"
-    assert summary["quickstart"] == "5/5"
+    assert summary["quickstart"] == "6/6"
     assert summary["dogfood_restore_status"] == "ok"
     assert summary["dogfood_files"] == "46/46"
     assert summary["doctor_readiness"] == "ready"
@@ -1702,6 +1708,11 @@ def _check_top_level_cli_alias_json(workspace: Path) -> None:
     assert "AI handoff:" in handoff["summary_text"]
     assert "Keep for restore:" in handoff["summary_text"]
 
+    help_proc = _run([sys.executable, "-m", "cli", "--help"])
+    assert "first-run" in help_proc.stdout
+    assert "handoff" in help_proc.stdout
+    assert "Install check plus safe demo" in help_proc.stdout
+
 
 def _check_zero_learning_defaults_json(workspace: Path) -> None:
     project = workspace / "zero_learning_project"
@@ -1739,6 +1750,42 @@ def _check_zero_learning_defaults_json(workspace: Path) -> None:
     assert recent["recent_status"] == "ready"
     assert recent["freshness_status"] == "fresh"
     assert recent["bundle_root"] == quick["bundle_root"]
+
+
+def _check_first_run_json(workspace: Path) -> None:
+    first_run_dir = workspace / "first_run_demo"
+    payload = _run_top_level_cli_json(["first-run", "--output-dir", str(first_run_dir), "--json"], cwd=workspace)
+    assert payload["status"] == "ok"
+    assert payload["entrypoint"] == "context-first-run"
+    assert payload["first_run_status"] in {"ready", "watch"}
+    assert payload["install_check"]["entrypoint"] == "context-install-doctor"
+    assert payload["install_status"] in {"ready", "watch", "blocked"}
+    assert payload["demo"]["entrypoint"] == "context-demo"
+    assert payload["demo_status"] == "ready"
+    assert payload["restore_safe"] is True
+    assert payload["token_savings"]["estimated_source_tokens"] >= 0
+    assert payload["token_savings"]["estimated_skeleton_tokens"] >= 0
+    assert "estimated_savings_percent" in payload["token_savings"]
+    assert payload["token_savings"]["estimated_tokens_saved"] > 0
+    assert payload["token_savings"]["estimated_savings_percent"] > 0
+    assert Path(payload["demo_root"]).resolve() == first_run_dir.resolve()
+    assert Path(payload["skeleton_file"]).exists()
+    assert payload["try_project_command_text"] == "ailoom handoff --copy --open"
+    assert payload["check_storage_command_text"] == "ailoom doctor --storage"
+    assert payload["clean_demo_command_text"].startswith("ailoom clean --dry-run --all")
+    assert payload["action_plan"]
+    assert payload["next_steps"] == [item["message"] for item in payload["action_plan"]]
+    assert "Ailoom Context First Run" in payload["summary_text"]
+    assert "Install check:" in payload["summary_text"]
+    assert "Safe demo:" in payload["summary_text"]
+    assert "Try your project:" in payload["summary_text"]
+    assert "Clean demo later:" in payload["summary_text"]
+
+    human = _run([sys.executable, "-m", "cli", "first-run", "--output-dir", str(workspace / "first_run_human")], cwd=workspace)
+    assert human.returncode == 0
+    assert "Ailoom Context First Run" in human.stdout
+    assert "Try your project:" in human.stdout
+    assert "ailoom handoff --copy --open" in human.stdout
 
 
 def _check_handoff_auto_reuse_json(workspace: Path) -> None:
@@ -3105,6 +3152,7 @@ CHECKS: list[tuple[str, Callable[[Path], None]]] = [
     ("release_readiness_summary_json_ok", _check_release_readiness_summary_json),
     ("top_level_cli_alias_json_ok", _check_top_level_cli_alias_json),
     ("zero_learning_defaults_json_ok", _check_zero_learning_defaults_json),
+    ("first_run_json_ok", _check_first_run_json),
     ("handoff_auto_reuse_json_ok", _check_handoff_auto_reuse_json),
     ("handoff_daily_output_json_ok", _check_handoff_daily_output_json),
     ("handoff_ai_prompt_json_ok", _check_handoff_ai_prompt_json),

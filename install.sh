@@ -172,6 +172,7 @@ fi
 if command -v ailoom >/dev/null 2>&1; then
   echo "PATH status: ready - ailoom is available on PATH"
   PATH_STATUS="ready"
+  FIRST_RUN_COMMAND="ailoom first-run"
   HANDOFF_COMMAND="ailoom handoff"
   QUICK_COMMAND="ailoom quick"
   VERSION_COMMAND="ailoom version"
@@ -179,6 +180,7 @@ if command -v ailoom >/dev/null 2>&1; then
 else
   echo "PATH status: needs shell setup - $BIN_DIR is not currently on PATH"
   PATH_STATUS="needs_shell_setup"
+  FIRST_RUN_COMMAND="$COMMAND_PATH first-run"
   HANDOFF_COMMAND="$COMMAND_PATH handoff"
   QUICK_COMMAND="$COMMAND_PATH quick"
   VERSION_COMMAND="$COMMAND_PATH version"
@@ -190,7 +192,7 @@ if [ "$SETUP_SHELL" = "1" ]; then
   echo "Restart your terminal or run: export PATH=\"$BIN_DIR:\$PATH\""
 fi
 
-"$VENV_DIR/bin/python" - "$READINESS_FILE" "$COMMAND_PATH" "$INSTALL_DIR" "$BIN_DIR" "$PATH_STATUS" "$SHELL_PROFILE_STATUS" "$HANDOFF_COMMAND" "$QUICK_COMMAND" "$VERSION_COMMAND" "$INSTALL_DOCTOR_COMMAND" "$SHELL_PROFILE" <<'PY'
+"$VENV_DIR/bin/python" - "$READINESS_FILE" "$COMMAND_PATH" "$INSTALL_DIR" "$BIN_DIR" "$PATH_STATUS" "$SHELL_PROFILE_STATUS" "$FIRST_RUN_COMMAND" "$HANDOFF_COMMAND" "$QUICK_COMMAND" "$VERSION_COMMAND" "$INSTALL_DOCTOR_COMMAND" "$SHELL_PROFILE" <<'PY'
 import json
 import sys
 from pathlib import Path
@@ -202,12 +204,13 @@ from pathlib import Path
     bin_dir,
     path_status,
     shell_profile_status,
+    first_run_command,
     handoff_command,
     quick_command,
     version_command,
     install_doctor_command,
     shell_profile,
-) = sys.argv[1:12]
+) = sys.argv[1:13]
 
 payload = {
     "schema": "ailoom.install-readiness.v1",
@@ -220,7 +223,8 @@ payload = {
     "path_status": path_status,
     "shell_profile_status": shell_profile_status,
     "shell_profile": shell_profile,
-    "recommended_first_command_text": handoff_command,
+    "recommended_first_command_text": first_run_command,
+    "recommended_project_command_text": handoff_command,
     "quick_command_text": quick_command,
     "doctor_command_text": f"{command_path} doctor",
     "install_doctor_command_text": install_doctor_command,
@@ -233,6 +237,9 @@ PY
 echo "Install readiness file: $READINESS_FILE"
 echo ""
 echo "Copy/paste next:"
+echo "  $FIRST_RUN_COMMAND"
+echo ""
+echo "Then try your project:"
 echo "  $HANDOFF_COMMAND"
 echo ""
 echo "Optional full bundle command:"

@@ -71,7 +71,8 @@ function Write-ReadinessManifest {
         temporary_path_command_text = "`$env:PATH = `"$CommandDir;`$env:PATH`""
         self_check_command_text = "ailoom version"
         install_doctor_command_text = "ailoom doctor --install"
-        recommended_first_command_text = "ailoom handoff"
+        recommended_first_command_text = "ailoom first-run"
+        recommended_project_command_text = "ailoom handoff"
         python_executable = $PythonExe
     }
     New-Item -ItemType Directory -Force -Path $InstallHome | Out-Null
@@ -105,8 +106,13 @@ function Install-McpSkeleton {
     Write-Host "  $CommandPath"
     Write-Host ""
     Write-Host "Copy/paste next:" -ForegroundColor Green
-    Write-Host "  ailoom doctor --install"
+    Write-Host "  ailoom first-run"
+    Write-Host ""
+    Write-Host "Then try your project:" -ForegroundColor Green
     Write-Host "  ailoom handoff"
+    Write-Host ""
+    Write-Host "Install doctor:" -ForegroundColor Green
+    Write-Host "  ailoom doctor --install"
     Write-Host ""
     Write-Host "If ailoom is not found in this terminal, run:" -ForegroundColor Yellow
     Write-Host "  `$env:PATH = `"$CommandDir;`$env:PATH`""

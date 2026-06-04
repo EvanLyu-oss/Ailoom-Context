@@ -8,7 +8,7 @@ From a cloned or downloaded checkout:
 
 ```bash
 sh install.sh --setup-shell
-ailoom demo
+ailoom first-run
 ailoom handoff
 ```
 
@@ -20,8 +20,7 @@ From a cloned or downloaded checkout:
 
 ```powershell
 .\install.ps1 -SetupShell
-ailoom doctor --install
-ailoom demo
+ailoom first-run
 ailoom handoff
 ```
 
@@ -31,6 +30,7 @@ If PowerShell cannot find `ailoom` yet, restart PowerShell or run the temporary 
 
 | Command | What it proves |
 | --- | --- |
+| `ailoom first-run` | Checks install readiness, runs a safe demo, shows savings, and prints the next command |
 | `ailoom demo` | Runs a safe sample and shows token savings plus restore safety |
 | `ailoom handoff` | Creates a restore-safe AI/IDE handoff for the current project |
 | `ailoom savings` | Shows the token savings from the most recent handoff |

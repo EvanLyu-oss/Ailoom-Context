@@ -79,6 +79,7 @@ CONTEXT_SUBCOMMANDS = {
     "doctor",
     "start",
     "quick",
+    "first-run",
     "recent",
     "savings",
     "demo",
@@ -148,6 +149,7 @@ def _build_version_payload() -> dict[str, Any]:
     path_setup_command_text = "sh install.sh --setup-shell"
     path_export_command_text = f"export PATH={shlex.quote(bin_dir)}:$PATH"
     self_check_command_text = f"{command_prefix} version"
+    first_run_command_text = f"{command_prefix} first-run"
     payload = {
         "status": "ok",
         "entrypoint": "mcp-skeleton-version",
@@ -173,7 +175,8 @@ def _build_version_payload() -> dict[str, Any]:
         "path_export_command_text": path_export_command_text,
         "self_check_command_text": self_check_command_text,
         "can_run_handoff": can_run_handoff,
-        "recommended_first_command_text": f"{command_prefix} handoff",
+        "recommended_first_command_text": first_run_command_text,
+        "recommended_project_command_text": f"{command_prefix} handoff",
         "doctor_command_text": f"{command_prefix} doctor",
         "path_hint": "ok" if command_path else f"{CLI_NAME} command was not found on PATH; use python3 -m cli or run sh install.sh",
     }
@@ -190,6 +193,7 @@ def _build_version_payload() -> dict[str, Any]:
             f"Temporary PATH command: {payload['path_export_command_text']}",
             f"Self-check command: {payload['self_check_command_text']}",
             f"First run command: {payload['recommended_first_command_text']}",
+            f"Project handoff command: {payload['recommended_project_command_text']}",
             f"Doctor command: {payload['doctor_command_text']}",
             "",
             f"Version: {payload['version']}",
@@ -213,9 +217,14 @@ def _build_install_doctor_action_plan(
     if install_doctor_status == "ready":
         return [
             {
-                "step": "run_first_handoff",
+                "step": "run_first_run",
                 "status": "ready",
-                "message": f"run {install.get('recommended_first_command_text', 'ailoom handoff')} in your project",
+                "message": f"run {install.get('recommended_first_command_text', 'ailoom first-run')} once to verify the install and see a safe demo",
+            },
+            {
+                "step": "try_project_handoff",
+                "status": "ready",
+                "message": f"then run {install.get('recommended_project_command_text', 'ailoom handoff')} in your project",
             },
             {
                 "step": "verify_safety",
@@ -315,7 +324,7 @@ def _build_context_install_doctor_payload(args: argparse.Namespace) -> tuple[dic
     elif manifest_status != "ready":
         recommended_fix_command_text = str(install.get("install_command_text") or "sh install.sh")
     else:
-        recommended_fix_command_text = str(install.get("recommended_first_command_text") or "ailoom handoff")
+        recommended_fix_command_text = str(install.get("recommended_first_command_text") or "ailoom first-run")
     action_plan = _build_install_doctor_action_plan(
         install_doctor_status=install_doctor_status,
         install=install,
@@ -329,7 +338,7 @@ def _build_context_install_doctor_payload(args: argparse.Namespace) -> tuple[dic
         "checks": checks,
         "recommended_fix_command_text": recommended_fix_command_text,
         "self_check_command_text": str(install.get("self_check_command_text") or "ailoom version"),
-        "first_run_command_text": str(install.get("recommended_first_command_text") or "ailoom handoff"),
+        "first_run_command_text": str(install.get("recommended_first_command_text") or "ailoom first-run"),
         "action_plan": action_plan,
         "next_steps": [item["message"] for item in action_plan],
     }
@@ -3319,6 +3328,106 @@ def _render_context_demo_summary(payload: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
+def _render_context_first_run_summary(payload: dict[str, Any]) -> str:
+    savings = payload.get("token_savings") or {}
+    return "\n".join(
+        [
+            "Ailoom Context First Run",
+            "",
+            f"Status: {payload.get('first_run_status', '')}",
+            f"Install check: {payload.get('install_status', '')}",
+            f"Safe demo: {payload.get('demo_status', '')}",
+            f"Restore safety: {'OK' if payload.get('restore_safe') else 'CHECK'}",
+            f"Token savings: {savings.get('estimated_tokens_saved', 0)} tokens ({savings.get('estimated_savings_percent', 0)}%)",
+            "",
+            "What happened:",
+            f"- Created a safe demo bundle: {payload.get('demo_root', '')}",
+            f"- AI-facing skeleton: {payload.get('skeleton_file', '')}",
+            "- Restore package stayed local.",
+            "",
+            "Try your project:",
+            payload.get("try_project_command_text") or "ailoom handoff --copy --open",
+            "",
+            "Check local storage:",
+            payload.get("check_storage_command_text") or "ailoom doctor --storage",
+            "",
+            "Clean demo later:",
+            payload.get("clean_demo_command_text") or "ailoom clean --dry-run --all",
+        ]
+    )
+
+
+def _build_context_first_run_action_plan(payload: dict[str, Any]) -> list[dict[str, str]]:
+    return [
+        {
+            "step": "try_project_handoff",
+            "message": f"Run `{payload.get('try_project_command_text')}` inside a real project.",
+        },
+        {
+            "step": "review_savings",
+            "message": "Run `ailoom savings` after your first handoff to see token savings.",
+        },
+        {
+            "step": "clean_when_done",
+            "message": f"Preview cleanup with `{payload.get('clean_demo_command_text')}` before deleting generated files.",
+        },
+    ]
+
+
+def _build_context_first_run_payload(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
+    install_payload, install_exit = _build_context_install_doctor_payload(args)
+    demo_args = _clone_args(
+        args,
+        context_command="demo",
+        output_dir=getattr(args, "output_dir", None),
+        force=bool(getattr(args, "force", False)),
+    )
+    demo_payload, demo_exit = _build_context_demo_payload(demo_args)
+    storage_payload, _storage_exit = _build_context_storage_payload(args)
+    quick_payload = demo_payload.get("quick") or {}
+    handoff = quick_payload.get("handoff") or {}
+    metrics = (
+        (quick_payload.get("performance_summary") or {}).get("token_impact")
+        or (quick_payload.get("experience") or {}).get("token_impact")
+        or quick_payload.get("metrics")
+        or {}
+    )
+    restore_safe = bool(demo_payload.get("restore_safe") or quick_payload.get("restore_safe"))
+    install_status = str(install_payload.get("install_doctor_status") or "watch")
+    demo_status = str(demo_payload.get("demo_status") or "blocked")
+    first_run_status = "ready" if install_status == "ready" and install_exit == EXIT_OK and demo_exit == EXIT_OK and restore_safe else "watch"
+    project_root = (_opt_path(args, "input_dir") or Path.cwd()).resolve()
+    payload = {
+        "status": "ok" if demo_exit == EXIT_OK else "error",
+        "entrypoint": "context-first-run",
+        "first_run_status": first_run_status,
+        "install_status": install_status,
+        "demo_status": demo_status,
+        "restore_safe": restore_safe,
+        "project_root": str(project_root),
+        "demo_root": demo_payload.get("demo_root", ""),
+        "bundle_root": quick_payload.get("bundle_root", ""),
+        "manifest_file": quick_payload.get("manifest_file", ""),
+        "skeleton_file": handoff.get("skeleton_file", ""),
+        "token_savings": {
+            "estimated_source_tokens": metrics.get("estimated_source_tokens", 0),
+            "estimated_skeleton_tokens": metrics.get("estimated_skeleton_tokens", 0),
+            "estimated_tokens_saved": metrics.get("estimated_tokens_saved", 0),
+            "estimated_savings_percent": metrics.get("estimated_savings_percent", 0),
+        },
+        "try_project_command_text": "ailoom handoff --copy --open",
+        "check_storage_command_text": "ailoom doctor --storage",
+        "clean_demo_command_text": _format_cli_command(["clean", "--dry-run", "--all", "--older-than", "7d", "--input-dir", str(project_root)]),
+        "install_check": install_payload,
+        "demo": demo_payload,
+        "storage": storage_payload,
+    }
+    payload["action_plan"] = _build_context_first_run_action_plan(payload)
+    payload["next_steps"] = [item["message"] for item in payload["action_plan"]]
+    payload["summary_text"] = _render_context_first_run_summary(payload)
+    return payload, EXIT_OK if payload["status"] == "ok" else EXIT_GENERAL_ERROR
+
+
 def _build_context_demo_payload(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
     demo_root = _default_demo_root(args)
     source_dir = demo_root / "source"
@@ -4288,7 +4397,7 @@ def cmd_context(args: argparse.Namespace) -> int:
     command = getattr(args, "context_command", None)
     supported = CONTEXT_SUBCOMMANDS
     if command not in supported:
-        return _emit_command_error(args, EXIT_USAGE, "invalid_usage", "supported context subcommands: compress, restore, inspect, explain, apply-check, preset, config, init, install-hook, doctor, start, quick, recent, savings, demo, safety, clean, bundle, patch, patch-apply")
+        return _emit_command_error(args, EXIT_USAGE, "invalid_usage", "supported context subcommands: compress, restore, inspect, explain, apply-check, preset, config, init, install-hook, doctor, start, quick, first-run, recent, savings, demo, safety, clean, bundle, patch, patch-apply")
 
     if command == "preset":
         payload = build_context_preset_payload(getattr(args, "preset_id", None))
@@ -4327,6 +4436,10 @@ def cmd_context(args: argparse.Namespace) -> int:
     if command == "quick":
         _apply_current_dir_default(args)
         payload, exit_code = _build_context_quick_payload(args)
+        return _emit_simple_result(args, payload, text=str(payload.get("summary_text", "")), exit_code=exit_code)
+
+    if command == "first-run":
+        payload, exit_code = _build_context_first_run_payload(args)
         return _emit_simple_result(args, payload, text=str(payload.get("summary_text", "")), exit_code=exit_code)
 
     if command == "recent":
@@ -4638,6 +4751,7 @@ def _build_parser() -> argparse.ArgumentParser:
         epilog=(
             f"Common shortcuts: {CLI_NAME} quick | "
             f"{CLI_NAME} handoff | "
+            f"{CLI_NAME} first-run | "
             f"{CLI_NAME} start | "
             f"{CLI_NAME} doctor | "
             f"{CLI_NAME} explain --package-file context_manifest.json"
@@ -4647,6 +4761,19 @@ def _build_parser() -> argparse.ArgumentParser:
 
     version_parser = subparsers.add_parser("version", help=f"Show {PRODUCT_NAME} version, Python, and install path details")
     version_parser.add_argument("--json", action="store_true")
+
+    for alias_name, alias_help in [
+        ("first-run", "Install check plus safe demo and next-step guidance"),
+        ("handoff", "Create or reuse a restore-safe AI/IDE handoff for this project"),
+        ("quick", "Create a restore-safe bundle with explicit paths"),
+        ("demo", "Run a safe sample before touching your own project"),
+        ("doctor", "Check readiness, restore safety, install status, or storage"),
+        ("savings", "Show token savings from the most recent handoff"),
+        ("recent", "Show the most recent handoff bundle"),
+        ("safety", "Explain local-only safety and share-vs-keep-local boundaries"),
+        ("clean", "Preview or remove generated Ailoom Context artifacts"),
+    ]:
+        subparsers.add_parser(alias_name, help=alias_help)
 
     context_parser = subparsers.add_parser("context", help="Compress long code or text context into an MCP skeleton and restore it later")
     context_subparsers = context_parser.add_subparsers(dest="context_command")
@@ -4811,6 +4938,12 @@ def _build_parser() -> argparse.ArgumentParser:
     quick.add_argument("--output-file", dest="output_file", help="Write JSON or human summary to a file")
     quick.add_argument("--force", action="store_true", help="Overwrite generated config/report files if they already exist")
     quick.add_argument("--json", action="store_true")
+
+    first_run = context_subparsers.add_parser("first-run", help="One-command install check, safe demo, savings preview, and next-step guidance")
+    first_run.add_argument("--input-dir", dest="input_dir", help="Project directory used for storage guidance; defaults to current directory")
+    first_run.add_argument("--output-dir", dest="output_dir", help="Demo root directory; defaults under .workspace_ail/demo_runs")
+    first_run.add_argument("--force", action="store_true", help="Overwrite --output-dir if it already exists")
+    first_run.add_argument("--json", action="store_true")
 
     recent = context_subparsers.add_parser("recent", help="Show the most recent quick bundle for this project")
     recent.add_argument("--input-dir", dest="input_dir", help="Project directory whose .workspace_ail/recent_quick.json should be read; defaults to current directory")

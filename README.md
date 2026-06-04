@@ -45,7 +45,7 @@ For the shortest install path, see [INSTALL.md](INSTALL.md).
 
 ```bash
 sh install.sh --setup-shell
-ailoom demo
+ailoom first-run
 ailoom handoff
 ailoom savings
 ```
@@ -79,7 +79,7 @@ From a cloned or downloaded checkout:
 
 ```bash
 sh install.sh --setup-shell
-ailoom demo
+ailoom first-run
 ailoom handoff
 ```
 
@@ -89,8 +89,7 @@ From a cloned or downloaded checkout:
 
 ```powershell
 .\install.ps1 -SetupShell
-ailoom doctor --install
-ailoom demo
+ailoom first-run
 ailoom handoff
 ```
 
@@ -104,6 +103,7 @@ ailoom handoff --copy --open
 
 | Command | Use it when |
 | --- | --- |
+| `ailoom first-run` | You just installed Ailoom Context and want one safe check plus a demo |
 | `ailoom demo` | You want a safe sample before touching your own project |
 | `ailoom handoff` | You want the fastest project-to-AI handoff |
 | `ailoom handoff --copy --open` | You want the handoff file opened and copied where possible |
@@ -212,7 +212,7 @@ ailoom doctor --install
 ```
 
 `ailoom version` reports install readiness, Python status, command availability, whether `handoff` is directly runnable from PATH, and the first `handoff` / `doctor` commands to run. If PATH is not ready, it prints both the persistent setup command and the temporary `export PATH=...` command. JSON output also includes `install_readiness_file` and `install_readiness_manifest` for IDE/plugin integration.
-`ailoom doctor --install` is the first-run self-check: it reports Python support, command availability, installer readiness manifest status, the copy/paste repair command, and the first `handoff` command to run.
+`ailoom doctor --install` is the install self-check: it reports Python support, command availability, installer readiness manifest status, the copy/paste repair command, and the first `first-run` / project `handoff` commands to run.
 
 Current v1.0 readiness contract:
 
@@ -286,6 +286,12 @@ If you do not pass `--preset`, `--focus-mode`, or `--skeleton-density`, Ailoom C
 One-command bundle creation:
 
 Try Ailoom Context without preparing your own project first:
+
+```bash
+ailoom first-run
+```
+
+`first-run` is the install-aftercare command: it checks local install readiness, runs a safe demo bundle, verifies restore safety, shows estimated token savings, and prints the exact `handoff`, `storage`, and cleanup commands to use next.
 
 ```bash
 ailoom demo

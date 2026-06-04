@@ -97,6 +97,11 @@ def build_quickstart_check_payload() -> dict[str, Any]:
         command_path = home / ".local" / "bin" / "ailoom"
         install = _run(["sh", str(ROOT / "install.sh"), "--setup-shell"], cwd=ROOT, env=env)
         install.pop("stdout", None)
+        first_run, first_run_json = _json_from_command(
+            [str(command_path), "first-run", "--output-dir", str(workspace / "first-run"), "--json"],
+            cwd=project,
+            env=env,
+        )
         demo, demo_json = _json_from_command(
             [str(command_path), "demo", "--output-dir", str(workspace / "demo"), "--json"],
             cwd=project,
@@ -129,7 +134,16 @@ def build_quickstart_check_payload() -> dict[str, Any]:
             readiness_json.get("schema") == "ailoom.install-readiness.v1"
             and readiness_json.get("status") == "ready"
             and readiness_json.get("command_path") == str(command_path)
-            and str(readiness_json.get("recommended_first_command_text") or "").endswith("handoff")
+            and str(readiness_json.get("recommended_first_command_text") or "").endswith("first-run")
+            and str(readiness_json.get("recommended_project_command_text") or "").endswith("handoff")
+        )
+        first_run_passed = bool(
+            first_run["passed"]
+            and first_run_json.get("first_run_status") in {"ready", "watch"}
+            and first_run_json.get("demo_status") == "ready"
+            and first_run_json.get("restore_safe")
+            and (first_run_json.get("token_savings") or {}).get("estimated_savings_percent", 0) > 0
+            and Path(str(first_run_json.get("skeleton_file") or "")).exists()
         )
         demo_passed = bool(demo["passed"] and demo_json.get("demo_status") == "ready" and (demo_json.get("quick") or {}).get("restore_safe"))
         handoff_passed = bool(
@@ -160,6 +174,14 @@ def build_quickstart_check_payload() -> dict[str, Any]:
                 "readiness_file_exists": readiness_file.exists(),
                 "readiness_status": readiness_json.get("status", ""),
                 "readiness_recommended_first_command": readiness_json.get("recommended_first_command_text", ""),
+            },
+            "ailoom_first_run": {
+                **first_run,
+                "passed": first_run_passed,
+                "first_run_status": first_run_json.get("first_run_status", ""),
+                "demo_status": first_run_json.get("demo_status", ""),
+                "restore_safe": bool(first_run_json.get("restore_safe")),
+                "skeleton_file_exists": Path(str(first_run_json.get("skeleton_file") or "")).exists(),
             },
             "ailoom_demo": {
                 **demo,

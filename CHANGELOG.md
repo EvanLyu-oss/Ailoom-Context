@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- added `ailoom first-run` as an install-aftercare command that checks readiness, runs a safe demo, shows savings, and prints next steps
 - added `ailoom clean --older-than` and `ailoom doctor --storage` for safer generated-artifact cleanup and storage visibility
 - added release checklist and GitHub release template docs for beta/v1.0 distribution
 - added `ailoom savings --write-report` for shareable Markdown token-savings reports during beta trials

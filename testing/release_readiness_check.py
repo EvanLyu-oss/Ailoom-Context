@@ -77,7 +77,18 @@ def _build_v1_beta_readiness(
 ) -> dict[str, Any]:
     quickstart_summary = _count_summary(quickstart)
     install_skipped = bool(quickstart.get("skipped"))
-    install_ready = quickstart_summary == "5/5" or install_skipped
+    quickstart_passed = int(quickstart.get("passed") or 0)
+    quickstart_total = int(quickstart.get("check_count") or quickstart.get("total") or 0)
+    quickstart_failed = int(quickstart.get("failed") or 0)
+    install_ready = (
+        install_skipped
+        or (
+            quickstart_total >= 5
+            and quickstart_passed == quickstart_total
+            and quickstart_failed == 0
+            and quickstart_summary != "unknown"
+        )
+    )
     handoff_ready = (
         dogfood.get("restore_status") == "ok"
         and dogfood.get("missing_count", 1) == 0

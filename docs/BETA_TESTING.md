@@ -54,7 +54,7 @@ Expected result:
 - `context_skeleton.mcp` is the file to share with AI or an IDE
 - restore package files are clearly marked as keep-local
 - the savings report contains source tokens, skeleton tokens, tokens saved, and savings percent
-- the trial report combines token savings, generated storage, safety boundaries, and feedback prompts
+- the trial report combines value summary, token savings, generated storage risk, safety boundaries, and feedback questions
 
 ## 4. Restore verification
 

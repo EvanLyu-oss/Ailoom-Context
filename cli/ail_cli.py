@@ -2066,6 +2066,8 @@ def _trial_report_project_root(args: argparse.Namespace) -> Path:
 def _render_context_trial_report_summary(payload: dict[str, Any]) -> str:
     savings = payload.get("savings") or {}
     storage = payload.get("storage") or {}
+    value = payload.get("value_summary") or {}
+    readiness = payload.get("trial_readiness") or {}
     if payload.get("trial_report_status") != "ready":
         return "\n".join([
             "Ailoom Context Trial Report",
@@ -2084,7 +2086,16 @@ def _render_context_trial_report_summary(payload: dict[str, Any]) -> str:
         f"- Project: {payload.get('project_root', '')}",
         f"- Token savings: {savings.get('tokens_saved', 0)} tokens ({savings.get('savings_percent', 0)}%)",
         f"- Storage status: {storage.get('storage_status', '')}",
+        f"- Storage risk: {payload.get('storage_risk_level', '')}",
         f"- Safety status: {(payload.get('safety') or {}).get('safety_status', '')}",
+        "",
+        "Trial readiness:",
+        f"- Status: {readiness.get('status', '')}",
+        f"- Recommendation: {readiness.get('recommendation', '')}",
+        "",
+        "Value summary:",
+        f"- Status: {value.get('status', '')}",
+        f"- Headline: {value.get('headline', '')}",
     ]
     if payload.get("report_written"):
         lines.append(f"- Report file: {payload.get('report_file', '')}")
@@ -2106,6 +2117,8 @@ def _render_context_trial_report(payload: dict[str, Any]) -> str:
     storage = payload.get("storage") or {}
     safety = payload.get("safety") or {}
     install = payload.get("install") or {}
+    value = payload.get("value_summary") or {}
+    readiness = payload.get("trial_readiness") or {}
     generated_at = time.strftime("%Y-%m-%d %H:%M:%S %z")
     storage_targets = storage.get("targets") or []
     storage_lines = [
@@ -2122,6 +2135,14 @@ def _render_context_trial_report(payload: dict[str, Any]) -> str:
         f"python_version: {install.get('python_version', '')}",
         f"platform: {platform.platform()}",
         f"project_root: {payload.get('project_root', '')}",
+        f"trial_readiness: {readiness.get('status', '')}",
+        f"trial_recommendation: {readiness.get('recommendation', '')}",
+        "",
+        "## Value Summary",
+        f"value_status: {value.get('status', '')}",
+        f"value_headline: {value.get('headline', '')}",
+        f"value_recommendation: {value.get('recommendation', '')}",
+        f"value_next_command: {value.get('next_best_command_text', '')}",
         "",
         "## Token Savings",
         f"status: {savings.get('savings_status', '')}",
@@ -2138,6 +2159,8 @@ def _render_context_trial_report(payload: dict[str, Any]) -> str:
         "",
         "## Storage",
         f"storage_status: {storage.get('storage_status', '')}",
+        f"storage_risk_level: {payload.get('storage_risk_level', '')}",
+        f"human_total_size: {storage.get('human_total_size', '')}",
         f"total_bytes: {storage.get('total_bytes', 0)}",
         f"total_files: {storage.get('total_files', 0)}",
         *storage_lines,
@@ -2150,6 +2173,12 @@ def _render_context_trial_report(payload: dict[str, Any]) -> str:
         f"safe_ai_file: {(safety.get('restore_package') or {}).get('safe_ai_file', 'context_skeleton.mcp')}",
         "keep_local: context_manifest.json, context_restore.json, AI_HANDOFF.md, handoff.json",
         "",
+        "## Feedback Questions",
+        *[
+            f"- {item.get('prompt', '')}"
+            for item in payload.get("feedback_questions") or []
+        ],
+        "",
         "## Recommended Next Commands",
         payload.get("next_command_text") or "(not available)",
         payload.get("storage_command_text") or "(not available)",
@@ -2161,6 +2190,55 @@ def _render_context_trial_report(payload: dict[str, Any]) -> str:
         "Please add one sentence about whether install, speed, token savings, and safety boundaries felt clear.",
         "",
     ])
+
+
+def _build_trial_feedback_questions() -> list[dict[str, str]]:
+    return [
+        {
+            "id": "install_easy",
+            "prompt": "Was installation easy enough to finish without reading extra docs?",
+        },
+        {
+            "id": "first_handoff_clear",
+            "prompt": "Did the first handoff clearly show which file to give to AI and which files to keep local?",
+        },
+        {
+            "id": "token_value_visible",
+            "prompt": "Did the Value summary and token savings make the benefit obvious?",
+        },
+        {
+            "id": "speed_acceptable",
+            "prompt": "Did handoff speed feel acceptable for this project size?",
+        },
+        {
+            "id": "storage_clear",
+            "prompt": "Did storage and cleanup guidance make generated files feel safe and manageable?",
+        },
+        {
+            "id": "keep_using",
+            "prompt": "Would you keep using Ailoom Context during normal development?",
+        },
+    ]
+
+
+def _build_trial_readiness(*, value_summary: dict[str, Any], storage_payload: dict[str, Any], safety_payload: dict[str, Any]) -> dict[str, str]:
+    storage_risk = str(storage_payload.get("risk_level") or "")
+    value_status = str(value_summary.get("status") or "")
+    safety_status = str(safety_payload.get("safety_status") or "")
+    if storage_risk == "large":
+        return {
+            "status": "watch",
+            "recommendation": "trial is usable, but run storage cleanup before long repeated handoff sessions",
+        }
+    if value_status in {"strong", "useful"} and safety_status == "ready":
+        return {
+            "status": "ready",
+            "recommendation": "good beta signal: value, safety, and storage guidance are available",
+        }
+    return {
+        "status": "watch",
+        "recommendation": "trial is safe to review, but use a larger project or long document for clearer token value",
+    }
 
 
 def _build_context_trial_report_payload(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
@@ -2187,6 +2265,12 @@ def _build_context_trial_report_payload(args: argparse.Namespace) -> tuple[dict[
 
     storage_payload, _ = _build_context_storage_payload(args)
     safety_payload, _ = _build_context_safety_payload(args)
+    value_summary = dict(savings_payload.get("value_summary") or {})
+    trial_readiness = _build_trial_readiness(
+        value_summary=value_summary,
+        storage_payload=storage_payload,
+        safety_payload=safety_payload,
+    )
     payload = {
         "status": "ok",
         "entrypoint": "context-trial-report",
@@ -2196,6 +2280,11 @@ def _build_context_trial_report_payload(args: argparse.Namespace) -> tuple[dict[
         "savings": savings_payload,
         "storage": storage_payload,
         "safety": safety_payload,
+        "value_summary": value_summary,
+        "storage_risk_level": storage_payload.get("risk_level", ""),
+        "trial_readiness": trial_readiness,
+        "feedback_questions": _build_trial_feedback_questions(),
+        "report_sections": ["environment", "value_summary", "token_savings", "storage", "safety_boundary", "feedback_questions", "recommended_next_commands"],
         "install": _build_version_payload(),
         "next_command_text": savings_payload.get("refresh_command_text") or _format_cli_command(["handoff", "--input-dir", str(project_root), "--reuse-if-fresh"]),
         "storage_command_text": _format_cli_command(["doctor", "--storage", "--input-dir", str(project_root)]),

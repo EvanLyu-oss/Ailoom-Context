@@ -1139,22 +1139,38 @@ def _check_trial_report_json(workspace: Path) -> None:
     assert payload["savings"]["savings_status"] == "ready"
     assert payload["storage"]["entrypoint"] == "context-storage-doctor"
     assert payload["safety"]["entrypoint"] == "context-safety"
+    assert payload["value_summary"]["status"] in {"strong", "useful", "watch", "tiny_project"}
+    assert payload["value_summary"]["headline"]
+    assert payload["storage_risk_level"] in {"ok", "notice", "watch", "large"}
+    assert payload["trial_readiness"]["status"] in {"ready", "watch"}
+    assert payload["trial_readiness"]["recommendation"]
+    assert payload["feedback_questions"]
+    assert payload["feedback_questions"][0]["id"] == "install_easy"
+    assert payload["feedback_questions"][-1]["id"] == "keep_using"
+    assert payload["report_sections"] == ["environment", "value_summary", "token_savings", "storage", "safety_boundary", "feedback_questions", "recommended_next_commands"]
     assert payload["report_written"] is True
     assert Path(payload["report_file"]).exists()
     assert payload["feedback_email"] == "carwyn910@gmail.com"
     assert payload["next_command_text"].startswith("ailoom handoff")
     assert "Ailoom Context Trial Report" in payload["summary_text"]
+    assert "Trial readiness:" in payload["summary_text"]
+    assert "Value summary:" in payload["summary_text"]
     assert "Feedback email:" in payload["summary_text"]
     assert "Attach this report" in payload["summary_text"]
 
     report_text = report_file.read_text(encoding="utf-8")
     assert "# Ailoom Context Trial Report" in report_text
     assert "## Environment" in report_text
+    assert "## Value Summary" in report_text
     assert "## Token Savings" in report_text
     assert "## Storage" in report_text
     assert "## Safety Boundary" in report_text
+    assert "## Feedback Questions" in report_text
     assert "## Feedback Prompt" in report_text
     assert "carwyn910@gmail.com" in report_text
+    assert "trial_readiness:" in report_text
+    assert "storage_risk_level:" in report_text
+    assert "value_status:" in report_text
     assert "source_tokens:" in report_text
     assert "savings_percent:" in report_text
 

@@ -54,6 +54,9 @@ Add any other commands you tried:
 - Was the token savings report useful:
 - Attach or paste the savings report:
 - Attach or paste the trial report:
+- Trial report readiness:
+- Trial report value summary:
+- Trial report storage risk:
 - Did `handoff` clearly identify the file to give to AI:
 - Did `handoff` clearly identify files to keep local:
 

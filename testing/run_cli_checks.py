@@ -1696,7 +1696,22 @@ def _check_release_readiness_summary_json(workspace: Path) -> None:
         "py_compile": {"passed": True},
         "python_smoke": {
             "passed": True,
-            "stdout_json": {"passed": 44, "check_count": 44, "failed": 0},
+            "stdout_json": {
+                "passed": 44,
+                "check_count": 44,
+                "failed": 0,
+                "checks": {
+                    "context_doctor_install_json_ok": True,
+                    "first_run_json_ok": True,
+                    "context_quick_json_ok": True,
+                    "context_savings_json_ok": True,
+                    "trial_report_json_ok": True,
+                    "context_clean_json_ok": True,
+                    "context_safety_json_ok": True,
+                    "handoff_auto_reuse_json_ok": True,
+                    "handoff_daily_output_json_ok": True,
+                },
+            },
         },
         "quickstart_check": {
             "passed": True,
@@ -1756,6 +1771,13 @@ def _check_release_readiness_summary_json(workspace: Path) -> None:
     assert summary["v1_beta_readiness"]["install_path"] == "ready"
     assert summary["v1_beta_readiness"]["handoff_path"] == "ready"
     assert summary["v1_beta_readiness"]["performance_path"] == "ready"
+    assert summary["v1_user_experience_readiness"]["status"] == "ready"
+    assert summary["v1_user_experience_readiness"]["install_experience"] == "ready"
+    assert summary["v1_user_experience_readiness"]["first_run_experience"] == "ready"
+    assert summary["v1_user_experience_readiness"]["handoff_value_experience"] == "ready"
+    assert summary["v1_user_experience_readiness"]["storage_safety_experience"] == "ready"
+    assert summary["v1_user_experience_readiness"]["trial_feedback_experience"] == "ready"
+    assert summary["v1_user_experience_readiness"]["blockers"] == []
     assert summary["next_action"] == "ready for release"
 
     skipped_checks = {
@@ -1770,6 +1792,33 @@ def _check_release_readiness_summary_json(workspace: Path) -> None:
     assert skipped_summary["v1_beta_readiness"]["status"] == "ready"
     assert skipped_summary["v1_beta_readiness"]["install_path"] == "skipped"
     assert "install_path_not_ready" not in skipped_summary["v1_beta_readiness"]["blockers"]
+
+    blocked_checks = {
+        **checks,
+        "python_smoke": {
+            "passed": True,
+            "stdout_json": {
+                "passed": 44,
+                "check_count": 44,
+                "failed": 0,
+                "checks": {
+                    "context_doctor_install_json_ok": True,
+                    "first_run_json_ok": True,
+                    "context_quick_json_ok": True,
+                    "context_savings_json_ok": True,
+                    "trial_report_json_ok": False,
+                    "context_clean_json_ok": True,
+                    "context_safety_json_ok": True,
+                    "handoff_auto_reuse_json_ok": True,
+                    "handoff_daily_output_json_ok": True,
+                },
+            },
+        },
+    }
+    blocked_summary = release_module.build_executive_summary(blocked_checks)
+    assert blocked_summary["v1_user_experience_readiness"]["status"] == "blocked"
+    assert blocked_summary["v1_user_experience_readiness"]["trial_feedback_experience"] == "blocked"
+    assert "trial_feedback_experience_not_ready" in blocked_summary["v1_user_experience_readiness"]["blockers"]
 
 
 def _check_top_level_cli_alias_json(workspace: Path) -> None:

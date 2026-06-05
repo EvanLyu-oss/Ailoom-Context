@@ -18,6 +18,8 @@ Required result:
 - benchmark status is `ready`
 - scale health is `ok`
 - restore verification is complete
+- `executive_summary.v1_beta_readiness.status` is `ready`
+- `executive_summary.v1_user_experience_readiness.status` is `ready`
 
 ## 2. Storage Safety
 
@@ -36,8 +38,10 @@ Required result:
 
 ```bash
 ailoom demo
+ailoom first-run
 ailoom handoff
 ailoom savings --write-report ailoom-savings-report.md
+ailoom trial-report --write-report ailoom-trial-report.md
 ailoom safety
 ```
 
@@ -45,6 +49,7 @@ Required result:
 
 - first-run output is understandable
 - savings report includes source tokens, skeleton tokens, tokens saved, and savings percent
+- trial report includes value summary, storage risk, trial readiness, and feedback questions
 - safety output clearly says skeletons can be shared and restore packages stay local
 
 ## 4. Documentation

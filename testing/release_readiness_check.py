@@ -132,6 +132,51 @@ def _build_v1_beta_readiness(
     }
 
 
+def _smoke_check_passed(python_smoke: dict[str, Any], name: str) -> bool:
+    checks = python_smoke.get("checks") or {}
+    return checks.get(name) is True
+
+
+def _experience_status(python_smoke: dict[str, Any], names: list[str]) -> str:
+    return "ready" if all(_smoke_check_passed(python_smoke, name) for name in names) else "blocked"
+
+
+def _build_v1_user_experience_readiness(*, python_smoke: dict[str, Any]) -> dict[str, Any]:
+    groups = {
+        "install_experience": ["context_doctor_install_json_ok"],
+        "first_run_experience": ["first_run_json_ok"],
+        "handoff_value_experience": [
+            "context_quick_json_ok",
+            "context_savings_json_ok",
+            "handoff_auto_reuse_json_ok",
+            "handoff_daily_output_json_ok",
+        ],
+        "storage_safety_experience": ["context_clean_json_ok", "context_safety_json_ok"],
+        "trial_feedback_experience": ["trial_report_json_ok"],
+    }
+    statuses = {
+        group_name: _experience_status(python_smoke, check_names)
+        for group_name, check_names in groups.items()
+    }
+    blockers = [
+        f"{group_name}_not_ready"
+        for group_name, status in statuses.items()
+        if status != "ready"
+    ]
+    status = "ready" if not blockers else "blocked"
+    return {
+        "status": status,
+        "recommendation": (
+            "recommend beta use from a user-experience perspective"
+            if status == "ready"
+            else "do not recommend broader beta use until blocked UX checks pass"
+        ),
+        "required_smoke_checks": groups,
+        "blockers": blockers,
+        **statuses,
+    }
+
+
 def build_executive_summary(checks: dict[str, dict[str, Any]]) -> dict[str, Any]:
     passed_count = sum(1 for item in checks.values() if item.get("passed"))
     failed_count = sum(1 for item in checks.values() if not item.get("passed"))
@@ -167,6 +212,7 @@ def build_executive_summary(checks: dict[str, dict[str, Any]]) -> dict[str, Any]
         doctor=doctor,
         benchmark_summary=benchmark_summary,
     )
+    v1_user_experience_readiness = _build_v1_user_experience_readiness(python_smoke=python_smoke)
     return {
         "status": status,
         "passed": passed_count,
@@ -186,6 +232,7 @@ def build_executive_summary(checks: dict[str, dict[str, Any]]) -> dict[str, Any]
         "best_large_directory_savings_percent": benchmark_summary.get("best_large_directory_savings_percent", "unknown"),
         "best_long_text_savings_percent": benchmark_summary.get("best_long_text_savings_percent", "unknown"),
         "v1_beta_readiness": v1_beta_readiness,
+        "v1_user_experience_readiness": v1_user_experience_readiness,
         "blocking_checks": blocking,
         "next_action": next_action,
     }

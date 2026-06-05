@@ -1182,17 +1182,20 @@ def _check_user_guides_docs_ok(workspace: Path) -> None:
     beta_testing = ROOT / "docs" / "BETA_TESTING.md"
     release_checklist = ROOT / "docs" / "RELEASE_CHECKLIST.md"
     release_template = ROOT / "docs" / "GITHUB_RELEASE_TEMPLATE.md"
+    v1_beta_notes = ROOT / "docs" / "V1_BETA_RELEASE_NOTES.md"
     feedback_template = ROOT / "FEEDBACK_TEMPLATE.md"
     assert install_doc.exists()
     assert user_guide.exists()
     assert beta_testing.exists()
     assert release_checklist.exists()
     assert release_template.exists()
+    assert v1_beta_notes.exists()
     install_text = install_doc.read_text(encoding="utf-8")
     user_text = user_guide.read_text(encoding="utf-8")
     beta_text = beta_testing.read_text(encoding="utf-8")
     release_checklist_text = release_checklist.read_text(encoding="utf-8")
     release_template_text = release_template.read_text(encoding="utf-8")
+    v1_beta_text = v1_beta_notes.read_text(encoding="utf-8")
     feedback_text = feedback_template.read_text(encoding="utf-8")
     assert "Install in 30 seconds" in install_text
     assert "macOS" in install_text
@@ -1209,8 +1212,13 @@ def _check_user_guides_docs_ok(workspace: Path) -> None:
     assert "Restore verification" in beta_text
     assert "Release Checklist" in release_checklist_text
     assert "python3 testing/release_readiness_check.py" in release_checklist_text
+    assert "V1_BETA_RELEASE_NOTES.md" in release_checklist_text
     assert "GitHub Release Template" in release_template_text
+    assert "v1.0.0-beta.1" in release_template_text
     assert "ailoom savings --write-report" in release_template_text
+    assert "v1_beta_readiness" in v1_beta_text
+    assert "v1_user_experience_readiness" in v1_beta_text
+    assert "ailoom trial-report --write-report" in v1_beta_text
     assert "Attach or paste the savings report" in feedback_text
     assert "ailoom trial-report --write-report" in feedback_text
     assert "Was the token savings report useful" in feedback_text

@@ -43,7 +43,7 @@ CLI_NAME = "ailoom"
 LEGACY_CLI_NAME = "mcp-skeleton"
 PACKAGE_NAME = "ailoom-context"
 LEGACY_PACKAGE_NAME = "mcp-skeleton"
-FALLBACK_VERSION = "0.1.0"
+FALLBACK_VERSION = "1.0.0b1"
 
 CONTEXT_CONFIG_KEYS = [
     "preset",

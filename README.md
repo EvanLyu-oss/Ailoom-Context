@@ -57,6 +57,8 @@ Beta users: start here with [docs/BETA_TESTING.md](docs/BETA_TESTING.md), then s
 
 Release checklist and notes template: [docs/RELEASE_CHECKLIST.md](docs/RELEASE_CHECKLIST.md), [docs/GITHUB_RELEASE_TEMPLATE.md](docs/GITHUB_RELEASE_TEMPLATE.md).
 
+Current beta notes: [docs/V1_BETA_RELEASE_NOTES.md](docs/V1_BETA_RELEASE_NOTES.md).
+
 ## Author
 
 Created and maintained by Evan.
@@ -629,6 +631,7 @@ python3 testing/release_readiness_check.py
 
 The release readiness JSON includes a top-level `executive_summary` with the quick answer: total passed/failed checks, smoke and quickstart counts, dogfood restore status, doctor readiness, benchmark health, restore coverage, and the next action.
 The same summary includes `v1_beta_readiness`, which is the macOS beta gate for install path, handoff path, safety/smoke path, doctor path, and performance path. It also includes `v1_user_experience_readiness`, which checks whether install diagnostics, first-run onboarding, handoff value display, storage safety, and beta trial reporting are covered by smoke tests. When both report `ready`, the project is suitable for local macOS beta use before broader Windows compatibility regression.
+For the current v1 beta release notes and tester handoff text, see [docs/V1_BETA_RELEASE_NOTES.md](docs/V1_BETA_RELEASE_NOTES.md).
 The dogfood self-check JSON also includes `performance_record`, which captures the tool compressing this repository itself: elapsed time, bundle size, included file count, source/skeleton token estimates, estimated token savings, and whether restore remained byte-exact.
 
 For repeatable test-machine prompts, stress benchmark commands, and result reporting templates, see [CROSS_PLATFORM_TESTING.md](CROSS_PLATFORM_TESTING.md).

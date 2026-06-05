@@ -65,3 +65,5 @@ Check:
 ## 5. Release Notes
 
 Use [docs/GITHUB_RELEASE_TEMPLATE.md](GITHUB_RELEASE_TEMPLATE.md).
+
+For v1 beta trial distribution, also publish [docs/V1_BETA_RELEASE_NOTES.md](V1_BETA_RELEASE_NOTES.md) and tag the release as `v1.0.0-beta.1`.

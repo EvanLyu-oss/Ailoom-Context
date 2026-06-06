@@ -1343,6 +1343,7 @@ def _build_ai_handoff_prompt(*, skeleton_file: str, manifest_file: str) -> str:
 def _build_ai_handoff_metadata(payload: dict[str, Any]) -> dict[str, Any]:
     handoff = payload.get("handoff") or {}
     user_outcome = payload.get("user_outcome") or {}
+    handoff_quickstart = payload.get("handoff_quickstart") or handoff.get("quickstart") or {}
     skeleton_file = str(handoff.get("skeleton_file", ""))
     manifest_file = str(handoff.get("manifest_file", ""))
     restore_package = str(handoff.get("restore_package", ""))
@@ -1358,6 +1359,7 @@ def _build_ai_handoff_metadata(payload: dict[str, Any]) -> dict[str, Any]:
         "restore_command_text": payload.get("restore_command_text", ""),
         "copy_command_text": payload.get("copy_command_text", ""),
         "recommended_prompt": recommended_prompt,
+        "quickstart": handoff_quickstart,
         "share_with_ai": {
             "file": skeleton_file,
             "label": "context_skeleton.mcp",
@@ -1385,6 +1387,13 @@ def _render_quick_ai_handoff_guide(payload: dict[str, Any]) -> str:
     metrics = start.get("metrics") or {}
     performance_summary = payload.get("performance_summary") or {}
     recommended_next = performance_summary.get("recommended_next_run") or {}
+    handoff_quickstart = payload.get("handoff_quickstart") or handoff.get("quickstart") or {}
+    quickstart_steps = list(handoff_quickstart.get("steps") or [])
+    workflow_lines: list[str] = []
+    for item in quickstart_steps:
+        workflow_lines.append(f"- {item.get('label', '')}: {item.get('value', '')}")
+        if item.get("why"):
+            workflow_lines.append(f"  Why: {item.get('why', '')}")
     return "\n".join([
         "# Ailoom Context AI Handoff",
         "",
@@ -1399,6 +1408,10 @@ def _render_quick_ai_handoff_guide(payload: dict[str, Any]) -> str:
         "Give this to AI/IDE:",
         f"- Skeleton file: {handoff.get('ai_file') or handoff.get('skeleton_file') or '(not available)'}",
         "- This is the compressed context file intended for chat, IDE agents, and AI review.",
+        "",
+        "Copy/paste workflow:",
+        *(workflow_lines or ["- Attach or paste context_skeleton.mcp, then keep restore files local."]),
+        "- Do not upload keep-local restore files unless you intentionally want to share raw source bytes.",
         "",
         "Recommended prompt:",
         handoff.get("recommended_prompt") or "(not available)",
@@ -1577,6 +1590,57 @@ def _build_quick_user_outcome(payload: dict[str, Any], *, reused: bool = False) 
             if reused
             else "Bundle is restore-safe; share the skeleton file with your AI/IDE and keep the bundle locally."
         ),
+    }
+
+
+def _build_handoff_quickstart(payload: dict[str, Any]) -> dict[str, Any]:
+    handoff = payload.get("handoff") or {}
+    user_outcome = payload.get("user_outcome") or {}
+    value_summary = payload.get("value_summary") or {}
+    skeleton_file = str(handoff.get("ai_file") or handoff.get("skeleton_file") or "")
+    manifest_file = str(handoff.get("manifest_file") or payload.get("manifest_file") or "")
+    restore_package = str(handoff.get("restore_package") or "")
+    recommended_prompt = str(handoff.get("recommended_prompt") or "")
+    next_best_command = str(value_summary.get("next_best_command_text") or user_outcome.get("next_command_text") or "ailoom handoff --reuse-if-fresh")
+    steps = [
+        {
+            "step": "share_skeleton",
+            "label": "Give AI this file",
+            "value": skeleton_file,
+            "why": "this is the compressed AI-facing context skeleton",
+        },
+        {
+            "step": "paste_prompt",
+            "label": "Use this prompt",
+            "value": recommended_prompt,
+            "why": "it tells the AI to use the skeleton without requesting local restore bytes",
+        },
+        {
+            "step": "keep_restore_local",
+            "label": "Keep restore files local",
+            "value": ", ".join(item for item in [manifest_file, restore_package] if item),
+            "why": "these files preserve exact restore and may contain raw source bytes",
+        },
+        {
+            "step": "check_savings",
+            "label": "Check token value",
+            "value": f"{CLI_NAME} savings",
+            "why": "shows source tokens, skeleton tokens, and estimated savings for the latest handoff",
+        },
+        {
+            "step": "reuse_next_time",
+            "label": "Reuse when unchanged",
+            "value": next_best_command,
+            "why": "unchanged projects can skip recompression and feel much faster",
+        },
+    ]
+    return {
+        "status": "ready" if skeleton_file and manifest_file else "watch",
+        "headline": "Share the skeleton with AI; keep restore files local.",
+        "share_file": skeleton_file,
+        "keep_local_files": [item for item in [manifest_file, restore_package] if item],
+        "recommended_prompt": recommended_prompt,
+        "steps": steps,
     }
 
 
@@ -2524,6 +2588,8 @@ def _build_reused_quick_payload(args: argparse.Namespace, *, started_at: float) 
         next_best_command_text=str(reuse_guidance.get("next_handoff_command_text") or "ailoom handoff --reuse-if-fresh"),
         share_file=skeleton_file,
     )
+    payload["handoff_quickstart"] = _build_handoff_quickstart(payload)
+    payload["handoff"]["quickstart"] = payload["handoff_quickstart"]
     _write_quick_ai_handoff_guide(payload)
     payload["daily_handoff"] = _build_daily_handoff_payload(
         payload,
@@ -2925,6 +2991,7 @@ def _render_context_quick_summary(payload: dict[str, Any]) -> str:
     performance_summary = payload.get("performance_summary") or {}
     user_outcome = payload.get("user_outcome") or {}
     value_summary = payload.get("value_summary") or {}
+    handoff_quickstart = payload.get("handoff_quickstart") or {}
     dominant_phase = performance_profile.get("dominant_phase") or {}
     default_noise = performance_profile.get("default_noise_protection") or {}
     next_run = performance_profile.get("next_run") or {}
@@ -2949,6 +3016,14 @@ def _render_context_quick_summary(payload: dict[str, Any]) -> str:
         f"- Bundle: {payload.get('bundle_root', '') or '(not created)'}",
         f"- Next command: {primary_next or '(not available)'}",
     ]
+    if handoff_quickstart:
+        lines.extend([
+            "",
+            "New user checklist:",
+            f"- {handoff_quickstart.get('headline', '')}",
+        ])
+        for item in list(handoff_quickstart.get("steps") or [])[:5]:
+            lines.append(f"- {item.get('label', '')}: {item.get('value', '')}")
     daily_handoff = payload.get("daily_handoff") or {}
     if daily_handoff:
         clipboard = daily_handoff.get("clipboard") or {}
@@ -3530,6 +3605,8 @@ def _build_context_quick_payload(args: argparse.Namespace) -> tuple[dict[str, An
         next_best_command_text=str((payload.get("performance_summary") or {}).get("recommended_next_run", {}).get("command_text") or payload.get("inspect_command_text") or "ailoom handoff"),
         share_file=str(handoff.get("skeleton_file") or ""),
     )
+    payload["handoff_quickstart"] = _build_handoff_quickstart(payload)
+    payload["handoff"]["quickstart"] = payload["handoff_quickstart"]
     _write_quick_ai_handoff_guide(payload)
     payload["daily_handoff"] = _build_daily_handoff_payload(
         payload,

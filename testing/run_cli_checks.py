@@ -816,10 +816,15 @@ def _check_context_quick_json(workspace: Path) -> None:
     assert payload["handoff"]["restore_keep_files"]["restore_package"]
     assert "do not paste the restore package into AI" in payload["handoff"]["restore_guidance"]
     assert payload["handoff"]["ai_handoff_file"].endswith("AI_HANDOFF.md")
+    assert payload["handoff_quickstart"]["status"] == "ready"
+    quickstart_steps = {item["step"] for item in payload["handoff_quickstart"]["steps"]}
+    assert {"share_skeleton", "paste_prompt", "keep_restore_local", "check_savings", "reuse_next_time"}.issubset(quickstart_steps)
     ai_handoff_file = Path(payload["handoff"]["ai_handoff_file"])
     assert ai_handoff_file.exists()
     ai_handoff_text = ai_handoff_file.read_text(encoding="utf-8")
     assert "Give this to AI/IDE" in ai_handoff_text
+    assert "Copy/paste workflow" in ai_handoff_text
+    assert "Do not upload keep-local restore files" in ai_handoff_text
     assert "context_skeleton.mcp" in ai_handoff_text
     assert "Keep these for restore" in ai_handoff_text
     assert "ailoom restore" in ai_handoff_text
@@ -2073,6 +2078,7 @@ def _check_handoff_daily_output_json(workspace: Path) -> None:
     assert first["daily_handoff"]["clipboard"]["requested"] is False
     assert first["daily_handoff"]["next_command_text"].startswith("ailoom inspect")
     assert "Daily handoff:" in first["summary_text"]
+    assert "New user checklist:" in first["summary_text"]
     assert "- What happened:" in first["summary_text"]
     assert "- Why:" in first["summary_text"]
     assert "- Copy status:" in first["summary_text"]
@@ -2105,10 +2111,12 @@ def _check_handoff_ai_prompt_json(workspace: Path) -> None:
 
     assert "Use the attached context_skeleton.mcp" in prompt
     assert "Do not ask me to paste the restore package" in prompt
+    assert handoff["quickstart"]["status"] == "ready"
     assert metadata["skeleton_file"] == handoff["skeleton_file"]
     assert metadata["manifest_file"] == handoff["manifest_file"]
     assert metadata["restore_command_text"] == payload["restore_command_text"]
     assert metadata["handoff_status"] == "ready_to_share"
+    assert metadata["quickstart"]["status"] == "ready"
     assert metadata["share_with_ai"]["file"] == handoff["skeleton_file"]
     assert metadata["share_with_ai"]["default_prompt"] == prompt
     assert metadata["keep_local"]["manifest_file"] == handoff["manifest_file"]

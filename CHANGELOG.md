@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- added a structured `handoff_quickstart` checklist to quick/handoff JSON, terminal output, `AI_HANDOFF.md`, and handoff metadata
 - added beta version identity fields and stale-package guidance to `ailoom version` and `ailoom doctor --install`
 - documented the current beta version check so test machines can detect stale ZIP/checkouts before reporting compatibility failures
 - clarified the current free/open-source release status, attribution expectations, and commercial-permission guidance in README and SECURITY docs

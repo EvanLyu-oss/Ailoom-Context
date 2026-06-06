@@ -1781,6 +1781,8 @@ def _recent_refresh_command_text(args: argparse.Namespace) -> str:
 
 def _build_recent_record(args: argparse.Namespace, payload: dict[str, Any]) -> dict[str, Any]:
     metrics = ((payload.get("start") or {}).get("metrics") or {})
+    performance_summary = payload.get("performance_summary") or {}
+    performance_tokens = performance_summary.get("token_impact") or {}
     recent_root = _recent_root_from_args(args)
     handoff = payload.get("handoff") or {}
     keep_files = handoff.get("restore_keep_files") or {}
@@ -1806,12 +1808,16 @@ def _build_recent_record(args: argparse.Namespace, payload: dict[str, Any]) -> d
         "open_command_text": payload.get("open_command_text", ""),
         "copy_command_text": payload.get("copy_command_text", ""),
         "refresh_command_text": _recent_refresh_command_text(args),
-        "estimated_tokens_saved": metrics.get("estimated_tokens_saved", 0),
-        "estimated_savings_percent": metrics.get("estimated_savings_percent", 0),
-        "source_tokens": metrics.get("estimated_token_count_source", 0),
-        "skeleton_tokens": metrics.get("estimated_token_count_skeleton", 0),
+        "estimated_tokens_saved": performance_tokens.get("estimated_tokens_saved", metrics.get("estimated_tokens_saved", 0)),
+        "estimated_savings_percent": performance_tokens.get("estimated_savings_percent", metrics.get("estimated_savings_percent", 0)),
+        "source_tokens": performance_tokens.get("estimated_source_tokens", metrics.get("estimated_token_count_source", 0)),
+        "skeleton_tokens": performance_tokens.get("estimated_skeleton_tokens", metrics.get("estimated_token_count_skeleton", 0)),
         "token_direction": metrics.get("estimated_token_direction", ""),
         "experience": payload.get("experience") or {},
+        "timings_ms": payload.get("timings_ms") or {},
+        "performance_summary": performance_summary,
+        "value_summary": payload.get("value_summary") or {},
+        "handoff_quickstart": payload.get("handoff_quickstart") or {},
         "user_outcome": payload.get("user_outcome") or {},
     }
 
@@ -2064,6 +2070,10 @@ def _build_context_recent_payload(args: argparse.Namespace) -> tuple[dict[str, A
         "skeleton_tokens": record.get("skeleton_tokens", 0),
         "token_direction": record.get("token_direction", ""),
         "experience": record.get("experience") or {},
+        "timings_ms": record.get("timings_ms") or {},
+        "performance_summary": record.get("performance_summary") or {},
+        "value_summary": record.get("value_summary") or {},
+        "handoff_quickstart": record.get("handoff_quickstart") or {},
         "user_outcome": user_outcome,
     }
     payload["summary_text"] = _render_context_recent_summary(payload)
@@ -2181,7 +2191,7 @@ def _build_context_savings_payload(args: argparse.Namespace) -> tuple[dict[str, 
         savings_percent=savings_percent,
         source_tokens=source_tokens,
         skeleton_tokens=skeleton_tokens,
-        elapsed_ms=float(((recent_payload.get("experience") or {}).get("performance_summary") or {}).get("total_ms") or 0.0),
+        elapsed_ms=float((recent_payload.get("performance_summary") or {}).get("total_ms") or (recent_payload.get("timings_ms") or {}).get("total") or 0.0),
         reused=str((recent_payload.get("user_outcome") or {}).get("status") or "").startswith("reused"),
         next_best_command_text=str(payload["next_command_text"] or payload["refresh_command_text"] or "ailoom handoff"),
         share_file=str(recent_payload.get("skeleton_file") or ""),
@@ -2207,11 +2217,57 @@ def _trial_report_project_root(args: argparse.Namespace) -> Path:
     return Path.cwd().resolve()
 
 
+def _build_trial_speed_summary(savings_payload: dict[str, Any]) -> dict[str, Any]:
+    recent = savings_payload.get("recent") or {}
+    performance_summary = recent.get("performance_summary") or {}
+    timings = recent.get("timings_ms") or {}
+    speed_diagnostic = performance_summary.get("speed_diagnostic") or {}
+    recommended_next = performance_summary.get("recommended_next_run") or {}
+    dominant_phase = performance_summary.get("dominant_phase") or {}
+    source_tokens = int(savings_payload.get("source_tokens") or recent.get("source_tokens") or 0)
+    skeleton_tokens = int(savings_payload.get("skeleton_tokens") or recent.get("skeleton_tokens") or 0)
+    savings_percent = float(savings_payload.get("savings_percent") or recent.get("estimated_savings_percent") or 0.0)
+    observed_ms = float(
+        performance_summary.get("total_ms")
+        or timings.get("total")
+        or ((recent.get("user_outcome") or {}).get("elapsed_ms") or 0.0)
+    )
+    speedup_x = round(source_tokens / skeleton_tokens, 2) if source_tokens > 0 and skeleton_tokens > 0 else 0.0
+    if speedup_x and speedup_x < 1:
+        speedup_x = 1.0
+    status = str(performance_summary.get("status") or "")
+    if not status:
+        status = "fast" if observed_ms and observed_ms < 500 else "ok" if observed_ms and observed_ms < 2500 else "slow" if observed_ms else "unknown"
+    best_next = str(
+        speed_diagnostic.get("best_next_command_text")
+        or recommended_next.get("command_text")
+        or savings_payload.get("next_command_text")
+        or "ailoom handoff --reuse-if-fresh"
+    )
+    return {
+        "status": status,
+        "observed_handoff_ms": round(observed_ms, 2),
+        "slowest_phase": str(speed_diagnostic.get("dominant_phase_label") or dominant_phase.get("label") or speed_diagnostic.get("dominant_phase") or ""),
+        "slowest_phase_ms": round(float(speed_diagnostic.get("dominant_phase_ms") or dominant_phase.get("duration_ms") or 0.0), 2),
+        "why_it_may_feel_slow": str(speed_diagnostic.get("why_it_may_feel_slow") or ""),
+        "best_next_command_text": best_next,
+        "estimated_agent_context_reading_speedup_x": speedup_x,
+        "estimated_token_reading_reduction_percent": round(savings_percent, 2),
+        "source_tokens": source_tokens,
+        "skeleton_tokens": skeleton_tokens,
+        "message": (
+            f"AI/agent context reading can inspect about {speedup_x}x fewer input tokens"
+            if speedup_x else "run ailoom handoff first to capture speed and token-reading benefit"
+        ),
+    }
+
+
 def _render_context_trial_report_summary(payload: dict[str, Any]) -> str:
     savings = payload.get("savings") or {}
     storage = payload.get("storage") or {}
     value = payload.get("value_summary") or {}
     readiness = payload.get("trial_readiness") or {}
+    speed = payload.get("speed_summary") or {}
     if payload.get("trial_report_status") != "ready":
         return "\n".join([
             "Ailoom Context Trial Report",
@@ -2240,6 +2296,11 @@ def _render_context_trial_report_summary(payload: dict[str, Any]) -> str:
         "Value summary:",
         f"- Status: {value.get('status', '')}",
         f"- Headline: {value.get('headline', '')}",
+        "",
+        "Speed summary:",
+        f"- Status: {speed.get('status', '')}",
+        f"- Observed handoff: {speed.get('observed_handoff_ms', 0)} ms",
+        f"- Estimated AI/agent token-reading speedup: {speed.get('estimated_agent_context_reading_speedup_x', 0)}x",
     ]
     if payload.get("report_written"):
         lines.append(f"- Report file: {payload.get('report_file', '')}")
@@ -2263,6 +2324,7 @@ def _render_context_trial_report(payload: dict[str, Any]) -> str:
     install = payload.get("install") or {}
     value = payload.get("value_summary") or {}
     readiness = payload.get("trial_readiness") or {}
+    speed = payload.get("speed_summary") or {}
     generated_at = time.strftime("%Y-%m-%d %H:%M:%S %z")
     storage_targets = storage.get("targets") or []
     storage_lines = [
@@ -2287,6 +2349,17 @@ def _render_context_trial_report(payload: dict[str, Any]) -> str:
         f"value_headline: {value.get('headline', '')}",
         f"value_recommendation: {value.get('recommendation', '')}",
         f"value_next_command: {value.get('next_best_command_text', '')}",
+        "",
+        "## Speed Summary",
+        f"speed_status: {speed.get('status', '')}",
+        f"observed_handoff_ms: {speed.get('observed_handoff_ms', 0)}",
+        f"slowest_phase: {speed.get('slowest_phase', '')}",
+        f"slowest_phase_ms: {speed.get('slowest_phase_ms', 0)}",
+        f"why_it_may_feel_slow: {speed.get('why_it_may_feel_slow', '')}",
+        f"best_next_command: {speed.get('best_next_command_text', '')}",
+        f"estimated_agent_context_reading_speedup_x: {speed.get('estimated_agent_context_reading_speedup_x', 0)}",
+        f"estimated_token_reading_reduction_percent: {speed.get('estimated_token_reading_reduction_percent', 0)}",
+        f"speed_message: {speed.get('message', '')}",
         "",
         "## Token Savings",
         f"status: {savings.get('savings_status', '')}",
@@ -2410,6 +2483,7 @@ def _build_context_trial_report_payload(args: argparse.Namespace) -> tuple[dict[
     storage_payload, _ = _build_context_storage_payload(args)
     safety_payload, _ = _build_context_safety_payload(args)
     value_summary = dict(savings_payload.get("value_summary") or {})
+    speed_summary = _build_trial_speed_summary(savings_payload)
     trial_readiness = _build_trial_readiness(
         value_summary=value_summary,
         storage_payload=storage_payload,
@@ -2425,10 +2499,11 @@ def _build_context_trial_report_payload(args: argparse.Namespace) -> tuple[dict[
         "storage": storage_payload,
         "safety": safety_payload,
         "value_summary": value_summary,
+        "speed_summary": speed_summary,
         "storage_risk_level": storage_payload.get("risk_level", ""),
         "trial_readiness": trial_readiness,
         "feedback_questions": _build_trial_feedback_questions(),
-        "report_sections": ["environment", "value_summary", "token_savings", "storage", "safety_boundary", "feedback_questions", "recommended_next_commands"],
+        "report_sections": ["environment", "value_summary", "speed_summary", "token_savings", "storage", "safety_boundary", "feedback_questions", "recommended_next_commands"],
         "install": _build_version_payload(),
         "next_command_text": savings_payload.get("refresh_command_text") or _format_cli_command(["handoff", "--input-dir", str(project_root), "--reuse-if-fresh"]),
         "storage_command_text": _format_cli_command(["doctor", "--storage", "--input-dir", str(project_root)]),

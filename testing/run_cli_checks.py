@@ -1182,10 +1182,15 @@ def _check_trial_report_json(workspace: Path) -> None:
     assert payload["storage_risk_level"] in {"ok", "notice", "watch", "large"}
     assert payload["trial_readiness"]["status"] in {"ready", "watch"}
     assert payload["trial_readiness"]["recommendation"]
+    assert payload["speed_summary"]["status"] in {"fast", "ok", "slow", "unknown"}
+    assert payload["speed_summary"]["observed_handoff_ms"] >= 0
+    assert payload["speed_summary"]["estimated_agent_context_reading_speedup_x"] >= 0
+    assert payload["speed_summary"]["estimated_token_reading_reduction_percent"] >= 0
+    assert payload["speed_summary"]["best_next_command_text"].startswith("ailoom")
     assert payload["feedback_questions"]
     assert payload["feedback_questions"][0]["id"] == "install_easy"
     assert payload["feedback_questions"][-1]["id"] == "keep_using"
-    assert payload["report_sections"] == ["environment", "value_summary", "token_savings", "storage", "safety_boundary", "feedback_questions", "recommended_next_commands"]
+    assert payload["report_sections"] == ["environment", "value_summary", "speed_summary", "token_savings", "storage", "safety_boundary", "feedback_questions", "recommended_next_commands"]
     assert payload["report_written"] is True
     assert Path(payload["report_file"]).exists()
     assert payload["feedback_email"] == "carwyn910@gmail.com"
@@ -1200,6 +1205,7 @@ def _check_trial_report_json(workspace: Path) -> None:
     assert "# Ailoom Context Trial Report" in report_text
     assert "## Environment" in report_text
     assert "## Value Summary" in report_text
+    assert "## Speed Summary" in report_text
     assert "## Token Savings" in report_text
     assert "## Storage" in report_text
     assert "## Safety Boundary" in report_text
@@ -1209,6 +1215,8 @@ def _check_trial_report_json(workspace: Path) -> None:
     assert "trial_readiness:" in report_text
     assert "storage_risk_level:" in report_text
     assert "value_status:" in report_text
+    assert "estimated_agent_context_reading_speedup_x:" in report_text
+    assert "observed_handoff_ms:" in report_text
     assert "source_tokens:" in report_text
     assert "savings_percent:" in report_text
 

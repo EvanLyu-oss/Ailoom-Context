@@ -24,6 +24,33 @@ class SmokeFailure(AssertionError):
     pass
 
 
+def _smoke_platform() -> str:
+    return str(os.environ.get("MCP_SKELETON_TEST_PLATFORM") or sys.platform).strip().lower()
+
+
+def _assert_platform_open_command_text(command_text: str) -> None:
+    platform_name = _smoke_platform()
+    if platform_name == "win32":
+        assert command_text.startswith("Start-Process "), command_text
+    elif platform_name.startswith("linux"):
+        assert command_text.startswith("xdg-open "), command_text
+    else:
+        assert command_text.startswith("open "), command_text
+
+
+def _assert_platform_copy_command_text(command_text: str) -> None:
+    platform_name = _smoke_platform()
+    if platform_name == "win32":
+        assert command_text.startswith("Get-Content "), command_text
+        assert "Set-Clipboard" in command_text
+    elif platform_name.startswith("linux"):
+        assert command_text.startswith("cat "), command_text
+        assert "xclip" in command_text
+    else:
+        assert command_text.startswith("cat "), command_text
+        assert "| pbcopy" in command_text
+
+
 def _run(
     args: list[str],
     *,
@@ -792,10 +819,10 @@ def _check_context_quick_json(workspace: Path) -> None:
     assert "ailoom restore" in ai_handoff_text
     assert payload["open_requested"] is False
     assert payload["open_performed"] is False
-    assert payload["open_command_text"].startswith("open ")
+    _assert_platform_open_command_text(payload["open_command_text"])
     assert payload["copy_requested"] is False
     assert payload["copy_performed"] is False
-    assert "| pbcopy" in payload["copy_command_text"]
+    _assert_platform_copy_command_text(payload["copy_command_text"])
     assert payload["experience"]["speed_status"] in {"fast", "ok", "slow"}
     assert payload["experience"]["token_status"] in {"good", "watch", "expanded"}
     assert payload["experience"]["recommendation"]
@@ -1008,8 +1035,8 @@ def _check_context_recent_json(workspace: Path) -> None:
     assert recent["restore_package"]
     assert "Use the attached context_skeleton.mcp" in recent["recommended_prompt"]
     assert recent["metadata_file"].endswith("handoff.json")
-    assert recent["open_command_text"].startswith("open ")
-    assert "| pbcopy" in recent["copy_command_text"]
+    _assert_platform_open_command_text(recent["open_command_text"])
+    _assert_platform_copy_command_text(recent["copy_command_text"])
     assert recent["inspect_command_text"].startswith("ailoom inspect")
     assert recent["restore_command_text"].startswith("ailoom restore")
     assert recent["user_outcome"]["status"] == "fresh_ready_to_share"
@@ -2017,7 +2044,7 @@ def _check_handoff_daily_output_json(workspace: Path) -> None:
     assert first["daily_handoff"]["reason_code"] == "fresh_bundle_created"
     assert "fresh bundle" in first["daily_handoff"]["reason"]
     assert first["daily_handoff"]["clipboard"]["status"] == "manual"
-    assert first["daily_handoff"]["clipboard"]["command_text"].startswith("cat ")
+    _assert_platform_copy_command_text(first["daily_handoff"]["clipboard"]["command_text"])
     assert first["daily_handoff"]["clipboard"]["requested"] is False
     assert first["daily_handoff"]["next_command_text"].startswith("ailoom inspect")
     assert "Daily handoff:" in first["summary_text"]

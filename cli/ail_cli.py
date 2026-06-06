@@ -4371,7 +4371,84 @@ def _parse_age_seconds(value: str | None) -> int | None:
     return max(0, int(amount * multiplier))
 
 
+def _build_generated_artifact_scope(
+    project_root: Path,
+    *,
+    include_restore_outputs: bool = True,
+    include_test_results: bool = False,
+    include_build_artifacts: bool = False,
+    include_global_visibility: bool = False,
+) -> dict[str, Any]:
+    project_artifact_roots = [".workspace_ail"]
+    if include_restore_outputs:
+        project_artifact_roots.append("mcp-skeleton-restore")
+    test_artifact_roots = ["testing/results"] if include_test_results else []
+    build_artifact_roots = ["build", "dist", "*.egg-info"] if include_build_artifacts else []
+    global_visibility: dict[str, str] = {}
+    if include_global_visibility:
+        install = _build_version_payload()
+        global_visibility = {
+            "install_home": str(install.get("install_home") or ""),
+            "install_readiness_file": str(install.get("install_readiness_file") or ""),
+            "command_path": str(install.get("command_path") or ""),
+            "note": "shown for visibility only; project cleanup never deletes global install files",
+        }
+    return {
+        "artifact_scope": "known-local-generated-artifacts",
+        "project_root": str(project_root),
+        "project_artifact_roots": project_artifact_roots,
+        "test_artifact_roots": test_artifact_roots,
+        "build_artifact_roots": build_artifact_roots,
+        "global_install_visibility": global_visibility,
+        "source_tree_protected": True,
+        "network_access": "not used",
+        "message": "only known Ailoom Context generated artifact roots are reported or cleaned",
+    }
+
+
+def _build_cleanup_safety_policy(
+    *,
+    allowed_target_roots: list[str],
+    allowed_target_paths: list[str],
+    dry_run_first: bool = True,
+) -> dict[str, Any]:
+    never_deletes = [
+        "source files",
+        "config files",
+        "files outside known generated artifact roots",
+        "global install files",
+        "network or cloud data",
+    ]
+    return {
+        "dry_run_first": dry_run_first,
+        "requires_known_generated_root": True,
+        "source_tree_protected": True,
+        "only_known_generated_roots": True,
+        "does_not_clean_global_install": True,
+        "network_access": "not used",
+        "allowed_target_roots": allowed_target_roots,
+        "allowed_target_paths": allowed_target_paths,
+        "never_deletes": never_deletes,
+    }
+
+
+def _package_artifact_target_specs(project_root: Path) -> list[tuple[str, Path]]:
+    specs: list[tuple[str, Path]] = [
+        ("package_build_outputs", project_root / "build"),
+        ("package_dist_outputs", project_root / "dist"),
+    ]
+    seen = {str(path) for _, path in specs}
+    for path in sorted(project_root.glob("*.egg-info")):
+        text = str(path)
+        if text not in seen:
+            specs.append(("package_metadata", path))
+            seen.add(text)
+    return specs
+
+
 def _render_context_clean_summary(payload: dict[str, Any]) -> str:
+    scope = payload.get("scope_summary") or {}
+    safety_policy = payload.get("safety_policy") or {}
     lines = [
         "Ailoom Context Clean",
         "",
@@ -4381,6 +4458,14 @@ def _render_context_clean_summary(payload: dict[str, Any]) -> str:
         f"Older than: {payload.get('older_than', '') or '(not set)'}",
         f"Total reclaimable bytes: {payload.get('total_bytes', 0)}",
         f"Deleted targets: {payload.get('deleted_count', 0)}",
+        "",
+        "Scope:",
+        f"- Artifact scope: {scope.get('artifact_scope', '')}",
+        f"- Project artifact roots: {', '.join(scope.get('project_artifact_roots') or [])}",
+        f"- Test artifact roots: {', '.join(scope.get('test_artifact_roots') or []) or '(not included)'}",
+        f"- Build artifact roots: {', '.join(scope.get('build_artifact_roots') or []) or '(not included)'}",
+        f"- Source tree protected: {scope.get('source_tree_protected', False)}",
+        f"- Network access: {scope.get('network_access', '')}",
         "",
         "Targets:",
     ]
@@ -4392,11 +4477,27 @@ def _render_context_clean_summary(payload: dict[str, Any]) -> str:
     lines.extend(
         [
             "",
-            "Safety:",
-            "- This command only removes known Ailoom Context generated local artifacts.",
-            "- It never deletes source files, config files, or restore output unless they live inside the listed generated directories.",
+            "Safety policy:",
+            f"- Dry run first: {safety_policy.get('dry_run_first', False)}",
+            f"- Requires known generated root: {safety_policy.get('requires_known_generated_root', False)}",
+            f"- Source tree protected: {safety_policy.get('source_tree_protected', False)}",
+            f"- Allowed roots: {', '.join(safety_policy.get('allowed_target_roots') or [])}",
+            f"- Never deletes: {', '.join(safety_policy.get('never_deletes') or [])}",
         ]
     )
+    recommended = payload.get("recommended_commands") or {}
+    if recommended:
+        lines.extend(
+            [
+                "",
+                "Recommended commands:",
+                f"- Storage doctor: {recommended.get('storage_doctor_command_text', '')}",
+                f"- Clean older generated files: {recommended.get('clean_older_than_7d_command_text', '')}",
+                f"- Clean test results: {recommended.get('clean_test_results_command_text', '')}",
+                f"- Clean build artifacts: {recommended.get('clean_build_artifacts_command_text', '')}",
+                f"- Clean after review: {recommended.get('clean_after_review_command_text', '')}",
+            ]
+        )
     if payload.get("next_command_text"):
         lines.extend(["", f"Next command: {payload.get('next_command_text')}"])
     return "\n".join(lines)
@@ -4406,6 +4507,8 @@ def _build_context_clean_payload(args: argparse.Namespace) -> tuple[dict[str, An
     project_root = (_opt_path(args, "input_dir") or Path.cwd()).resolve()
     dry_run = bool(getattr(args, "dry_run", False))
     clean_all = bool(getattr(args, "clean_all", False))
+    include_test_results = bool(getattr(args, "include_test_results", False))
+    include_build_artifacts = bool(getattr(args, "include_build_artifacts", False))
     older_than = str(getattr(args, "older_than", "") or "").strip()
     older_than_seconds = _parse_age_seconds(older_than)
     cutoff = time.time() - older_than_seconds if older_than_seconds is not None else None
@@ -4414,6 +4517,10 @@ def _build_context_clean_payload(args: argparse.Namespace) -> tuple[dict[str, An
     ]
     if clean_all:
         target_specs.append(("restore_outputs", project_root / "mcp-skeleton-restore"))
+    if include_test_results:
+        target_specs.append(("test_results", project_root / "testing" / "results"))
+    if include_build_artifacts:
+        target_specs.extend(_package_artifact_target_specs(project_root))
     targets = []
     total_bytes = 0
     total_files = 0
@@ -4451,6 +4558,28 @@ def _build_context_clean_payload(args: argparse.Namespace) -> tuple[dict[str, An
                 "deleted": deleted,
             }
         )
+    allowed_target_roots = (
+        [".workspace_ail"]
+        + (["mcp-skeleton-restore"] if clean_all else [])
+        + (["testing/results"] if include_test_results else [])
+        + (["build", "dist", "*.egg-info"] if include_build_artifacts else [])
+    )
+    allowed_target_paths = [str(path) for _, path in target_specs]
+    recommended_commands = {
+        "storage_doctor_command_text": _format_cli_command(["doctor", "--storage", "--input-dir", str(project_root)]),
+        "preview_cleanup_command_text": _format_cli_command(["clean", "--dry-run", "--all", "--input-dir", str(project_root)]),
+        "clean_older_than_7d_command_text": _format_cli_command(["clean", "--dry-run", "--all", "--older-than", "7d", "--input-dir", str(project_root)]),
+        "clean_after_review_command_text": _format_cli_command(["clean", "--input-dir", str(project_root), "--all"]),
+        "clean_test_results_command_text": _format_cli_command(["clean", "--dry-run", "--include-test-results", "--input-dir", str(project_root)]),
+        "clean_build_artifacts_command_text": _format_cli_command(["clean", "--dry-run", "--include-build-artifacts", "--input-dir", str(project_root)]),
+    }
+    next_clean_args = ["clean", "--input-dir", str(project_root)]
+    if clean_all:
+        next_clean_args.append("--all")
+    if include_test_results:
+        next_clean_args.append("--include-test-results")
+    if include_build_artifacts:
+        next_clean_args.append("--include-build-artifacts")
     payload = {
         "status": "ok",
         "entrypoint": "context-clean",
@@ -4459,13 +4588,23 @@ def _build_context_clean_payload(args: argparse.Namespace) -> tuple[dict[str, An
         "project_root": str(project_root),
         "dry_run": dry_run,
         "all": clean_all,
+        "include_test_results": include_test_results,
+        "include_build_artifacts": include_build_artifacts,
         "older_than": older_than,
         "older_than_seconds": older_than_seconds,
         "targets": targets,
         "total_bytes": total_bytes,
         "total_files": total_files,
         "deleted_count": deleted_count,
-        "next_command_text": "" if not dry_run else _format_cli_command(["clean", "--input-dir", str(project_root), "--all"]),
+        "scope_summary": _build_generated_artifact_scope(
+            project_root,
+            include_restore_outputs=clean_all,
+            include_test_results=include_test_results,
+            include_build_artifacts=include_build_artifacts,
+        ),
+        "safety_policy": _build_cleanup_safety_policy(allowed_target_roots=allowed_target_roots, allowed_target_paths=allowed_target_paths),
+        "recommended_commands": recommended_commands,
+        "next_command_text": "" if not dry_run else _format_cli_command(next_clean_args),
     }
     payload["summary_text"] = _render_context_clean_summary(payload)
     return payload, EXIT_OK
@@ -4475,6 +4614,8 @@ def _render_context_storage_summary(payload: dict[str, Any]) -> str:
     storage_summary = payload.get("storage_summary") or {}
     largest = storage_summary.get("largest_target") or {}
     cleanup_safety = payload.get("cleanup_safety") or {}
+    scope = payload.get("scope_summary") or {}
+    global_visibility = scope.get("global_install_visibility") or {}
     lines = [
         "Ailoom Context Storage Doctor",
         "",
@@ -4483,6 +4624,15 @@ def _render_context_storage_summary(payload: dict[str, Any]) -> str:
         f"Project root: {payload.get('project_root', '')}",
         f"Total generated size: {payload.get('human_total_size', '')} ({payload.get('total_bytes', 0)} bytes)",
         f"Total generated files: {payload.get('total_files', 0)}",
+        "",
+        "Scope:",
+        f"- Artifact scope: {scope.get('artifact_scope', '')}",
+        f"- Project artifact roots: {', '.join(scope.get('project_artifact_roots') or [])}",
+        f"- Test artifact roots: {', '.join(scope.get('test_artifact_roots') or []) or '(none)'}",
+        f"- Global install home: {global_visibility.get('install_home', '') or '(not detected)'}",
+        f"- Global install note: {global_visibility.get('note', '')}",
+        f"- Source tree protected: {scope.get('source_tree_protected', False)}",
+        f"- Network access: {scope.get('network_access', '')}",
         "",
         "Storage summary:",
         f"- Targets checked: {storage_summary.get('target_count', 0)}",
@@ -4497,12 +4647,26 @@ def _render_context_storage_summary(payload: dict[str, Any]) -> str:
         "",
         "Cleanup safety:",
         f"- Safe to delete known artifacts: {cleanup_safety.get('safe_to_delete', False)}",
+        f"- Dry run first: {cleanup_safety.get('dry_run_first', False)}",
+        f"- Only known generated roots: {cleanup_safety.get('only_known_generated_roots', False)}",
+        f"- Does not clean global install: {cleanup_safety.get('does_not_clean_global_install', False)}",
         f"- Targets: {', '.join(cleanup_safety.get('targets') or [])}",
         f"- Never deletes: {', '.join(cleanup_safety.get('never_deletes') or [])}",
         "",
         "Recommended cleanup:",
         payload.get("recommended_clean_command_text") or "(not available)",
     ])
+    recommended_commands = payload.get("recommended_commands") or {}
+    if recommended_commands:
+        lines.extend(
+            [
+                "",
+                "Recommended commands:",
+                f"- Preview cleanup: {recommended_commands.get('preview_cleanup_command_text', '')}",
+                f"- Clean older generated files: {recommended_commands.get('clean_older_than_7d_command_text', '')}",
+                f"- Clean all after review: {recommended_commands.get('clean_all_command_text', '')}",
+            ]
+        )
     if payload.get("recommended_actions"):
         lines.extend(["", "Recommended actions:"])
         for item in payload.get("recommended_actions") or []:
@@ -4517,6 +4681,7 @@ def _build_context_storage_payload(args: argparse.Namespace) -> tuple[dict[str, 
         ("restore_outputs", project_root / "mcp-skeleton-restore"),
         ("test_results", project_root / "testing" / "results"),
     ]
+    target_specs.extend(_package_artifact_target_specs(project_root))
     targets = []
     total_bytes = 0
     total_files = 0
@@ -4543,6 +4708,12 @@ def _build_context_storage_payload(args: argparse.Namespace) -> tuple[dict[str, 
         if risk_level in {"watch", "notice"}
         else "generated artifact size is small"
     )
+    cleanup_command_older_than = _format_cli_command(["clean", "--dry-run", "--all", "--older-than", "7d", "--input-dir", str(project_root)])
+    clean_all_command = _format_cli_command(["clean", "--input-dir", str(project_root), "--all"])
+    clean_test_results_command = _format_cli_command(["clean", "--dry-run", "--include-test-results", "--input-dir", str(project_root)])
+    clean_build_artifacts_command = _format_cli_command(["clean", "--dry-run", "--include-build-artifacts", "--input-dir", str(project_root)])
+    allowed_target_roots = [".workspace_ail", "mcp-skeleton-restore", "testing/results", "build", "dist", "*.egg-info"]
+    allowed_target_paths = [str(path) for _, path in target_specs]
     payload = {
         "status": "ok",
         "entrypoint": "context-storage-doctor",
@@ -4558,11 +4729,34 @@ def _build_context_storage_payload(args: argparse.Namespace) -> tuple[dict[str, 
             "largest_target": largest_target,
             "message": storage_message,
         },
+        "scope_summary": _build_generated_artifact_scope(
+            project_root,
+            include_restore_outputs=True,
+            include_test_results=True,
+            include_build_artifacts=True,
+            include_global_visibility=True,
+        ),
         "cleanup_safety": {
             "safe_to_delete": True,
             "targets": [".workspace_ail", "mcp-skeleton-restore", "testing/results"],
             "never_deletes": ["source files", "config files", "files outside known generated artifact roots"],
             "preview_first": True,
+            "dry_run_first": True,
+            "only_known_generated_roots": True,
+            "does_not_clean_global_install": True,
+            "requires_explicit_flag_for": ["testing/results", "build artifacts"],
+            "network_access": "not used",
+            "allowed_target_roots": allowed_target_roots,
+            "allowed_target_paths": allowed_target_paths,
+        },
+        "safety_policy": _build_cleanup_safety_policy(allowed_target_roots=allowed_target_roots, allowed_target_paths=allowed_target_paths),
+        "recommended_commands": {
+            "preview_cleanup_command_text": cleanup_command,
+            "clean_older_than_7d_command_text": cleanup_command_older_than,
+            "clean_all_command_text": clean_all_command,
+            "clean_test_results_command_text": clean_test_results_command,
+            "clean_build_artifacts_command_text": clean_build_artifacts_command,
+            "storage_doctor_command_text": _format_cli_command(["doctor", "--storage", "--input-dir", str(project_root)]),
         },
         "recommended_actions": [
             {
@@ -4571,8 +4765,23 @@ def _build_context_storage_payload(args: argparse.Namespace) -> tuple[dict[str, 
                 "reason": "shows exactly which generated artifact roots would be removed before deleting anything",
             },
             {
+                "label": "Preview older generated files",
+                "command_text": cleanup_command_older_than,
+                "reason": "keeps fresh handoff bundles while surfacing older generated artifacts that may be safe to remove",
+            },
+            {
+                "label": "Preview test-result cleanup",
+                "command_text": clean_test_results_command,
+                "reason": "explicitly includes Ailoom test result artifacts; useful for test machines with large benchmark outputs",
+            },
+            {
+                "label": "Preview build-artifact cleanup",
+                "command_text": clean_build_artifacts_command,
+                "reason": "explicitly includes build, dist, and egg-info artifacts left by install or packaging tests",
+            },
+            {
                 "label": "Clean after review",
-                "command_text": _format_cli_command(["clean", "--all", "--input-dir", str(project_root)]),
+                "command_text": clean_all_command,
                 "reason": "removes known generated Ailoom Context artifacts after you have reviewed the dry run",
             },
         ],
@@ -5763,6 +5972,8 @@ def _build_parser() -> argparse.ArgumentParser:
     clean.add_argument("--input-dir", dest="input_dir", help="Project directory to clean; defaults to current directory")
     clean.add_argument("--dry-run", action="store_true", help="Preview cleanup targets without deleting anything")
     clean.add_argument("--all", dest="clean_all", action="store_true", help="Also remove known restore-output artifacts such as mcp-skeleton-restore")
+    clean.add_argument("--include-test-results", action="store_true", help="Also target Ailoom testing/results artifacts; use mainly for test machines")
+    clean.add_argument("--include-build-artifacts", action="store_true", help="Also target build, dist, and egg-info artifacts created by install/package tests")
     clean.add_argument("--older-than", dest="older_than", help="Only remove known generated artifact roots older than a duration such as 7d, 24h, or 3600s")
     clean.add_argument("--json", action="store_true")
 

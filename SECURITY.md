@@ -27,9 +27,11 @@ Generated bundle and handoff artifacts normally live under `.workspace_ail/`. To
 ailoom doctor --storage
 ailoom clean --dry-run --all
 ailoom clean --all
+ailoom clean --dry-run --include-test-results
+ailoom clean --dry-run --include-build-artifacts
 ```
 
-`doctor --storage` reports generated artifact size, risk level, largest target, and cleanup safety before anything is deleted. The clean command targets known Ailoom Context generated directories such as `.workspace_ail/` and, with `--all`, `mcp-skeleton-restore/`. It does not delete source files, config files, or files outside known generated artifact roots.
+`doctor --storage` reports generated artifact size, risk level, largest target, and cleanup safety before anything is deleted. It also separates project-generated artifact roots from global install visibility so users can tell the difference between files created inside a repository and the local command installation. The clean command targets known Ailoom Context generated directories such as `.workspace_ail/` and, with `--all`, `mcp-skeleton-restore/`. It does not delete source files, config files, global install files, or files outside known generated artifact roots. Test result cleanup requires the explicit `--include-test-results` flag so ordinary project test outputs are not removed accidentally. Build/package cleanup requires `--include-build-artifacts` for `build/`, `dist/`, and `*.egg-info`. Use `ailoom clean --dry-run --all --older-than 7d` when you want to preview cleanup for older generated artifacts while keeping fresh handoff bundles.
 
 ## Import And Replay Safety
 

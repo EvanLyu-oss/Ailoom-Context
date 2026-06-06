@@ -1497,10 +1497,19 @@ def _check_context_clean_json(workspace: Path) -> None:
     project = workspace / "clean_project"
     workspace_dir = project / ".workspace_ail" / "context_bundles" / "old"
     restore_dir = project / "mcp-skeleton-restore"
+    test_results_dir = project / "testing" / "results"
+    build_dir = project / "build"
+    egg_info_dir = project / "ailoom_context.egg-info"
     workspace_dir.mkdir(parents=True)
     restore_dir.mkdir(parents=True)
+    test_results_dir.mkdir(parents=True)
+    build_dir.mkdir(parents=True)
+    egg_info_dir.mkdir(parents=True)
     (workspace_dir / "context_skeleton.mcp").write_text("temporary skeleton\n", encoding="utf-8")
     (restore_dir / "restored.txt").write_text("temporary restore\n", encoding="utf-8")
+    (test_results_dir / "benchmark.json").write_text('{"temporary": true}\n', encoding="utf-8")
+    (build_dir / "artifact.txt").write_text("temporary build\n", encoding="utf-8")
+    (egg_info_dir / "PKG-INFO").write_text("temporary metadata\n", encoding="utf-8")
     dry_run = _run_top_level_cli_json(["clean", "--input-dir", str(project), "--dry-run", "--all", "--json"])
     assert dry_run["status"] == "ok"
     assert dry_run["entrypoint"] == "context-clean"
@@ -1509,9 +1518,42 @@ def _check_context_clean_json(workspace: Path) -> None:
     assert dry_run["total_files"] == 2
     assert dry_run["total_bytes"] > 0
     assert "Total reclaimable bytes:" in dry_run["summary_text"]
+    assert dry_run["scope_summary"]["source_tree_protected"] is True
+    assert dry_run["scope_summary"]["artifact_scope"] == "known-local-generated-artifacts"
+    assert ".workspace_ail" in dry_run["scope_summary"]["project_artifact_roots"]
+    assert dry_run["safety_policy"]["dry_run_first"] is True
+    assert dry_run["safety_policy"]["requires_known_generated_root"] is True
+    assert dry_run["safety_policy"]["source_tree_protected"] is True
+    assert ".workspace_ail" in dry_run["safety_policy"]["allowed_target_roots"]
+    assert dry_run["recommended_commands"]["storage_doctor_command_text"].startswith("ailoom doctor --storage")
+    assert dry_run["recommended_commands"]["clean_after_review_command_text"].startswith("ailoom clean --input-dir")
+    assert "Scope:" in dry_run["summary_text"]
+    assert "Safety policy:" in dry_run["summary_text"]
     assert workspace_dir.exists()
     assert restore_dir.exists()
+    assert test_results_dir.exists()
+    assert build_dir.exists()
+    assert egg_info_dir.exists()
     assert dry_run["next_command_text"].startswith("ailoom clean --input-dir")
+
+    test_results_preview = _run_top_level_cli_json(["clean", "--input-dir", str(project), "--dry-run", "--all", "--include-test-results", "--json"])
+    assert test_results_preview["include_test_results"] is True
+    assert test_results_preview["total_files"] == 3
+    assert "testing/results" in test_results_preview["scope_summary"]["test_artifact_roots"]
+    assert "testing/results" in test_results_preview["safety_policy"]["allowed_target_roots"]
+    assert any(target["label"] == "test_results" and target["eligible"] for target in test_results_preview["targets"])
+    assert test_results_preview["recommended_commands"]["clean_test_results_command_text"].startswith("ailoom clean --dry-run")
+    assert "--include-test-results" in test_results_preview["next_command_text"]
+
+    build_preview = _run_top_level_cli_json(["clean", "--input-dir", str(project), "--dry-run", "--all", "--include-test-results", "--include-build-artifacts", "--json"])
+    assert build_preview["include_build_artifacts"] is True
+    assert build_preview["total_files"] == 5
+    assert "*.egg-info" in build_preview["scope_summary"]["build_artifact_roots"]
+    assert "build" in build_preview["safety_policy"]["allowed_target_roots"]
+    assert any(target["label"] == "package_metadata" and target["eligible"] for target in build_preview["targets"])
+    assert build_preview["recommended_commands"]["clean_build_artifacts_command_text"].startswith("ailoom clean --dry-run")
+    assert "--include-test-results" in build_preview["next_command_text"]
+    assert "--include-build-artifacts" in build_preview["next_command_text"]
 
     old_timestamp = 946684800
     os.utime(project / ".workspace_ail", (old_timestamp, old_timestamp))
@@ -1528,6 +1570,9 @@ def _check_context_clean_json(workspace: Path) -> None:
     assert cleaned["deleted_count"] == 2
     assert not (project / ".workspace_ail").exists()
     assert not restore_dir.exists()
+    assert test_results_dir.exists()
+    assert build_dir.exists()
+    assert egg_info_dir.exists()
     assert "Ailoom Context Clean" in cleaned["summary_text"]
 
     storage = _run_top_level_cli_json(["doctor", "--storage", "--input-dir", str(project), "--json"])
@@ -1537,17 +1582,43 @@ def _check_context_clean_json(workspace: Path) -> None:
     assert storage["total_bytes"] >= 0
     assert storage["human_total_size"]
     assert storage["risk_level"] in {"ok", "notice", "watch", "large"}
-    assert storage["storage_summary"]["target_count"] == 3
-    assert storage["storage_summary"]["largest_target"]["label"] in {"workspace_artifacts", "restore_outputs", "test_results"}
+    assert storage["storage_summary"]["target_count"] >= 5
+    assert storage["storage_summary"]["largest_target"]["label"] in {"workspace_artifacts", "restore_outputs", "test_results", "package_build_outputs", "package_metadata"}
+    assert any(target["label"] == "package_build_outputs" for target in storage["targets"])
+    assert any(target["label"] == "package_metadata" for target in storage["targets"])
+    assert storage["scope_summary"]["source_tree_protected"] is True
+    assert storage["scope_summary"]["artifact_scope"] == "known-local-generated-artifacts"
+    assert ".workspace_ail" in storage["scope_summary"]["project_artifact_roots"]
+    assert "install_home" in storage["scope_summary"]["global_install_visibility"]
     assert storage["cleanup_safety"]["safe_to_delete"] is True
     assert ".workspace_ail" in storage["cleanup_safety"]["targets"]
+    assert storage["cleanup_safety"]["dry_run_first"] is True
+    assert storage["cleanup_safety"]["only_known_generated_roots"] is True
+    assert storage["cleanup_safety"]["does_not_clean_global_install"] is True
     assert "source files" in " ".join(storage["cleanup_safety"]["never_deletes"])
+    assert storage["recommended_commands"]["preview_cleanup_command_text"].startswith("ailoom clean --dry-run")
+    assert storage["recommended_commands"]["clean_older_than_7d_command_text"].startswith("ailoom clean --dry-run")
+    assert storage["recommended_commands"]["clean_all_command_text"].startswith("ailoom clean --input-dir")
+    assert storage["recommended_commands"]["clean_test_results_command_text"].startswith("ailoom clean --dry-run")
+    assert storage["recommended_commands"]["clean_build_artifacts_command_text"].startswith("ailoom clean --dry-run")
+    assert "testing/results" in storage["cleanup_safety"]["requires_explicit_flag_for"]
+    assert "build artifacts" in storage["cleanup_safety"]["requires_explicit_flag_for"]
     assert storage["recommended_actions"]
     assert storage["recommended_actions"][0]["command_text"].startswith("ailoom clean --dry-run")
     assert storage["recommended_clean_command_text"].startswith("ailoom clean --dry-run")
     assert "Ailoom Context Storage Doctor" in storage["summary_text"]
+    assert "Scope:" in storage["summary_text"]
     assert "Storage summary:" in storage["summary_text"]
     assert "Cleanup safety:" in storage["summary_text"]
+
+    test_results_cleaned = _run_top_level_cli_json(["clean", "--input-dir", str(project), "--include-test-results", "--json"])
+    assert test_results_cleaned["deleted_count"] == 1
+    assert not test_results_dir.exists()
+
+    build_cleaned = _run_top_level_cli_json(["clean", "--input-dir", str(project), "--include-build-artifacts", "--json"])
+    assert build_cleaned["deleted_count"] == 2
+    assert not build_dir.exists()
+    assert not egg_info_dir.exists()
 
 
 def _check_top_level_version_json(workspace: Path) -> None:

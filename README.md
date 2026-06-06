@@ -441,9 +441,12 @@ Clean local generated artifacts when you want to remove old handoff bundles:
 ailoom doctor --storage
 ailoom clean --dry-run --all
 ailoom clean --all
+ailoom clean --dry-run --include-test-results
+ailoom clean --dry-run --include-build-artifacts
 ```
 
-`doctor --storage` prints a storage summary, risk level, largest generated target, cleanup safety boundary, and copy/paste cleanup commands. It is designed for long beta runs where generated handoff bundles can grow into many GB if never cleaned.
+`doctor --storage` prints a storage summary, risk level, largest generated target, cleanup safety boundary, and copy/paste cleanup commands. It also separates project-generated artifacts (`.workspace_ail/`, `mcp-skeleton-restore/`, `testing/results`) from global install/cache visibility so users can see what will be cleaned and what will never be touched. It is designed for long beta runs where generated handoff bundles can grow into many GB if never cleaned.
+`clean --dry-run` reports a machine-readable `scope_summary`, `safety_policy`, and `recommended_commands` block before deletion; the source tree, config files, global install files, and anything outside known generated roots stay protected. Test result artifacts require the explicit `--include-test-results` flag, which is mainly for test machines that generate large benchmark outputs. Build/package artifacts require `--include-build-artifacts` and cover `build/`, `dist/`, and `*.egg-info` from install or packaging tests.
 It also includes common questions and emergency recovery guidance for changed projects, lost manifests, and safe patch replay.
 
 Compress a directory:

@@ -51,6 +51,14 @@ ailoom savings
 ailoom trial-report --write-report ailoom-trial-report.md
 ```
 
+Confirm the current beta before reporting install or compatibility issues:
+
+```bash
+ailoom version --json
+```
+
+Look for `version_check: ok`, `release_channel: v1-beta`, and `expected_beta_tag: v1.0.0-beta.1`.
+
 New-user guide: [docs/USER_GUIDE.md](docs/USER_GUIDE.md)
 
 Beta users: start here with [docs/BETA_TESTING.md](docs/BETA_TESTING.md), then send results with [FEEDBACK_TEMPLATE.md](FEEDBACK_TEMPLATE.md).

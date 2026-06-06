@@ -2,6 +2,24 @@
 
 Ailoom Context is a local command-line tool. It does not upload source code, text, bundles, or usage logs.
 
+## Confirm You Have The Current Beta
+
+Before reporting install or Windows compatibility issues, confirm the checkout or ZIP is the current beta:
+
+```bash
+ailoom version --json
+```
+
+Expected beta identity:
+
+- `version`: `1.0.0b1`
+- `release_channel`: `v1-beta`
+- `expected_beta_tag`: `v1.0.0-beta.1`
+- `repo_url`: `https://github.com/EvanLyu-oss/Ailoom-Context`
+- `version_check`: `ok`
+
+If `version` still shows `0.1.0` or `version_check` is `watch`, refresh the checkout or download the current beta ZIP from the `latest_beta_zip_url` printed by `ailoom version --json`, then reinstall.
+
 ## macOS
 
 From a cloned or downloaded checkout:

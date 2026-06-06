@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- added beta version identity fields and stale-package guidance to `ailoom version` and `ailoom doctor --install`
+- documented the current beta version check so test machines can detect stale ZIP/checkouts before reporting compatibility failures
 - clarified the current free/open-source release status, attribution expectations, and commercial-permission guidance in README and SECURITY docs
 
 ## 1.0.0-beta.1 - 2026-06-05

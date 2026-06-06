@@ -707,9 +707,14 @@ def _check_context_doctor_install_json(workspace: Path) -> None:
     assert payload["install_doctor_status"] in {"ready", "watch", "blocked"}
     assert payload["install"]["entrypoint"] == "mcp-skeleton-version"
     assert payload["install"]["install_command_text"] == "sh install.sh"
+    assert payload["install"]["release_channel"] == "v1-beta"
+    assert payload["install"]["expected_beta_version"] == "1.0.0b1"
+    assert payload["install"]["expected_beta_tag"] == "v1.0.0-beta.1"
+    assert payload["install"]["repo_url"] == "https://github.com/EvanLyu-oss/Ailoom-Context"
+    assert payload["install"]["version_check"] == "ok"
     assert payload["checks"]
     check_names = {item["name"] for item in payload["checks"]}
-    assert {"python_version_supported", "command_available", "readiness_manifest_available"}.issubset(check_names)
+    assert {"python_version_supported", "command_available", "readiness_manifest_available", "expected_beta_version"}.issubset(check_names)
     assert payload["recommended_fix_command_text"]
     assert payload["first_run_command_text"].endswith("first-run")
     assert payload["install"]["recommended_project_command_text"].endswith("handoff")
@@ -717,6 +722,7 @@ def _check_context_doctor_install_json(workspace: Path) -> None:
     assert payload["action_plan"]
     assert payload["next_steps"] == [item["message"] for item in payload["action_plan"]]
     assert "Ailoom Context Install Doctor" in payload["summary_text"]
+    assert "Release status:" in payload["summary_text"]
     assert "Copy/paste fix:" in payload["summary_text"]
     assert "First run:" in payload["summary_text"]
     alias_payload = _run_top_level_cli_json(["doctor", "--install", "--json"])
@@ -1225,6 +1231,9 @@ def _check_user_guides_docs_ok(workspace: Path) -> None:
     v1_beta_text = v1_beta_notes.read_text(encoding="utf-8")
     feedback_text = feedback_template.read_text(encoding="utf-8")
     assert "Install in 30 seconds" in install_text
+    assert "Confirm You Have The Current Beta" in install_text
+    assert "v1.0.0-beta.1" in install_text
+    assert "ailoom version --json" in install_text
     assert "macOS" in install_text
     assert "Windows PowerShell" in install_text
     assert "ailoom demo" in install_text
@@ -1535,6 +1544,17 @@ def _check_top_level_version_json(workspace: Path) -> None:
     assert payload["entrypoint"] == "mcp-skeleton-version"
     assert payload["package_name"] == "ailoom-context"
     assert payload["version"]
+    assert payload["release_channel"] == "v1-beta"
+    assert payload["expected_beta_version"] == "1.0.0b1"
+    assert payload["expected_beta_tag"] == "v1.0.0-beta.1"
+    assert payload["repo_url"] == "https://github.com/EvanLyu-oss/Ailoom-Context"
+    assert payload["release_url"].endswith("/releases/tag/v1.0.0-beta.1")
+    assert payload["latest_beta_zip_url"].endswith("/archive/refs/heads/main.zip")
+    assert payload["version_check"] == "ok"
+    assert payload["release_status"] == "current-beta"
+    assert payload["is_current_beta"] is True
+    assert payload["update_command_text"]
+    assert payload["version_recovery_steps"]
     assert payload["python_version"]
     assert payload["executable"]
     assert payload["install_readiness_status"] in {"ready", "watch"}
@@ -1549,6 +1569,11 @@ def _check_top_level_version_json(workspace: Path) -> None:
     assert payload["recommended_project_command_text"].endswith("handoff")
     assert payload["doctor_command_text"].endswith("doctor")
     assert "ailoom version" in payload["summary_text"]
+    assert "Release channel:" in payload["summary_text"]
+    assert "Expected beta:" in payload["summary_text"]
+    assert "Release status:" in payload["summary_text"]
+    assert "Repository:" in payload["summary_text"]
+    assert "Update command:" in payload["summary_text"]
     assert "Can run handoff:" in payload["summary_text"]
     assert "PATH fix command:" in payload["summary_text"]
     assert "Self-check command:" in payload["summary_text"]

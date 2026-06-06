@@ -43,7 +43,13 @@ CLI_NAME = "ailoom"
 LEGACY_CLI_NAME = "mcp-skeleton"
 PACKAGE_NAME = "ailoom-context"
 LEGACY_PACKAGE_NAME = "mcp-skeleton"
-FALLBACK_VERSION = "1.0.0b1"
+EXPECTED_BETA_VERSION = "1.0.0b1"
+EXPECTED_BETA_TAG = "v1.0.0-beta.1"
+RELEASE_CHANNEL = "v1-beta"
+REPO_URL = "https://github.com/EvanLyu-oss/Ailoom-Context"
+RELEASE_URL = f"{REPO_URL}/releases/tag/{EXPECTED_BETA_TAG}"
+LATEST_BETA_ZIP_URL = f"{REPO_URL}/archive/refs/heads/main.zip"
+FALLBACK_VERSION = EXPECTED_BETA_VERSION
 
 CONTEXT_CONFIG_KEYS = [
     "preset",
@@ -132,6 +138,7 @@ def _build_version_payload() -> dict[str, Any]:
     command_path = shutil.which(CLI_NAME) or shutil.which(LEGACY_CLI_NAME) or ""
     executable = command_path or sys.executable
     python_check = "ok" if sys.version_info >= (3, 10) else "blocked"
+    target_platform = _runtime_platform()
     install_home = os.environ.get("AILOOM_HOME") or os.environ.get("MCP_SKELETON_HOME", str(Path.home() / ".ailoom"))
     install_readiness_file = str(Path(install_home) / "install-readiness.json")
     install_readiness_manifest: dict[str, Any] = {"status": "missing"}
@@ -143,14 +150,41 @@ def _build_version_payload() -> dict[str, Any]:
                 install_readiness_manifest = loaded_manifest
     except (OSError, json.JSONDecodeError):
         install_readiness_manifest = {"status": "unreadable"}
-    bin_dir = str(Path.home() / ".local" / "bin")
+    if target_platform == "win32":
+        bin_dir = str(Path(install_home) / "bin")
+        install_command_text = ".\\install.ps1"
+        update_command_text = ".\\install.ps1 -Update"
+        path_setup_command_text = ".\\install.ps1 -SetupShell"
+        path_export_command_text = f'$env:PATH = "{bin_dir};$env:PATH"'
+        missing_command_hint = f"{CLI_NAME} command was not found on PATH; use {shlex.quote(sys.executable)} -m cli or run .\\install.ps1 -SetupShell"
+    else:
+        bin_dir = str(Path.home() / ".local" / "bin")
+        install_command_text = "sh install.sh"
+        update_command_text = "sh install.sh --update"
+        path_setup_command_text = "sh install.sh --setup-shell"
+        path_export_command_text = f"export PATH={shlex.quote(bin_dir)}:$PATH"
+        missing_command_hint = f"{CLI_NAME} command was not found on PATH; use python3 -m cli or run sh install.sh"
     install_readiness_status = "ready" if command_path and python_check == "ok" else "watch"
     command_prefix = CLI_NAME if command_path else f"{shlex.quote(sys.executable)} -m cli"
     can_run_handoff = command_path != "" and python_check == "ok"
-    path_setup_command_text = "sh install.sh --setup-shell"
-    path_export_command_text = f"export PATH={shlex.quote(bin_dir)}:$PATH"
     self_check_command_text = f"{command_prefix} version"
     first_run_command_text = f"{command_prefix} first-run"
+    current_version = _read_project_version()
+    is_current_beta = current_version == EXPECTED_BETA_VERSION
+    version_check = "ok" if is_current_beta else "watch"
+    release_status = "current-beta" if is_current_beta else "version-mismatch"
+    if is_current_beta:
+        version_guidance = f"current beta matches {EXPECTED_BETA_TAG}"
+    else:
+        version_guidance = (
+            f"expected {EXPECTED_BETA_VERSION} ({EXPECTED_BETA_TAG}), got {current_version}; "
+            f"refresh from {LATEST_BETA_ZIP_URL} or run {update_command_text} from a current checkout"
+        )
+    version_recovery_steps = [
+        f"confirm version with {command_prefix} version --json",
+        f"download the current beta ZIP: {LATEST_BETA_ZIP_URL}",
+        f"or update an existing checkout with: {update_command_text}",
+    ]
     payload = {
         "status": "ok",
         "entrypoint": "mcp-skeleton-version",
@@ -159,7 +193,18 @@ def _build_version_payload() -> dict[str, Any]:
         "legacy_cli_name": LEGACY_CLI_NAME,
         "package_name": PACKAGE_NAME,
         "legacy_package_name": LEGACY_PACKAGE_NAME,
-        "version": _read_project_version(),
+        "version": current_version,
+        "release_channel": RELEASE_CHANNEL,
+        "expected_beta_version": EXPECTED_BETA_VERSION,
+        "expected_beta_tag": EXPECTED_BETA_TAG,
+        "repo_url": REPO_URL,
+        "release_url": RELEASE_URL,
+        "latest_beta_zip_url": LATEST_BETA_ZIP_URL,
+        "version_check": version_check,
+        "release_status": release_status,
+        "is_current_beta": is_current_beta,
+        "version_guidance": version_guidance,
+        "version_recovery_steps": version_recovery_steps,
         "python_version": sys.version.split()[0],
         "python_executable": sys.executable,
         "executable": executable,
@@ -171,7 +216,8 @@ def _build_version_payload() -> dict[str, Any]:
         "install_readiness_status": install_readiness_status,
         "python_check": python_check,
         "command_check": "ok" if command_path else "watch",
-        "install_command_text": "sh install.sh",
+        "install_command_text": install_command_text,
+        "update_command_text": update_command_text,
         "path_setup_command_text": path_setup_command_text,
         "path_export_command_text": path_export_command_text,
         "self_check_command_text": self_check_command_text,
@@ -179,11 +225,19 @@ def _build_version_payload() -> dict[str, Any]:
         "recommended_first_command_text": first_run_command_text,
         "recommended_project_command_text": f"{command_prefix} handoff",
         "doctor_command_text": f"{command_prefix} doctor",
-        "path_hint": "ok" if command_path else f"{CLI_NAME} command was not found on PATH; use python3 -m cli or run sh install.sh",
+        "path_hint": "ok" if command_path else missing_command_hint,
     }
     payload["summary_text"] = "\n".join(
         [
             f"{CLI_NAME} version",
+            "",
+            f"Release channel: {payload['release_channel']}",
+            f"Expected beta: {payload['expected_beta_tag']} ({payload['expected_beta_version']})",
+            f"Release status: {payload['release_status']} - {payload['version_guidance']}",
+            f"Repository: {payload['repo_url']}",
+            f"Release page: {payload['release_url']}",
+            f"Latest beta main ZIP: {payload['latest_beta_zip_url']}",
+            f"Update command: {payload['update_command_text']}",
             "",
             f"Install readiness: {payload['install_readiness_status']}",
             f"Python check: {payload['python_check']} - {payload['python_version']} ({payload['python_executable']})",
@@ -233,6 +287,19 @@ def _build_install_doctor_action_plan(
                 "message": "use ailoom safety if you are unsure which generated files are safe to share",
             },
         ]
+    if install.get("version_check") != "ok":
+        return [
+            {
+                "step": "refresh_current_beta",
+                "status": "watch",
+                "message": f"{recommended_fix_command_text}; if this checkout is stale, download {install.get('latest_beta_zip_url', LATEST_BETA_ZIP_URL)}",
+            },
+            {
+                "step": "self_check_version",
+                "status": "next",
+                "message": install.get("self_check_command_text", "ailoom version"),
+            },
+        ]
     if install.get("python_check") == "blocked":
         return [
             {
@@ -267,6 +334,7 @@ def _render_context_install_doctor_summary(payload: dict[str, Any]) -> str:
         "Ailoom Context Install Doctor",
         "",
         f"Status: {payload.get('install_doctor_status', '')}",
+        f"Release status: {install.get('release_status', '')} - {install.get('version_guidance', '')}",
         f"Python: {install.get('python_check', '')} - {install.get('python_version', '')}",
         f"Command: {install.get('command_check', '')} - {install.get('command_path', '') or '(not found on PATH)'}",
         f"Readiness file: {install.get('install_readiness_manifest', {}).get('status', 'unknown')}",
@@ -314,12 +382,24 @@ def _build_context_install_doctor_payload(args: argparse.Namespace) -> tuple[dic
             "severity": "watch",
             "observed": manifest_status,
         },
+        {
+            "name": "expected_beta_version",
+            "passed": install.get("version_check") == "ok",
+            "severity": "watch",
+            "observed": install.get("version", ""),
+            "expected": install.get("expected_beta_version", EXPECTED_BETA_VERSION),
+        },
     ]
     failed_blocks = [item for item in checks if item["severity"] == "block" and not item["passed"]]
     failed_watches = [item for item in checks if item["severity"] == "watch" and not item["passed"]]
     install_doctor_status = "blocked" if failed_blocks else "watch" if failed_watches else "ready"
     if failed_blocks:
-        recommended_fix_command_text = "PYTHON=/path/to/python3.11 sh install.sh --setup-shell"
+        if _runtime_platform() == "win32":
+            recommended_fix_command_text = "install Python 3.10+ from python.org, then run .\\install.ps1 -SetupShell"
+        else:
+            recommended_fix_command_text = "PYTHON=/path/to/python3.11 sh install.sh --setup-shell"
+    elif install.get("version_check") != "ok":
+        recommended_fix_command_text = str(install.get("update_command_text") or "sh install.sh --update")
     elif install.get("command_check") != "ok":
         recommended_fix_command_text = str(install.get("path_setup_command_text") or "sh install.sh --setup-shell")
     elif manifest_status != "ready":

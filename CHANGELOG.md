@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- clarified the current free/open-source release status, attribution expectations, and commercial-permission guidance in README and SECURITY docs
+
 ## 1.0.0-beta.1 - 2026-06-05
 
 - added `v1_user_experience_readiness` to release readiness summaries for install, first-run, handoff value, storage safety, and trial feedback gates

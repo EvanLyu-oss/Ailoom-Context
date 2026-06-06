@@ -65,6 +65,16 @@ Created and maintained by Evan.
 
 Contact: [carwyn910@gmail.com](mailto:carwyn910@gmail.com)
 
+## License, Attribution, And Commercial Use
+
+Ailoom Context is currently released as a free and open-source project under the repository license.
+
+The current public version may be used for personal learning, research, local development, and open-source experimentation. Please keep clear attribution to the original project and author when using, modifying, forking, publishing, or redistributing this work.
+
+Do not misrepresent forks, derived tools, rebranded packages, or commercial products as the official Ailoom Context project. Commercial use cases such as SaaS hosting, enterprise integration, paid redistribution, rebranded resale, or building a competing commercial product based on Ailoom Context should contact the author for written permission.
+
+The [LICENSE](LICENSE) file remains the legal source of permissions for the current release. Future versions may use a different license or commercial agreement for advanced commercial use.
+
 ## Security Model
 
 | Boundary | Default |

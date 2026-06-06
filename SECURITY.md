@@ -42,7 +42,9 @@ ailoom clean --all
 
 `AILOOM-SKL.v1`, the Ailoom Context bundle schema, and the associated lossless context compression workflow are original project artifacts of Ailoom Context.
 
-Please do not misrepresent derived tools, forks, or commercial products as the official Ailoom Context project. If you build on this work, keep clear attribution and project identity separation.
+Please do not misrepresent derived tools, forks, rebranded packages, or commercial products as the official Ailoom Context project. If you build on this work, keep clear attribution to the original project and author, and keep project identity separation visible to users.
+
+Commercial use cases such as SaaS hosting, enterprise integration, paid redistribution, rebranded resale, or building a competing commercial product based on Ailoom Context should contact the author for written permission: carwyn910@gmail.com.
 
 The current repository license remains the source of legal permissions and restrictions. If Ailoom Context later needs stronger restrictions against competing commercial clones or rebranded resale, that should be handled through an explicit license change and legal review rather than a documentation-only claim.
 

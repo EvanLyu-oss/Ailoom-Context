@@ -436,6 +436,58 @@ def _emit_version_result(args: argparse.Namespace) -> int:
     return EXIT_OK
 
 
+def _render_top_level_welcome() -> str:
+    install = _build_version_payload()
+    command_hint = str(install.get("path_hint") or "")
+    temporary_path = str(install.get("path_export_command_text") or "")
+    first_run_fallback = str(install.get("recommended_first_command_text") or "python3 -m cli first-run")
+    project_fallback = str(install.get("recommended_project_command_text") or "python3 -m cli handoff")
+    lines = [
+        "Ailoom Context Welcome",
+        "",
+        "Status:",
+        f"- Release channel: {install.get('release_channel', '')}",
+        f"- Version: {install.get('version', '')}",
+        f"- Install readiness: {install.get('install_readiness_status', '')}",
+        f"- Command check: {install.get('command_check', '')}",
+        "",
+        "Copy/paste first:",
+        "ailoom first-run",
+        "",
+        "Daily project command:",
+        "ailoom handoff --copy --open",
+        "",
+        "One-shot bundle command:",
+        "ailoom quick --copy --open",
+        "",
+        "Install check:",
+        "ailoom doctor --install",
+        "",
+        "Storage safety:",
+        "ailoom doctor --storage",
+        "ailoom clean --dry-run --all",
+        "",
+        "Local-only safety:",
+        "ailoom safety",
+        "",
+        "If command is not found:",
+        f"- Run: {temporary_path or 'export PATH=$HOME/.local/bin:$PATH'}",
+        f"- Or use now: {first_run_fallback}",
+        f"- Project fallback: {project_fallback}",
+    ]
+    if command_hint:
+        lines.append(f"- Hint: {command_hint}")
+    lines.extend(
+        [
+            "",
+            "More commands:",
+            "ailoom --help",
+            "ailoom start --json",
+        ]
+    )
+    return "\n".join(lines)
+
+
 def _print_json_error(
     code: str,
     message: str,
@@ -5361,8 +5413,8 @@ def main(argv: list[str] | None = None) -> int:
     normalized_argv = _normalize_top_level_context_aliases(list(sys.argv[1:] if argv is None else argv))
     args = parser.parse_args(normalized_argv)
     if not getattr(args, "command", None):
-        parser.print_help()
-        return EXIT_USAGE
+        print(_render_top_level_welcome())
+        return EXIT_OK
     if args.command == "version":
         return _emit_version_result(args)
     if args.command != "context":
@@ -5753,6 +5805,7 @@ def _build_parser() -> argparse.ArgumentParser:
 
     for alias_name, alias_help in [
         ("first-run", "Install check plus safe demo and next-step guidance"),
+        ("start", "Welcome / first command setup plus config recommendation"),
         ("handoff", "Create or reuse a restore-safe AI/IDE handoff for this project"),
         ("quick", "Create a restore-safe bundle with explicit paths"),
         ("demo", "Run a safe sample before touching your own project"),

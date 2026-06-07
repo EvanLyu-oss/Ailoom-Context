@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- added a zero-learning `ailoom` welcome panel for first-time users, plus top-level help visibility for `ailoom start`
 - expanded `ailoom clean` and `ailoom doctor --storage` with structured scope summaries, safety policies, global-install visibility, dry-run-first recommended cleanup commands, and explicit test/build artifact cleanup for benchmark-heavy test machines
 - added trial-report speed summaries with observed handoff time, slowest phase, reuse guidance, and estimated AI/agent token-reading speedup
 - added a structured `handoff_quickstart` checklist to quick/handoff JSON, terminal output, `AI_HANDOFF.md`, and handoff metadata

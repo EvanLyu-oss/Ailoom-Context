@@ -26,11 +26,13 @@ From a cloned or downloaded checkout:
 
 ```bash
 sh install.sh --setup-shell
+ailoom
 ailoom first-run
-ailoom handoff
+ailoom handoff --copy --open
 ```
 
 If the current terminal cannot find `ailoom` yet, restart the terminal or run the temporary PATH command printed by the installer.
+If you are unsure what to run next, type `ailoom` with no arguments. It prints a welcome panel with the first safe demo, daily handoff, install check, storage cleanup, and local-only safety commands.
 
 ## Windows PowerShell
 
@@ -38,8 +40,9 @@ From a cloned or downloaded checkout:
 
 ```powershell
 .\install.ps1 -SetupShell
+ailoom
 ailoom first-run
-ailoom handoff
+ailoom handoff --copy --open
 ```
 
 If PowerShell cannot find `ailoom` yet, restart PowerShell or run the temporary PATH command printed by the installer.
@@ -48,9 +51,10 @@ If PowerShell cannot find `ailoom` yet, restart PowerShell or run the temporary 
 
 | Command | What it proves |
 | --- | --- |
+| `ailoom` | Shows the zero-learning welcome panel and the next command to copy |
 | `ailoom first-run` | Checks install readiness, runs a safe demo, shows savings, and prints the next command |
 | `ailoom demo` | Runs a safe sample and shows token savings plus restore safety |
-| `ailoom handoff` | Creates a restore-safe AI/IDE handoff for the current project |
+| `ailoom handoff --copy --open` | Creates a restore-safe AI/IDE handoff for the current project, opens the bundle, and copies the skeleton when possible |
 | `ailoom savings` | Shows the token savings from the most recent handoff |
 | `ailoom recent` | Finds the latest bundle, skeleton, manifest, and restore command |
 | `ailoom doctor --install` | Checks Python, PATH, and install-readiness status |

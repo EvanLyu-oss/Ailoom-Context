@@ -1997,6 +1997,26 @@ def _check_top_level_cli_alias_json(workspace: Path) -> None:
     assert "Install check plus safe demo" in help_proc.stdout
 
 
+def _check_zero_learning_welcome_output_json(workspace: Path) -> None:
+    del workspace
+    proc = _run([sys.executable, "-m", "cli"])
+    assert "Ailoom Context Welcome" in proc.stdout
+    assert "Copy/paste first:" in proc.stdout
+    assert "ailoom first-run" in proc.stdout
+    assert "Daily project command:" in proc.stdout
+    assert "ailoom handoff --copy --open" in proc.stdout
+    assert "Install check:" in proc.stdout
+    assert "ailoom doctor --install" in proc.stdout
+    assert "Storage safety:" in proc.stdout
+    assert "ailoom doctor --storage" in proc.stdout
+    assert "Local-only safety:" in proc.stdout
+    assert "ailoom safety" in proc.stdout
+
+    help_proc = _run([sys.executable, "-m", "cli", "--help"])
+    assert "start" in help_proc.stdout
+    assert "Welcome / first command" in help_proc.stdout
+
+
 def _check_zero_learning_defaults_json(workspace: Path) -> None:
     project = workspace / "zero_learning_project"
     (project / "src").mkdir(parents=True)
@@ -3462,6 +3482,7 @@ CHECKS: list[tuple[str, Callable[[Path], None]]] = [
     ("context_explain_json_ok", _check_context_explain_json),
     ("release_readiness_summary_json_ok", _check_release_readiness_summary_json),
     ("top_level_cli_alias_json_ok", _check_top_level_cli_alias_json),
+    ("zero_learning_welcome_output_json_ok", _check_zero_learning_welcome_output_json),
     ("zero_learning_defaults_json_ok", _check_zero_learning_defaults_json),
     ("first_run_json_ok", _check_first_run_json),
     ("handoff_auto_reuse_json_ok", _check_handoff_auto_reuse_json),

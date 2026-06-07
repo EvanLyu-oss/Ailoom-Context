@@ -106,9 +106,12 @@ From a cloned or downloaded checkout:
 
 ```bash
 sh install.sh --setup-shell
+ailoom
 ailoom first-run
-ailoom handoff
+ailoom handoff --copy --open
 ```
+
+Running `ailoom` with no arguments now opens a zero-learning welcome panel instead of an error-style usage screen. It prints the first command to copy, the daily project handoff command, install diagnostics, storage cleanup, and local-only safety checks.
 
 ### Windows PowerShell
 

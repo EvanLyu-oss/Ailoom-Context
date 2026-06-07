@@ -1174,6 +1174,67 @@ def _check_context_savings_json(workspace: Path) -> None:
     assert "## Share With Beta Feedback" in report_text
 
 
+def _check_context_next_json(workspace: Path) -> None:
+    missing_project = workspace / "next_missing_project"
+    missing_project.mkdir()
+    missing = _run_top_level_cli_json(["next", "--json"], cwd=missing_project)
+    assert missing["status"] == "ok"
+    assert missing["entrypoint"] == "context-next"
+    assert missing["next_status"] == "needs_handoff"
+    assert missing["current_step"] == "create_handoff"
+    assert missing["primary_command_text"] == "ailoom handoff --copy --open"
+    assert missing["action_plan"][0]["command_text"] == "ailoom handoff --copy --open"
+    assert missing["commands"]["handoff"].startswith("ailoom handoff")
+    assert "Ailoom Context Next" in missing["summary_text"]
+    assert "Current step: create_handoff" in missing["summary_text"]
+    assert "Copy/paste now:" in missing["summary_text"]
+
+    project = workspace / "next_project"
+    (project / "src").mkdir(parents=True)
+    (project / "docs").mkdir()
+    (project / "src" / "app.py").write_text(
+        "def run() -> str:\n"
+        "    return 'next-ready'\n",
+        encoding="utf-8",
+    )
+    (project / "docs" / "notes.md").write_text(
+        "# Notes\n\n" + "Ailoom Context next-step guidance.\n\n" * 80,
+        encoding="utf-8",
+    )
+    handoff = _run_top_level_cli_json(["handoff", "--json"], cwd=project)
+    assert handoff["status"] == "ok"
+    ready = _run_top_level_cli_json(["next", "--json"], cwd=project)
+    assert ready["status"] == "ok"
+    assert ready["entrypoint"] == "context-next"
+    assert ready["next_status"] == "ready"
+    assert ready["current_step"] == "share_or_review"
+    assert ready["freshness_status"] == "fresh"
+    assert ready["primary_command_text"].startswith("ailoom handoff")
+    assert ready["skeleton_file"].endswith("context_skeleton.mcp")
+    assert Path(ready["skeleton_file"]).exists()
+    assert ready["value_summary"]["agent_context_reading"]["estimated_speedup_x"] >= 0
+    assert ready["commands"]["savings"] == "ailoom savings"
+    assert ready["commands"]["trial_report"].startswith("ailoom trial-report --write-report")
+    assert any(item["step"] == "share_skeleton" for item in ready["action_plan"])
+    assert any(item["step"] == "check_savings" for item in ready["action_plan"])
+    assert "Agent reading:" in ready["summary_text"]
+    assert "Next commands:" in ready["summary_text"]
+
+    (project / "src" / "app.py").write_text(
+        "def run() -> str:\n"
+        "    return 'next-stale'\n",
+        encoding="utf-8",
+    )
+    stale = _run_top_level_cli_json(["next", "--json"], cwd=project)
+    assert stale["status"] == "ok"
+    assert stale["next_status"] == "refresh_needed"
+    assert stale["current_step"] == "refresh_handoff"
+    assert stale["freshness_status"] == "stale"
+    assert stale["primary_command_text"].startswith("ailoom handoff")
+    assert stale["commands"]["refresh"].startswith("ailoom handoff")
+    assert "Refresh first:" in stale["summary_text"]
+
+
 def _check_trial_report_json(workspace: Path) -> None:
     project = workspace / "trial_report_project"
     (project / "src").mkdir(parents=True)
@@ -2031,6 +2092,8 @@ def _check_zero_learning_welcome_output_json(workspace: Path) -> None:
     assert "ailoom first-run" in proc.stdout
     assert "Daily project command:" in proc.stdout
     assert "ailoom handoff --copy --open" in proc.stdout
+    assert "What should I do next?" in proc.stdout
+    assert "ailoom next" in proc.stdout
     assert "Install check:" in proc.stdout
     assert "ailoom doctor --install" in proc.stdout
     assert "Storage safety:" in proc.stdout
@@ -2040,6 +2103,7 @@ def _check_zero_learning_welcome_output_json(workspace: Path) -> None:
 
     help_proc = _run([sys.executable, "-m", "cli", "--help"])
     assert "start" in help_proc.stdout
+    assert "next" in help_proc.stdout
     assert "Welcome / first command" in help_proc.stdout
 
 
@@ -3509,6 +3573,7 @@ CHECKS: list[tuple[str, Callable[[Path], None]]] = [
     ("context_quick_windows_command_text_json_ok", _check_context_quick_windows_command_text_json),
     ("context_recent_json_ok", _check_context_recent_json),
     ("context_savings_json_ok", _check_context_savings_json),
+    ("context_next_json_ok", _check_context_next_json),
     ("trial_report_json_ok", _check_trial_report_json),
     ("context_quick_fast_json_ok", _check_context_quick_fast_json),
     ("context_quick_speed_tip_json_ok", _check_context_quick_speed_tip_json),

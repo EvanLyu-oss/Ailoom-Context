@@ -12,10 +12,11 @@ If you just installed Ailoom Context, run the guided first screen once:
 ailoom first-run
 ```
 
-Then follow its `First real project loop`: `handoff`, `savings`, `trial-report`, and `doctor --storage`.
+Then follow its `First real project loop`: `handoff`, `next`, `savings`, `trial-report`, and `doctor --storage`.
 
 ```bash
 ailoom handoff --copy --open
+ailoom next
 ```
 
 What to share:
@@ -37,12 +38,21 @@ ailoom savings
 
 Read the `Value summary` first. It tells you whether the current project shows strong token value, useful token value, a watch-level result, or a tiny-project result where the skeleton may not look smaller yet. It also shows estimated AI/agent context-reading speedup, calculated from source tokens versus skeleton tokens.
 
+If you lose track, run:
+
+```bash
+ailoom next
+```
+
+It reads the current project's recent handoff state and tells you whether to create the first handoff, share/review the fresh skeleton, refresh a stale bundle, check savings, or write a trial report.
+
 ## Large repository
 
 Large repositories usually benefit most from `imports` or `tree` focus with adaptive density.
 
 ```bash
 ailoom handoff
+ailoom next
 ailoom savings
 ailoom recent
 ```

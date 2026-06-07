@@ -31,10 +31,11 @@ sh install.sh --setup-shell
 ailoom
 ailoom first-run
 ailoom handoff --copy --open
+ailoom next
 ```
 
 If the current terminal cannot find `ailoom` yet, restart the terminal or run the temporary PATH command printed by the installer.
-If you are unsure what to run next, type `ailoom` with no arguments. It prints a welcome panel with the first safe demo, daily handoff, install check, storage cleanup, and local-only safety commands.
+If you are unsure what to run next, type `ailoom` with no arguments for the welcome panel, or run `ailoom next` inside a project for a state-aware next command.
 
 ## Windows PowerShell
 
@@ -45,6 +46,7 @@ From a cloned or downloaded checkout:
 ailoom
 ailoom first-run
 ailoom handoff --copy --open
+ailoom next
 ```
 
 If PowerShell cannot find `ailoom` yet, restart PowerShell or run the temporary PATH command printed by the installer.
@@ -57,6 +59,7 @@ If PowerShell cannot find `ailoom` yet, restart PowerShell or run the temporary 
 | `ailoom first-run` | Checks install readiness, runs a safe demo, shows savings, and prints the next command |
 | `ailoom demo` | Runs a safe sample and shows token savings plus restore safety |
 | `ailoom handoff --copy --open` | Creates a restore-safe AI/IDE handoff for the current project, opens the bundle, and copies the skeleton when possible |
+| `ailoom next` | Shows whether to create, share, refresh, or report on the current project handoff |
 | `ailoom savings` | Shows the token savings from the most recent handoff |
 | `ailoom recent` | Finds the latest bundle, skeleton, manifest, and restore command |
 | `ailoom doctor --install` | Checks Python, PATH, and install-readiness status |

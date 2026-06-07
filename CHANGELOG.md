@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- added `ailoom next` / `context next`, a state-aware project guide that tells users whether to create the first handoff, share a fresh skeleton, refresh stale context, check savings, or write a trial report
 - hardened the macOS installer for offline/restricted machines with no-index testing, no-build-isolation package installs, core-package fallback, source-runner fallback, and install-method reporting
 - added `agent_context_reading` to value summaries so quick, handoff, and savings output show estimated AI/agent token-reading speedup and reduction percentage directly
 - added stable `reuse_policy` output to quick/handoff JSON and terminal summaries so users can see when daily handoff auto-reuse is active, when explicit output paths force a fresh bundle, and which `--force-refresh` command to run

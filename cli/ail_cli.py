@@ -86,6 +86,7 @@ CONTEXT_SUBCOMMANDS = {
     "start",
     "quick",
     "first-run",
+    "next",
     "recent",
     "savings",
     "trial-report",
@@ -456,6 +457,9 @@ def _render_top_level_welcome() -> str:
         "",
         "Daily project command:",
         "ailoom handoff --copy --open",
+        "",
+        "What should I do next?",
+        "ailoom next",
         "",
         "One-shot bundle command:",
         "ailoom quick --copy --open",
@@ -2379,6 +2383,213 @@ def _build_context_savings_payload(args: argparse.Namespace) -> tuple[dict[str, 
     payload["report_file"] = report_path
     payload["report_written"] = report_written
     payload["summary_text"] = _render_context_savings_summary(payload)
+    return payload, EXIT_OK
+
+
+def _next_source_option_args(args: argparse.Namespace) -> list[Any]:
+    if bool(getattr(args, "defaulted_input_dir", False)):
+        return []
+    input_dir = _opt_path(args, "input_dir")
+    input_file = _opt_path(args, "input_file")
+    text_file = _opt_path(args, "text_file")
+    if input_dir is not None:
+        return ["--input-dir", str(input_dir.resolve())]
+    if input_file is not None:
+        return ["--input-file", str(input_file.resolve())]
+    if text_file is not None:
+        return ["--text-file", str(text_file.resolve())]
+    return []
+
+
+def _next_command_text(args: argparse.Namespace, command: str, extra: list[Any] | None = None) -> str:
+    command_args: list[Any] = [command]
+    command_args.extend(extra or [])
+    command_args.extend(_next_source_option_args(args))
+    return _format_cli_command(command_args)
+
+
+def _build_next_commands(args: argparse.Namespace) -> dict[str, str]:
+    return {
+        "handoff": _next_command_text(args, "handoff", ["--copy", "--open"]),
+        "refresh": _next_command_text(args, "handoff", ["--force-refresh"]),
+        "savings": _next_command_text(args, "savings"),
+        "trial_report": _next_command_text(args, "trial-report", ["--write-report", "ailoom-trial-report.md"]),
+        "doctor_storage": _next_command_text(args, "doctor", ["--storage"]),
+        "clean_preview": _next_command_text(args, "clean", ["--dry-run", "--all"]),
+    }
+
+
+def _render_context_next_summary(payload: dict[str, Any]) -> str:
+    value_summary = payload.get("value_summary") or {}
+    agent_reading = value_summary.get("agent_context_reading") or {}
+    lines = [
+        "Ailoom Context Next",
+        "",
+        "At a glance:",
+        f"- Status: {payload.get('next_status', '')}",
+        f"- Current step: {payload.get('current_step', '')}",
+        f"- Freshness: {payload.get('freshness_status', 'unknown')}",
+        f"- Token savings: {payload.get('tokens_saved', 0)} tokens ({payload.get('savings_percent', 0)}%)",
+        f"- Agent reading: {agent_reading.get('estimated_speedup_x', 0)}x fewer input tokens ({agent_reading.get('token_reduction_percent', 0)}% reduction)",
+        "",
+        "Copy/paste now:",
+        payload.get("primary_command_text") or "(not available)",
+    ]
+    if payload.get("next_status") == "refresh_needed":
+        lines.extend([
+            "",
+            "Refresh first:",
+            payload.get("primary_command_text") or "(not available)",
+        ])
+    lines.extend(["", "Action plan:"])
+    for item in payload.get("action_plan") or []:
+        command_text = item.get("command_text") or ""
+        lines.append(f"- {item.get('label', item.get('step', ''))}: {item.get('message', '')}")
+        if command_text:
+            lines.append(f"- Command: {command_text}")
+    commands = payload.get("commands") or {}
+    lines.extend([
+        "",
+        "Next commands:",
+        f"- Handoff: {commands.get('handoff', '') or '(not available)'}",
+        f"- Savings: {commands.get('savings', '') or '(not available)'}",
+        f"- Trial report: {commands.get('trial_report', '') or '(not available)'}",
+        f"- Storage check: {commands.get('doctor_storage', '') or '(not available)'}",
+    ])
+    skeleton_file = str(payload.get("skeleton_file") or "")
+    if skeleton_file:
+        lines.extend([
+            "",
+            "Share with AI/IDE:",
+            f"- Skeleton file: {skeleton_file}",
+            "- Keep manifest and restore package local unless you intentionally want to share raw source bytes",
+        ])
+    return "\n".join(lines)
+
+
+def _build_context_next_payload(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
+    commands = _build_next_commands(args)
+    recent_payload, recent_exit = _build_context_recent_payload(args)
+    if recent_exit != EXIT_OK:
+        payload = {
+            "status": "ok",
+            "entrypoint": "context-next",
+            "next_status": "needs_handoff",
+            "current_step": "create_handoff",
+            "freshness_status": "missing",
+            "primary_command_text": commands["handoff"],
+            "commands": commands,
+            "recent": recent_payload,
+            "tokens_saved": 0,
+            "savings_percent": 0,
+            "value_summary": {},
+            "action_plan": [
+                {
+                    "step": "create_handoff",
+                    "label": "Create AI handoff",
+                    "message": "create a restore-safe skeleton for this project first",
+                    "command_text": commands["handoff"],
+                },
+                {
+                    "step": "check_savings",
+                    "label": "Check value",
+                    "message": "after handoff, see token savings and agent reading speedup",
+                    "command_text": commands["savings"],
+                },
+                {
+                    "step": "write_trial_report",
+                    "label": "Write trial report",
+                    "message": "capture one report if you are testing the beta",
+                    "command_text": commands["trial_report"],
+                },
+            ],
+        }
+        payload["summary_text"] = _render_context_next_summary(payload)
+        return payload, EXIT_OK
+
+    freshness_status = str(recent_payload.get("freshness_status") or "unknown")
+    if freshness_status == "stale":
+        refresh_command = str(recent_payload.get("refresh_command_text") or commands["refresh"])
+        payload = {
+            "status": "ok",
+            "entrypoint": "context-next",
+            "next_status": "refresh_needed",
+            "current_step": "refresh_handoff",
+            "freshness_status": freshness_status,
+            "primary_command_text": refresh_command,
+            "commands": {**commands, "refresh": refresh_command},
+            "recent": recent_payload,
+            "skeleton_file": recent_payload.get("skeleton_file", ""),
+            "bundle_root": recent_payload.get("bundle_root", ""),
+            "manifest_file": recent_payload.get("manifest_file", ""),
+            "tokens_saved": recent_payload.get("estimated_tokens_saved", 0),
+            "savings_percent": recent_payload.get("estimated_savings_percent", 0),
+            "value_summary": recent_payload.get("value_summary") or {},
+            "action_plan": [
+                {
+                    "step": "refresh_handoff",
+                    "label": "Refresh handoff",
+                    "message": "project files changed since the last handoff; refresh before sharing",
+                    "command_text": refresh_command,
+                },
+                {
+                    "step": "check_savings",
+                    "label": "Check value",
+                    "message": "review token savings after the refreshed bundle is ready",
+                    "command_text": commands["savings"],
+                },
+            ],
+        }
+        payload["summary_text"] = _render_context_next_summary(payload)
+        return payload, EXIT_OK
+
+    savings_payload, savings_exit = _build_context_savings_payload(args)
+    value_summary = savings_payload.get("value_summary") if savings_exit == EXIT_OK else recent_payload.get("value_summary") or {}
+    primary_command = str((recent_payload.get("user_outcome") or {}).get("next_command_text") or commands["handoff"])
+    payload = {
+        "status": "ok",
+        "entrypoint": "context-next",
+        "next_status": "ready",
+        "current_step": "share_or_review",
+        "freshness_status": freshness_status,
+        "primary_command_text": primary_command,
+        "commands": commands,
+        "recent": recent_payload,
+        "savings": savings_payload if savings_exit == EXIT_OK else {},
+        "skeleton_file": recent_payload.get("skeleton_file", ""),
+        "bundle_root": recent_payload.get("bundle_root", ""),
+        "manifest_file": recent_payload.get("manifest_file", ""),
+        "tokens_saved": recent_payload.get("estimated_tokens_saved", 0),
+        "savings_percent": recent_payload.get("estimated_savings_percent", 0),
+        "value_summary": value_summary or {},
+        "action_plan": [
+            {
+                "step": "share_skeleton",
+                "label": "Share skeleton",
+                "message": "give context_skeleton.mcp and the AI_HANDOFF prompt to your AI/IDE",
+                "command_text": "",
+            },
+            {
+                "step": "keep_using_fast_handoff",
+                "label": "Keep daily handoff fast",
+                "message": "run handoff again; unchanged projects reuse the fresh bundle automatically",
+                "command_text": primary_command,
+            },
+            {
+                "step": "check_savings",
+                "label": "Check value",
+                "message": "show token savings and estimated AI/agent context-reading speedup",
+                "command_text": commands["savings"],
+            },
+            {
+                "step": "write_trial_report",
+                "label": "Write trial report",
+                "message": "create a compact report for beta feedback or your own notes",
+                "command_text": commands["trial_report"],
+            },
+        ],
+    }
+    payload["summary_text"] = _render_context_next_summary(payload)
     return payload, EXIT_OK
 
 
@@ -5574,7 +5785,7 @@ def cmd_context(args: argparse.Namespace) -> int:
     command = getattr(args, "context_command", None)
     supported = CONTEXT_SUBCOMMANDS
     if command not in supported:
-        return _emit_command_error(args, EXIT_USAGE, "invalid_usage", "supported context subcommands: compress, restore, inspect, explain, apply-check, preset, config, init, install-hook, doctor, start, quick, first-run, recent, savings, trial-report, demo, safety, clean, bundle, patch, patch-apply")
+        return _emit_command_error(args, EXIT_USAGE, "invalid_usage", "supported context subcommands: compress, restore, inspect, explain, apply-check, preset, config, init, install-hook, doctor, start, quick, first-run, next, recent, savings, trial-report, demo, safety, clean, bundle, patch, patch-apply")
 
     if command == "preset":
         payload = build_context_preset_payload(getattr(args, "preset_id", None))
@@ -5622,6 +5833,11 @@ def cmd_context(args: argparse.Namespace) -> int:
     if command == "recent":
         _apply_current_dir_default(args)
         payload, exit_code = _build_context_recent_payload(args)
+        return _emit_simple_result(args, payload, text=str(payload.get("summary_text", "")), exit_code=exit_code)
+
+    if command == "next":
+        _apply_current_dir_default(args)
+        payload, exit_code = _build_context_next_payload(args)
         return _emit_simple_result(args, payload, text=str(payload.get("summary_text", "")), exit_code=exit_code)
 
     if command == "savings":
@@ -5951,6 +6167,7 @@ def _build_parser() -> argparse.ArgumentParser:
         ("quick", "Create a restore-safe bundle with explicit paths"),
         ("demo", "Run a safe sample before touching your own project"),
         ("doctor", "Check readiness, restore safety, install status, or storage"),
+        ("next", "Show the next best command for this project"),
         ("savings", "Show token savings from the most recent handoff"),
         ("trial-report", "Write a beta trial report from the most recent handoff"),
         ("recent", "Show the most recent handoff bundle"),
@@ -6137,6 +6354,12 @@ def _build_parser() -> argparse.ArgumentParser:
     recent.add_argument("--clean-stale", action="store_true", help="Clean stale known bundles for this project")
     recent.add_argument("--dry-run", action="store_true", help="Show bundle cleanup candidates without deleting anything")
     recent.add_argument("--json", action="store_true")
+
+    next_cmd = context_subparsers.add_parser("next", help="Show the next best command for the current project state")
+    next_cmd.add_argument("--input-dir", dest="input_dir", help="Project directory whose next step should be read; defaults to current directory")
+    next_cmd.add_argument("--input-file", dest="input_file", help="Read next-step state next to this file")
+    next_cmd.add_argument("--text-file", dest="text_file", help="Read next-step state next to this text file")
+    next_cmd.add_argument("--json", action="store_true")
 
     savings = context_subparsers.add_parser("savings", help="Show token savings from the most recent handoff for this project")
     savings.add_argument("--input-dir", dest="input_dir", help="Project directory whose recent handoff should be read; defaults to current directory")

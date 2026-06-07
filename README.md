@@ -131,6 +131,8 @@ ailoom handoff --copy --open
 
 `handoff` is the shortest "give this project to AI/IDE" command. It creates or reuses a restore-safe bundle for the current directory, writes an `AI_HANDOFF.md` prompt, separates the skeleton you can share from restore files you keep local, and prints the next command to copy.
 
+Daily `ailoom handoff` automatically reuses the last fresh bundle when the project fingerprint has not changed, so repeated AI/IDE handoffs stay fast on large repositories. Use `ailoom handoff --force-refresh` when you intentionally want a brand-new bundle. If you pass `--output-dir`, Ailoom treats that as an explicit request for a fresh bundle in that directory.
+
 | Command | Use it when |
 | --- | --- |
 | `ailoom first-run` | You just installed Ailoom Context and want one safe check plus a demo |
@@ -143,7 +145,7 @@ ailoom handoff --copy --open
 | `ailoom trial-report --write-report ailoom-trial-report.md` | You are testing the beta and want one report to send back |
 | `ailoom doctor` | You want readiness, restore safety, and install diagnostics |
 
-The human output for `quick`, `handoff`, `doctor`, and `recent` starts with an `At a glance` card so first-time users can immediately see status, restore safety, token savings, speed/freshness, and the next command to copy. `handoff` also includes a `Value summary` that turns raw token and speed numbers into a plain recommendation, plus a `Daily handoff` panel that says whether it created or reused a bundle, why, and whether the skeleton was copied automatically or needs the shown manual copy command. `quick` / `handoff` also write `AI_HANDOFF.md` and `handoff.json` beside the bundle, include a recommended AI/IDE prompt, separate the skeleton file to share from restore files to keep locally, explain the slowest visible phase, show a stable `Performance summary` plus detailed `Performance profile`, report default noise protection, suggest the best next command (`--fast` or `--reuse-if-fresh`) for large or slower runs, and explain why tiny projects may expand instead of saving tokens.
+The human output for `quick`, `handoff`, `doctor`, and `recent` starts with an `At a glance` card so first-time users can immediately see status, restore safety, token savings, speed/freshness, and the next command to copy. `handoff` also includes a `Value summary` that turns raw token and speed numbers into a plain recommendation, plus `Daily handoff` and `Reuse policy` panels that say whether it created or reused a bundle, why, whether reuse was effective this run, how to keep using the fast path, and how to force a refresh. `quick` / `handoff` also write `AI_HANDOFF.md` and `handoff.json` beside the bundle, include a recommended AI/IDE prompt, separate the skeleton file to share from restore files to keep locally, explain the slowest visible phase, show a stable `Performance summary` plus detailed `Performance profile`, report default noise protection, suggest the best next command (`--fast` or `--reuse-if-fresh`) for large or slower runs, and explain why tiny projects may expand instead of saving tokens.
 
 ## What it does
 

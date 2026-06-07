@@ -1334,6 +1334,8 @@ def _quick_run_command_text(args: argparse.Namespace) -> str:
         command_args.append("--fast")
     if bool(getattr(args, "reuse_if_fresh", False)):
         command_args.append("--reuse-if-fresh")
+    if bool(getattr(args, "force_refresh", False)):
+        command_args.append("--force-refresh")
     if _inline_text(args) is not None:
         return ""
     if bool(getattr(args, "defaulted_input_dir", False)):
@@ -1354,6 +1356,87 @@ def _quick_run_command_text(args: argparse.Namespace) -> str:
     if getattr(args, "zip_bundle", False):
         command_args.append("--zip")
     return _format_cli_command(command_args)
+
+
+def _quick_reuse_effective(args: argparse.Namespace) -> bool:
+    if bool(getattr(args, "force_refresh", False)):
+        return False
+    if bool(getattr(args, "reuse_if_fresh", False)):
+        return True
+    return (
+        bool(getattr(args, "handoff_alias", False))
+        and _opt_path(args, "output_dir") is None
+        and not bool(getattr(args, "preview", False))
+    )
+
+
+def _build_quick_reuse_policy(args: argparse.Namespace) -> dict[str, Any]:
+    handoff_alias = bool(getattr(args, "handoff_alias", False))
+    output_dir = _opt_path(args, "output_dir")
+    preview = bool(getattr(args, "preview", False))
+    force_refresh = bool(getattr(args, "force_refresh", False))
+    explicit_reuse = bool(getattr(args, "reuse_if_fresh", False))
+    effective = _quick_reuse_effective(args)
+    if force_refresh:
+        status = "force_refresh"
+        message = "forced a fresh bundle; automatic reuse was skipped for this run"
+    elif handoff_alias and output_dir is None and not preview:
+        status = "active"
+        message = "daily handoff automatically reuses the last fresh bundle when the project fingerprint is unchanged"
+    elif handoff_alias and output_dir is not None:
+        status = "fresh_output"
+        message = "explicit --output-dir creates a fresh bundle; daily ailoom handoff without --output-dir can reuse unchanged projects"
+    elif explicit_reuse:
+        status = "explicit"
+        message = "reuse was requested with --reuse-if-fresh and will use the recent bundle only when the project fingerprint is unchanged"
+    elif preview:
+        status = "preview"
+        message = "preview does not read or write reuse state"
+    else:
+        status = "explicit"
+        message = "quick creates a fresh bundle by default; add --reuse-if-fresh when you want unchanged projects to reuse the recent bundle"
+
+    if handoff_alias:
+        recommended_args = _clone_args(
+            args,
+            output_dir=None,
+            reuse_if_fresh=False,
+            force_refresh=False,
+            preview=False,
+        )
+        force_args = _clone_args(
+            args,
+            output_dir=None,
+            reuse_if_fresh=False,
+            force_refresh=True,
+            preview=False,
+        )
+    else:
+        recommended_args = _clone_args(
+            args,
+            reuse_if_fresh=True,
+            force_refresh=False,
+            preview=False,
+        )
+        force_args = _clone_args(
+            args,
+            reuse_if_fresh=False,
+            force_refresh=True,
+            preview=False,
+        )
+
+    return {
+        "status": status,
+        "default_for_handoff": handoff_alias,
+        "effective_reuse_if_fresh": effective,
+        "fingerprint_based": True,
+        "freshness_status": "checked_when_enabled" if effective else "not_checked",
+        "message": message,
+        "recommended_command_text": _quick_run_command_text(recommended_args),
+        "force_refresh_command_text": _quick_run_command_text(force_args),
+        "recent_file": str(_recent_file_from_args(args)),
+        "fingerprint_skip_dirs": [".git", ".workspace_ail", "__pycache__", "node_modules", "dist", "build", "coverage", ".venv", ".next"],
+    }
 
 
 def _build_quick_handoff_payload(bundle_payload: dict[str, Any], *, bundle_root: str, manifest_file: str) -> dict[str, Any]:
@@ -2647,6 +2730,7 @@ def _build_reused_quick_payload(args: argparse.Namespace, *, started_at: float) 
         "copy_requested": bool(getattr(args, "copy_command", False)),
         "copy_performed": copy_performed,
         "copy_error": copy_error,
+        "reuse_policy": _build_quick_reuse_policy(args),
         "reuse_guidance": reuse_guidance,
         "experience": recent_payload.get("experience") or {},
         "archive_path": "",
@@ -3162,6 +3246,18 @@ def _render_context_quick_summary(payload: dict[str, Any]) -> str:
             f"- Copy status: {clipboard.get('status', '')} - {clipboard.get('message', '')}",
             f"- Copy command: {clipboard.get('command_text', '') or '(not available)'}",
         ])
+    reuse_policy = payload.get("reuse_policy") or {}
+    if reuse_policy:
+        effective_label = "yes" if reuse_policy.get("effective_reuse_if_fresh") else "no"
+        lines.extend([
+            "",
+            "Reuse policy:",
+            f"- Status: {reuse_policy.get('status', '')}",
+            f"- Effective this run: {effective_label}",
+            f"- Why: {reuse_policy.get('message', '')}",
+            f"- Recommended daily command: {reuse_policy.get('recommended_command_text', '') or '(not available)'}",
+            f"- Force refresh: {reuse_policy.get('force_refresh_command_text', '') or '(not available)'}",
+        ])
     if value_summary:
         lines.extend([
             "",
@@ -3526,6 +3622,7 @@ def _build_context_quick_payload(args: argparse.Namespace) -> tuple[dict[str, An
             "copy_requested": bool(getattr(args, "copy_command", False)),
             "copy_performed": False,
             "copy_error": "quick stopped before creating a bundle",
+            "reuse_policy": _build_quick_reuse_policy(args),
             "inspect_command_args": [],
             "inspect_command_text": "",
             "restore_command_args": [],
@@ -3571,6 +3668,7 @@ def _build_context_quick_payload(args: argparse.Namespace) -> tuple[dict[str, An
             "manifest_file": manifest_file_preview,
             "recent_file": str(_recent_file_from_args(args)),
             "run_command_text": _quick_run_command_text(args),
+            "reuse_policy": _build_quick_reuse_policy(args),
             "start": start_payload,
             "bundle": {},
             "timings_ms": timings_ms,
@@ -3682,6 +3780,7 @@ def _build_context_quick_payload(args: argparse.Namespace) -> tuple[dict[str, An
         "copy_requested": bool(getattr(args, "copy_command", False)),
         "copy_performed": copy_performed,
         "copy_error": copy_error,
+        "reuse_policy": _build_quick_reuse_policy(args),
         "experience": experience,
         "performance_advice": _build_quick_performance_advice(
             args,

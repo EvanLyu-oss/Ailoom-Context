@@ -861,6 +861,11 @@ def _check_context_quick_json(workspace: Path) -> None:
     assert payload["performance_summary"]["speed_diagnostic"]["dominant_phase"] in {"setup_and_doctor", "config_recommendation", "restore_safety_check", "bundle_write", "quick_total", "start_and_doctor"}
     assert payload["performance_summary"]["speed_diagnostic"]["why_it_may_feel_slow"]
     assert payload["performance_summary"]["speed_diagnostic"]["best_next_command_text"].startswith("ailoom quick")
+    assert payload["reuse_policy"]["status"] == "explicit"
+    assert payload["reuse_policy"]["default_for_handoff"] is False
+    assert payload["reuse_policy"]["effective_reuse_if_fresh"] is False
+    assert payload["reuse_policy"]["recommended_command_text"].startswith("ailoom quick --reuse-if-fresh")
+    assert payload["reuse_policy"]["force_refresh_command_text"].startswith("ailoom quick --force-refresh")
     assert payload["user_outcome"]["status"] == "ready_to_share"
     assert payload["user_outcome"]["primary_file"] == payload["handoff"]["skeleton_file"]
     assert payload["user_outcome"]["share_action"] == "give_skeleton_to_ai"
@@ -880,6 +885,8 @@ def _check_context_quick_json(workspace: Path) -> None:
     assert "Performance profile:" in payload["summary_text"]
     assert "Default noise protection:" in payload["summary_text"]
     assert "Next run:" in payload["summary_text"]
+    assert "Reuse policy:" in payload["summary_text"]
+    assert "explicit" in payload["summary_text"]
     assert "--reuse-if-fresh" in payload["summary_text"]
     assert Path(payload["recent_file"]).exists()
     assert payload["inspect_command_args"][:3] == ["context", "inspect", "--package-file"]
@@ -951,6 +958,10 @@ def _check_context_quick_json(workspace: Path) -> None:
     assert reused["reuse_guidance"]["status"] == "reused"
     assert reused["reuse_guidance"]["saved_work"] == "skipped recompression and restore recheck"
     assert reused["reuse_guidance"]["next_handoff_command_text"].startswith("ailoom handoff --reuse-if-fresh")
+    assert reused["reuse_policy"]["status"] == "explicit"
+    assert reused["reuse_policy"]["effective_reuse_if_fresh"] is True
+    assert reused["reuse_policy"]["recommended_command_text"].startswith("ailoom quick --reuse-if-fresh")
+    assert reused["reuse_policy"]["force_refresh_command_text"].startswith("ailoom quick --force-refresh")
     assert reused["performance_summary"]["status"] == "fast"
     assert reused["performance_summary"]["recommended_next_run"]["strategy"] == "reuse_if_fresh"
     assert reused["performance_summary"]["recommended_next_run"]["command_text"].startswith("ailoom handoff")
@@ -962,6 +973,7 @@ def _check_context_quick_json(workspace: Path) -> None:
     assert reused["restore_command_text"].startswith("ailoom restore --package-file")
     _assert_command_contains_option(reused["restore_command_text"], "--package-file", reused["manifest_file"])
     assert "Reused previous bundle:" in reused["summary_text"]
+    assert "Reuse policy:" in reused["summary_text"]
     assert "Saved time:" in reused["summary_text"]
     assert "ailoom handoff --reuse-if-fresh" in reused["summary_text"]
     assert "At a glance:" in reused["summary_text"]
@@ -2130,6 +2142,13 @@ def _check_handoff_auto_reuse_json(workspace: Path) -> None:
     assert first["entrypoint"] == "context-quick"
     assert first["quick_status"] == "ready"
     assert first.get("reuse_status", "") != "reused"
+    assert first["reuse_policy"]["status"] == "fresh_output"
+    assert first["reuse_policy"]["default_for_handoff"] is True
+    assert first["reuse_policy"]["effective_reuse_if_fresh"] is False
+    assert first["reuse_policy"]["recommended_command_text"] == "ailoom handoff"
+    assert first["reuse_policy"]["force_refresh_command_text"].startswith("ailoom handoff --force-refresh")
+    assert "Reuse policy:" in first["summary_text"]
+    assert "fresh_output" in first["summary_text"]
     assert Path(first["handoff"]["skeleton_file"]).exists()
     assert "--input-dir" not in first["performance_profile"]["next_run"]["reuse_command_text"]
     assert "--input-dir" not in first["performance_profile"]["next_run"]["fast_command_text"]
@@ -2143,7 +2162,14 @@ def _check_handoff_auto_reuse_json(workspace: Path) -> None:
     assert second["bundle_root"] == first["bundle_root"]
     assert second["handoff"]["skeleton_file"] == first["handoff"]["skeleton_file"]
     assert second["timings_ms"]["bundle"] == 0.0
+    assert second["reuse_policy"]["status"] == "active"
+    assert second["reuse_policy"]["default_for_handoff"] is True
+    assert second["reuse_policy"]["effective_reuse_if_fresh"] is True
+    assert second["reuse_policy"]["recommended_command_text"] == "ailoom handoff"
+    assert second["reuse_policy"]["force_refresh_command_text"].startswith("ailoom handoff --force-refresh")
     assert "Reused previous bundle:" in second["summary_text"]
+    assert "Reuse policy:" in second["summary_text"]
+    assert "Force refresh:" in second["summary_text"]
     assert "--input-dir" not in second["reuse_guidance"]["next_handoff_command_text"]
 
     forced_dir = project / "forced-handoff-bundle"

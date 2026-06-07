@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- added stable `reuse_policy` output to quick/handoff JSON and terminal summaries so users can see when daily handoff auto-reuse is active, when explicit output paths force a fresh bundle, and which `--force-refresh` command to run
 - added a zero-learning `ailoom` welcome panel for first-time users, plus top-level help visibility for `ailoom start`
 - expanded `ailoom clean` and `ailoom doctor --storage` with structured scope summaries, safety policies, global-install visibility, dry-run-first recommended cleanup commands, and explicit test/build artifact cleanup for benchmark-heavy test machines
 - added trial-report speed summaries with observed handoff time, slowest phase, reuse guidance, and estimated AI/agent token-reading speedup

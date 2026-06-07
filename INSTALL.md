@@ -59,12 +59,15 @@ If PowerShell cannot find `ailoom` yet, restart PowerShell or run the temporary 
 | `ailoom recent` | Finds the latest bundle, skeleton, manifest, and restore command |
 | `ailoom doctor --install` | Checks Python, PATH, and install-readiness status |
 
+Daily `ailoom handoff` is the fastest loop for real projects: it automatically reuses the last fresh bundle when the project has not changed. Run `ailoom handoff --force-refresh` when you intentionally want a new bundle, or pass `--output-dir` when you want a fresh bundle in a specific directory.
+
 ## What Success Looks Like
 
 After `ailoom handoff`, look for:
 
 - `Restore safety: OK`
 - `Token savings: ...`
+- `Reuse policy: ...`
 - `Give AI this file: .../context_skeleton.mcp`
 - `Keep for restore: .../context_manifest.json`
 

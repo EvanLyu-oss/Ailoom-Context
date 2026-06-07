@@ -877,10 +877,14 @@ def _check_context_quick_json(workspace: Path) -> None:
     assert payload["value_summary"]["next_best_command_text"].startswith("ailoom")
     assert payload["value_summary"]["token_savings"]["tokens_saved"] >= 0
     assert payload["value_summary"]["speed"]["elapsed_ms"] >= 0
+    assert payload["value_summary"]["agent_context_reading"]["estimated_speedup_x"] >= 0
+    assert payload["value_summary"]["agent_context_reading"]["token_reduction_percent"] >= 0
+    assert payload["value_summary"]["agent_context_reading"]["message"]
     assert payload["value_summary"]["handoff"]["status"] == "created"
     assert "Performance advice:" in payload["summary_text"]
     assert "User outcome:" in payload["summary_text"]
     assert "Value summary:" in payload["summary_text"]
+    assert "Agent reading:" in payload["summary_text"]
     assert "Performance summary:" in payload["summary_text"]
     assert "Performance profile:" in payload["summary_text"]
     assert "Default noise protection:" in payload["summary_text"]
@@ -970,6 +974,8 @@ def _check_context_quick_json(workspace: Path) -> None:
     assert reused["user_outcome"]["next_command_text"].startswith("ailoom handoff")
     assert reused["value_summary"]["handoff"]["status"] == "reused"
     assert reused["value_summary"]["next_best_command_text"].startswith("ailoom handoff")
+    assert reused["value_summary"]["agent_context_reading"]["estimated_speedup_x"] >= 0
+    assert reused["value_summary"]["agent_context_reading"]["message"]
     assert reused["restore_command_text"].startswith("ailoom restore --package-file")
     _assert_command_contains_option(reused["restore_command_text"], "--package-file", reused["manifest_file"])
     assert "Reused previous bundle:" in reused["summary_text"]
@@ -1143,8 +1149,12 @@ def _check_context_savings_json(workspace: Path) -> None:
     assert savings["value_summary"]["next_best_command_text"].startswith("ailoom")
     assert savings["value_summary"]["token_savings"]["source_tokens"] == savings["source_tokens"]
     assert savings["value_summary"]["token_savings"]["skeleton_tokens"] == savings["skeleton_tokens"]
+    assert savings["value_summary"]["agent_context_reading"]["estimated_speedup_x"] >= 0
+    assert savings["value_summary"]["agent_context_reading"]["token_reduction_percent"] >= 0
+    assert savings["value_summary"]["agent_context_reading"]["message"]
     assert "Ailoom Context Savings" in savings["summary_text"]
     assert "Value summary:" in savings["summary_text"]
+    assert "Agent reading:" in savings["summary_text"]
     assert "Token savings:" in savings["summary_text"]
     assert "Source tokens:" in savings["summary_text"]
     assert "Skeleton tokens:" in savings["summary_text"]
@@ -1690,6 +1700,8 @@ def _check_installer_lifecycle_json(workspace: Path) -> None:
     env["HOME"] = str(home)
     env["MCP_SKELETON_HOME"] = str(home / ".mcp-skeleton")
     env["PYTHON"] = _python310_plus()
+    env["PIP_NO_INDEX"] = "1"
+    env["PIP_DISABLE_PIP_VERSION_CHECK"] = "1"
     install = subprocess.run(
         ["sh", str(ROOT / "install.sh")],
         cwd=str(ROOT),
@@ -1704,6 +1716,7 @@ def _check_installer_lifecycle_json(workspace: Path) -> None:
     assert "Ailoom Context Install Ready" in install.stdout
     assert "PATH status:" in install.stdout
     assert "Command check:" in install.stdout
+    assert "Install mode:" in install.stdout
     assert "First run self-check:" in install.stdout
     assert "If command is not found later:" in install.stdout
     assert "PATH fix command:" in install.stdout
@@ -1723,6 +1736,7 @@ def _check_installer_lifecycle_json(workspace: Path) -> None:
     assert readiness["status"] == "ready"
     assert readiness["command_path"] == str(command)
     assert readiness["command_check"] == "ok"
+    assert readiness["install_method"] in {"package_with_metrics", "package_core", "source_runner"}
     assert readiness["path_status"] in {"ready", "needs_shell_setup"}
     assert readiness["recommended_first_command_text"].endswith("first-run")
     assert readiness["recommended_project_command_text"].endswith("handoff")

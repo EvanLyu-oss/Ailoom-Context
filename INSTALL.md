@@ -2,6 +2,8 @@
 
 Ailoom Context is a local command-line tool. It does not upload source code, text, bundles, or usage logs.
 
+The installer is designed to be tolerant of offline or restricted machines. It first tries the full package with tokenizer metrics, then falls back to the core package, and finally to a source-runner command wrapper if Python packaging build dependencies are unavailable. The install summary prints `Install mode:` so you can see which path was used.
+
 ## Confirm You Have The Current Beta
 
 Before reporting install or Windows compatibility issues, confirm the checkout or ZIP is the current beta:

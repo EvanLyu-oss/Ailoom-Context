@@ -35,7 +35,7 @@ Check the latest savings:
 ailoom savings
 ```
 
-Read the `Value summary` first. It tells you whether the current project shows strong token value, useful token value, a watch-level result, or a tiny-project result where the skeleton may not look smaller yet.
+Read the `Value summary` first. It tells you whether the current project shows strong token value, useful token value, a watch-level result, or a tiny-project result where the skeleton may not look smaller yet. It also shows estimated AI/agent context-reading speedup, calculated from source tokens versus skeleton tokens.
 
 ## Large repository
 
@@ -47,10 +47,10 @@ ailoom savings
 ailoom recent
 ```
 
-If the project has not changed, repeated handoffs can reuse the latest fresh bundle:
+If the project has not changed, repeated handoffs reuse the latest fresh bundle automatically:
 
 ```bash
-ailoom handoff --reuse-if-fresh
+ailoom handoff
 ```
 
 If the project changed and you want a new bundle:

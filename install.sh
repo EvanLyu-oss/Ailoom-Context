@@ -128,8 +128,31 @@ if [ "$MODE" = "update" ]; then
 else
   echo "Installing Ailoom Context..."
 fi
-"$VENV_DIR/bin/python" -m pip install --upgrade pip >/dev/null
-"$VENV_DIR/bin/python" -m pip install "$ROOT_DIR[context-metrics]" >/dev/null
+if "$VENV_DIR/bin/python" -m pip install --upgrade pip >/dev/null 2>&1; then
+  echo "Pip: upgraded"
+else
+  echo "Pip: upgrade skipped (continuing with bundled pip)"
+fi
+
+INSTALL_METHOD="package_with_metrics"
+if "$VENV_DIR/bin/python" -m pip install --no-build-isolation "$ROOT_DIR[context-metrics]" >/dev/null 2>&1; then
+  echo "Package install: full package with tokenizer metrics"
+elif "$VENV_DIR/bin/python" -m pip install --no-build-isolation "$ROOT_DIR" >/dev/null 2>&1; then
+  INSTALL_METHOD="package_core"
+  echo "Package install: core package (tokenizer metrics extra unavailable)"
+else
+  INSTALL_METHOD="source_runner"
+  echo "Package install: source runner fallback"
+  cat > "$VENV_DIR/bin/ailoom" <<EOF
+#!/usr/bin/env sh
+PYTHONPATH="$ROOT_DIR\${PYTHONPATH:+:\$PYTHONPATH}" exec "$VENV_DIR/bin/python" -m cli "\$@"
+EOF
+  cat > "$VENV_DIR/bin/mcp-skeleton" <<EOF
+#!/usr/bin/env sh
+PYTHONPATH="$ROOT_DIR\${PYTHONPATH:+:\$PYTHONPATH}" exec "$VENV_DIR/bin/python" -m cli "\$@"
+EOF
+  chmod +x "$VENV_DIR/bin/ailoom" "$VENV_DIR/bin/mcp-skeleton"
+fi
 
 printf '%s\n' "managed-by=ailoom" "source=$ROOT_DIR" > "$MARKER_FILE"
 ln -sf "$VENV_DIR/bin/ailoom" "$COMMAND_PATH"
@@ -187,12 +210,13 @@ else
   INSTALL_DOCTOR_COMMAND="$COMMAND_PATH doctor --install"
 fi
 echo "Shell profile: $SHELL_PROFILE_STATUS"
+echo "Install mode: $INSTALL_METHOD"
 if [ "$SETUP_SHELL" = "1" ]; then
   echo "Shell profile file: $SHELL_PROFILE"
   echo "Restart your terminal or run: export PATH=\"$BIN_DIR:\$PATH\""
 fi
 
-"$VENV_DIR/bin/python" - "$READINESS_FILE" "$COMMAND_PATH" "$INSTALL_DIR" "$BIN_DIR" "$PATH_STATUS" "$SHELL_PROFILE_STATUS" "$FIRST_RUN_COMMAND" "$HANDOFF_COMMAND" "$QUICK_COMMAND" "$VERSION_COMMAND" "$INSTALL_DOCTOR_COMMAND" "$SHELL_PROFILE" <<'PY'
+"$VENV_DIR/bin/python" - "$READINESS_FILE" "$COMMAND_PATH" "$INSTALL_DIR" "$BIN_DIR" "$PATH_STATUS" "$SHELL_PROFILE_STATUS" "$FIRST_RUN_COMMAND" "$HANDOFF_COMMAND" "$QUICK_COMMAND" "$VERSION_COMMAND" "$INSTALL_DOCTOR_COMMAND" "$SHELL_PROFILE" "$INSTALL_METHOD" <<'PY'
 import json
 import sys
 from pathlib import Path
@@ -210,7 +234,8 @@ from pathlib import Path
     version_command,
     install_doctor_command,
     shell_profile,
-) = sys.argv[1:13]
+    install_method,
+) = sys.argv[1:14]
 
 payload = {
     "schema": "ailoom.install-readiness.v1",
@@ -223,6 +248,7 @@ payload = {
     "path_status": path_status,
     "shell_profile_status": shell_profile_status,
     "shell_profile": shell_profile,
+    "install_method": install_method,
     "recommended_first_command_text": first_run_command,
     "recommended_project_command_text": handoff_command,
     "quick_command_text": quick_command,

@@ -1791,6 +1791,34 @@ def _classify_value_summary(*, tokens_saved: int, savings_percent: float, source
     return "watch"
 
 
+def _build_agent_context_reading_summary(*, source_tokens: int, skeleton_tokens: int, savings_percent: float) -> dict[str, Any]:
+    raw_speedup = round(source_tokens / skeleton_tokens, 2) if source_tokens > 0 and skeleton_tokens > 0 else 0.0
+    speedup_x = raw_speedup if raw_speedup >= 1.0 else (1.0 if raw_speedup > 0 else 0.0)
+    reduction_percent = round(max(0.0, savings_percent), 2)
+    if speedup_x >= 3.0 or reduction_percent >= 60:
+        status = "strong"
+    elif speedup_x >= 1.25 or reduction_percent >= 20:
+        status = "useful"
+    elif source_tokens > 0 and skeleton_tokens > 0:
+        status = "watch"
+    else:
+        status = "unknown"
+    if speedup_x > 1.0:
+        message = f"AI/agent context reading can inspect about {speedup_x}x fewer input tokens from the skeleton"
+    elif status == "watch":
+        message = "this input is small or dense; token-reading speedup may become visible on larger projects"
+    else:
+        message = "run ailoom handoff first to capture token-reading speedup"
+    return {
+        "status": status,
+        "estimated_speedup_x": speedup_x,
+        "token_reduction_percent": reduction_percent,
+        "source_tokens": source_tokens,
+        "skeleton_tokens": skeleton_tokens,
+        "message": message,
+    }
+
+
 def _build_value_summary(
     *,
     tokens_saved: int,
@@ -1839,6 +1867,11 @@ def _build_value_summary(
             "status": "fast" if elapsed_ms < 500 else "ok" if elapsed_ms < 2500 else "slow",
             "reused": reused,
         },
+        "agent_context_reading": _build_agent_context_reading_summary(
+            source_tokens=source_tokens,
+            skeleton_tokens=skeleton_tokens,
+            savings_percent=savings_percent,
+        ),
         "handoff": {
             "status": "reused" if reused else "created",
             "share_file": share_file,
@@ -2217,6 +2250,7 @@ def _build_context_recent_payload(args: argparse.Namespace) -> tuple[dict[str, A
 
 def _render_context_savings_summary(payload: dict[str, Any]) -> str:
     value_summary = payload.get("value_summary") or {}
+    agent_reading = value_summary.get("agent_context_reading") or {}
     lines = [
         "Ailoom Context Savings",
         "",
@@ -2230,6 +2264,7 @@ def _render_context_savings_summary(payload: dict[str, Any]) -> str:
         "Value summary:",
         f"- Status: {value_summary.get('status', '')}",
         f"- Headline: {value_summary.get('headline', '')}",
+        f"- Agent reading: {agent_reading.get('estimated_speedup_x', 0)}x fewer input tokens ({agent_reading.get('token_reduction_percent', 0)}% reduction)",
         f"- Recommendation: {value_summary.get('recommendation', '')}",
         f"- Next command: {value_summary.get('next_best_command_text', '') or '(not available)'}",
         "",
@@ -2251,6 +2286,8 @@ def _render_context_savings_summary(payload: dict[str, Any]) -> str:
 
 
 def _render_context_savings_report(payload: dict[str, Any]) -> str:
+    value_summary = payload.get("value_summary") or {}
+    agent_reading = value_summary.get("agent_context_reading") or {}
     return "\n".join([
         "# Ailoom Context Savings Report",
         "",
@@ -2265,6 +2302,9 @@ def _render_context_savings_report(payload: dict[str, Any]) -> str:
         f"tokens_saved: {payload.get('tokens_saved', 0)}",
         f"savings_percent: {payload.get('savings_percent', 0)}",
         f"token_direction: {payload.get('token_direction', '')}",
+        f"agent_context_reading_speedup_x: {agent_reading.get('estimated_speedup_x', 0)}",
+        f"agent_context_reading_reduction_percent: {agent_reading.get('token_reduction_percent', 0)}",
+        f"agent_context_reading_message: {agent_reading.get('message', '')}",
         "",
         "## Files",
         f"source_root: {payload.get('source_root', '')}",
@@ -3259,11 +3299,13 @@ def _render_context_quick_summary(payload: dict[str, Any]) -> str:
             f"- Force refresh: {reuse_policy.get('force_refresh_command_text', '') or '(not available)'}",
         ])
     if value_summary:
+        agent_reading = value_summary.get("agent_context_reading") or {}
         lines.extend([
             "",
             "Value summary:",
             f"- Status: {value_summary.get('status', '')}",
             f"- Headline: {value_summary.get('headline', '')}",
+            f"- Agent reading: {agent_reading.get('estimated_speedup_x', 0)}x fewer input tokens ({agent_reading.get('token_reduction_percent', 0)}% reduction)",
             f"- Recommendation: {value_summary.get('recommendation', '')}",
             f"- Next best command: {value_summary.get('next_best_command_text', '') or '(not available)'}",
         ])

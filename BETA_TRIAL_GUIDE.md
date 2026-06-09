@@ -35,6 +35,7 @@ Run this inside a project you want to hand to an AI or IDE:
 
 ```bash
 ailoom handoff
+ailoom next
 ```
 
 This creates a restore-safe bundle under `.workspace_ail/`.
@@ -72,6 +73,14 @@ ailoom handoff
 
 If the project has not changed, Ailoom Context reuses the previous fresh bundle instead of recompressing.
 
+If you are unsure what to do after any run:
+
+```bash
+ailoom next
+```
+
+It tells you whether to create the first handoff, share a fresh skeleton, refresh stale context, check savings, or write a trial report.
+
 Force a fresh bundle when needed:
 
 ```bash
@@ -103,7 +112,7 @@ ailoom quick --fast
 For unchanged projects:
 
 ```bash
-ailoom handoff --reuse-if-fresh
+ailoom handoff
 ```
 
 ## What to report back

@@ -38,6 +38,7 @@ flowchart LR
 | Patch and replay gates | Dry-run, policy-aware, and merge-aware update flows |
 | Incremental handoff | Compress only the git-scoped change surface when you need speed |
 | Benchmarks and diagnostics | See token savings, speed profile, warnings, and restore safety |
+| Launch-ready trial path | `GOOD_FIRST_TRIAL.md` gets new users from install to feedback quickly |
 
 ## Install in 30 Seconds
 
@@ -63,6 +64,10 @@ Look for `version_check: ok`, `release_channel: v1-beta`, and `expected_beta_tag
 New-user guide: [docs/USER_GUIDE.md](docs/USER_GUIDE.md)
 
 Beta users: start here with [docs/BETA_TESTING.md](docs/BETA_TESTING.md), then send results with [FEEDBACK_TEMPLATE.md](FEEDBACK_TEMPLATE.md).
+
+Trying it for the first time? Use [GOOD_FIRST_TRIAL.md](GOOD_FIRST_TRIAL.md).
+
+Public proof points and launch material: [docs/SHOWCASE.md](docs/SHOWCASE.md), [docs/LAUNCH_POSTS.md](docs/LAUNCH_POSTS.md), [docs/PROMOTION_PLAN.md](docs/PROMOTION_PLAN.md).
 
 Release checklist and notes template: [docs/RELEASE_CHECKLIST.md](docs/RELEASE_CHECKLIST.md), [docs/GITHUB_RELEASE_TEMPLATE.md](docs/GITHUB_RELEASE_TEMPLATE.md).
 

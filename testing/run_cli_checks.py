@@ -1313,12 +1313,20 @@ def _check_user_guides_docs_ok(workspace: Path) -> None:
     release_template = ROOT / "docs" / "GITHUB_RELEASE_TEMPLATE.md"
     v1_beta_notes = ROOT / "docs" / "V1_BETA_RELEASE_NOTES.md"
     feedback_template = ROOT / "FEEDBACK_TEMPLATE.md"
+    good_first_trial = ROOT / "GOOD_FIRST_TRIAL.md"
+    showcase = ROOT / "docs" / "SHOWCASE.md"
+    launch_posts = ROOT / "docs" / "LAUNCH_POSTS.md"
+    promotion_plan = ROOT / "docs" / "PROMOTION_PLAN.md"
     assert install_doc.exists()
     assert user_guide.exists()
     assert beta_testing.exists()
     assert release_checklist.exists()
     assert release_template.exists()
     assert v1_beta_notes.exists()
+    assert good_first_trial.exists()
+    assert showcase.exists()
+    assert launch_posts.exists()
+    assert promotion_plan.exists()
     install_text = install_doc.read_text(encoding="utf-8")
     user_text = user_guide.read_text(encoding="utf-8")
     beta_text = beta_testing.read_text(encoding="utf-8")
@@ -1326,6 +1334,10 @@ def _check_user_guides_docs_ok(workspace: Path) -> None:
     release_template_text = release_template.read_text(encoding="utf-8")
     v1_beta_text = v1_beta_notes.read_text(encoding="utf-8")
     feedback_text = feedback_template.read_text(encoding="utf-8")
+    good_first_trial_text = good_first_trial.read_text(encoding="utf-8")
+    showcase_text = showcase.read_text(encoding="utf-8")
+    launch_posts_text = launch_posts.read_text(encoding="utf-8")
+    promotion_plan_text = promotion_plan.read_text(encoding="utf-8")
     assert "Install in 30 seconds" in install_text
     assert "Confirm You Have The Current Beta" in install_text
     assert "v1.0.0-beta.1" in install_text
@@ -1352,8 +1364,22 @@ def _check_user_guides_docs_ok(workspace: Path) -> None:
     assert "v1_user_experience_readiness" in v1_beta_text
     assert "ailoom trial-report --write-report" in v1_beta_text
     assert "Attach or paste the savings report" in feedback_text
+    assert "ailoom next" in feedback_text
     assert "ailoom trial-report --write-report" in feedback_text
     assert "Was the token savings report useful" in feedback_text
+    assert "Good First Trial" in good_first_trial_text
+    assert "ailoom next" in good_first_trial_text
+    assert "carwyn910@gmail.com" in good_first_trial_text
+    assert "Ailoom Context Showcase" in showcase_text
+    assert "93/93" in showcase_text
+    assert "local-first" in showcase_text
+    assert "Launch Posts" in launch_posts_text
+    assert "Show HN" in launch_posts_text
+    assert "Social Image Prompt" in launch_posts_text
+    assert "github.com/EvanLyu-oss/Ailoom-Context" in launch_posts_text
+    assert "Promotion Plan" in promotion_plan_text
+    assert "GitHub stars: 7" in promotion_plan_text
+    assert "30-Day Goals" in promotion_plan_text
 
 
 def _check_context_quick_windows_command_text_json(workspace: Path) -> None:

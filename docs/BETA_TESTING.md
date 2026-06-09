@@ -45,6 +45,7 @@ Run this from a real project directory:
 
 ```bash
 ailoom handoff --copy --open
+ailoom next
 ailoom savings --write-report ailoom-savings-report.md
 ailoom trial-report --write-report ailoom-trial-report.md
 ```
@@ -53,6 +54,7 @@ Expected result:
 
 - `context_skeleton.mcp` is the file to share with AI or an IDE
 - restore package files are clearly marked as keep-local
+- `ailoom next` explains whether to share, refresh, check savings, or write a report
 - the savings report contains source tokens, skeleton tokens, tokens saved, and savings percent
 - the trial report combines value summary, token savings, generated storage risk, safety boundaries, and feedback questions
 
@@ -72,7 +74,8 @@ Expected result:
 Run handoff again without changing the project:
 
 ```bash
-ailoom handoff --reuse-if-fresh
+ailoom handoff
+ailoom next
 ailoom savings
 ```
 
@@ -90,6 +93,7 @@ Please send:
 - install method
 - first `ailoom doctor --install` result
 - first `ailoom handoff` result
+- `ailoom next` result
 - `ailoom savings --write-report ailoom-savings-report.md` output
 - `ailoom trial-report --write-report ailoom-trial-report.md` output
 - whether speed felt acceptable

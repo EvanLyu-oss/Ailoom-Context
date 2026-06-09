@@ -27,6 +27,7 @@ ailoom version
 ailoom doctor --install
 ailoom handoff
 ailoom handoff
+ailoom next
 ailoom savings
 ailoom savings --write-report ailoom-savings-report.md
 ailoom trial-report --write-report ailoom-trial-report.md
@@ -44,6 +45,7 @@ Add any other commands you tried:
 - Did install complete successfully:
 - Did `doctor --install` make sense:
 - Did first `handoff` complete:
+- Did `ailoom next` make the next action obvious:
 - First handoff time shown:
 - Reuse handoff time shown:
 - Restore safety shown as OK:
@@ -89,6 +91,6 @@ If a command failed, include:
 - Was the first successful command obvious:
 - Was the safety boundary clear:
 - Was the speed acceptable:
-- Did the second `handoff --reuse-if-fresh` feel faster:
+- Did the second `ailoom handoff` reuse feel faster:
 - Would you keep using this during development:
 - What is the one thing that should improve before v1.0:

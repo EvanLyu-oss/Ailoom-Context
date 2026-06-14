@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- added v1.0 stable readiness documentation and strengthened the zero-learning install, handoff, next, savings, safety, and cleanup path across README, INSTALL, USER_GUIDE, release checklist, and the top-level welcome screen
 - added Launch Kit documentation for public promotion: first-trial flow, showcase proof points, launch post drafts, social image prompt, and a 30-day promotion plan
 - added `ailoom next` / `context next`, a state-aware project guide that tells users whether to create the first handoff, share a fresh skeleton, refresh stale context, check savings, or write a trial report
 - hardened the macOS installer for offline/restricted machines with no-index testing, no-build-isolation package installs, core-package fallback, source-runner fallback, and install-method reporting

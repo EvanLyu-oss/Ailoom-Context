@@ -21,6 +21,42 @@ Ailoom Context helps you hand large codebases or long manuscripts to an AI/IDE w
 - `AILOOM-SKL.v1`: a small structural skeleton you can share with AI tools.
 - Restore package: an exact machine-readable package you keep locally for byte-safe restore, patching, and replay.
 
+## Try It In 3 Commands
+
+From a cloned or downloaded checkout:
+
+```bash
+sh install.sh --setup-shell
+ailoom first-run
+ailoom handoff --copy --open
+```
+
+Then ask Ailoom what to do next and check the value:
+
+```bash
+ailoom next
+ailoom savings
+```
+
+The intended first-user loop is deliberately small:
+
+| Step | Command | Result |
+| --- | --- | --- |
+| Install and verify | `sh install.sh --setup-shell` then `ailoom first-run` | Confirms Python/PATH, runs a safe demo, and explains the first real project command |
+| Hand off a project | `ailoom handoff --copy --open` | Creates `context_skeleton.mcp` for AI/IDE and keeps restore files local |
+| Decide next action | `ailoom next` | Tells you whether to share, refresh, check savings, or clean storage |
+| See token value | `ailoom savings` | Shows source tokens, skeleton tokens, tokens saved, savings percent, and agent-reading estimate |
+
+Current beta proof points:
+
+| Check | Current signal |
+| --- | --- |
+| Release readiness | `7/7` checks passing on macOS |
+| Python smoke | `61/61` checks passing |
+| Benchmark restore | `93/93` cases restore-verified |
+| Benchmark status | `ready / ready / ok` |
+| Dogfood | Ailoom Context compresses and restores its own repository byte-exactly |
+
 ```mermaid
 flowchart LR
     A["Large repo or long document"] --> B["ailoom handoff"]
@@ -72,6 +108,8 @@ Public proof points and launch material: [docs/SHOWCASE.md](docs/SHOWCASE.md), [
 Release checklist and notes template: [docs/RELEASE_CHECKLIST.md](docs/RELEASE_CHECKLIST.md), [docs/GITHUB_RELEASE_TEMPLATE.md](docs/GITHUB_RELEASE_TEMPLATE.md).
 
 Current beta notes: [docs/V1_BETA_RELEASE_NOTES.md](docs/V1_BETA_RELEASE_NOTES.md).
+
+v1.0 stable target: [docs/V1_STABLE_READINESS.md](docs/V1_STABLE_READINESS.md).
 
 ## Author
 

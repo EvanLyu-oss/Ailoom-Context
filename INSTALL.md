@@ -4,6 +4,36 @@ Ailoom Context is a local command-line tool. It does not upload source code, tex
 
 The installer is designed to be tolerant of offline or restricted machines. It first tries the full package with tokenizer metrics, then falls back to the core package, and finally to a source-runner command wrapper if Python packaging build dependencies are unavailable. The install summary prints `Install mode:` so you can see which path was used.
 
+## The No-Learning Path
+
+If you do not want to read the docs first, use this flow:
+
+```bash
+sh install.sh --setup-shell
+ailoom first-run
+ailoom handoff --copy --open
+ailoom next
+ailoom savings
+```
+
+What this proves:
+
+- the command is installed and runnable
+- a safe demo can compress and restore
+- your real project can produce an AI-facing skeleton
+- Ailoom tells you the next command instead of making you learn the bundle format
+- token savings are visible in one report
+
+For Windows PowerShell, use:
+
+```powershell
+.\install.ps1 -SetupShell
+ailoom first-run
+ailoom handoff --copy --open
+ailoom next
+ailoom savings
+```
+
 ## Confirm You Have The Current Beta
 
 Before reporting install or Windows compatibility issues, confirm the checkout or ZIP is the current beta:
@@ -77,3 +107,17 @@ After `ailoom handoff`, look for:
 - `Keep for restore: .../context_manifest.json`
 
 Share the skeleton with AI or your IDE. Keep restore packages local unless you intentionally want to share raw source bytes.
+
+## If Something Feels Wrong
+
+Run these diagnostics before changing files manually:
+
+```bash
+ailoom version
+ailoom doctor --install
+ailoom next
+ailoom doctor --storage
+ailoom clean --dry-run --all
+```
+
+The install doctor checks Python, PATH, release identity, and the install-readiness manifest. The storage doctor reports generated artifact size before cleanup. The clean command should be run with `--dry-run` first so you can verify the exact generated roots it will target.

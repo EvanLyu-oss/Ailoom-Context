@@ -59,8 +59,16 @@ Check:
 - [INSTALL.md](../INSTALL.md)
 - [docs/USER_GUIDE.md](USER_GUIDE.md)
 - [docs/BETA_TESTING.md](BETA_TESTING.md)
+- [docs/V1_STABLE_READINESS.md](V1_STABLE_READINESS.md)
 - [FEEDBACK_TEMPLATE.md](../FEEDBACK_TEMPLATE.md)
 - [SECURITY.md](../SECURITY.md)
+
+Required documentation result:
+
+- README first screen shows the 3-command install / first-run / handoff path.
+- INSTALL shows the no-learning path for macOS and Windows.
+- USER_GUIDE starts with the five-minute loop.
+- V1 stable readiness states install, first project, value, safety, performance, and release gates.
 
 ## 5. Release Notes
 

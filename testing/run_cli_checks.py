@@ -1312,33 +1312,40 @@ def _check_user_guides_docs_ok(workspace: Path) -> None:
     release_checklist = ROOT / "docs" / "RELEASE_CHECKLIST.md"
     release_template = ROOT / "docs" / "GITHUB_RELEASE_TEMPLATE.md"
     v1_beta_notes = ROOT / "docs" / "V1_BETA_RELEASE_NOTES.md"
+    v1_stable_readiness = ROOT / "docs" / "V1_STABLE_READINESS.md"
     feedback_template = ROOT / "FEEDBACK_TEMPLATE.md"
     good_first_trial = ROOT / "GOOD_FIRST_TRIAL.md"
     showcase = ROOT / "docs" / "SHOWCASE.md"
     launch_posts = ROOT / "docs" / "LAUNCH_POSTS.md"
     promotion_plan = ROOT / "docs" / "PROMOTION_PLAN.md"
+    readme = ROOT / "README.md"
     assert install_doc.exists()
     assert user_guide.exists()
     assert beta_testing.exists()
     assert release_checklist.exists()
     assert release_template.exists()
     assert v1_beta_notes.exists()
+    assert v1_stable_readiness.exists()
     assert good_first_trial.exists()
     assert showcase.exists()
     assert launch_posts.exists()
     assert promotion_plan.exists()
+    assert readme.exists()
     install_text = install_doc.read_text(encoding="utf-8")
     user_text = user_guide.read_text(encoding="utf-8")
     beta_text = beta_testing.read_text(encoding="utf-8")
     release_checklist_text = release_checklist.read_text(encoding="utf-8")
     release_template_text = release_template.read_text(encoding="utf-8")
     v1_beta_text = v1_beta_notes.read_text(encoding="utf-8")
+    v1_stable_text = v1_stable_readiness.read_text(encoding="utf-8")
     feedback_text = feedback_template.read_text(encoding="utf-8")
     good_first_trial_text = good_first_trial.read_text(encoding="utf-8")
     showcase_text = showcase.read_text(encoding="utf-8")
     launch_posts_text = launch_posts.read_text(encoding="utf-8")
     promotion_plan_text = promotion_plan.read_text(encoding="utf-8")
+    readme_text = readme.read_text(encoding="utf-8")
     assert "Install in 30 seconds" in install_text
+    assert "The No-Learning Path" in install_text
     assert "Confirm You Have The Current Beta" in install_text
     assert "v1.0.0-beta.1" in install_text
     assert "ailoom version --json" in install_text
@@ -1346,6 +1353,8 @@ def _check_user_guides_docs_ok(workspace: Path) -> None:
     assert "Windows PowerShell" in install_text
     assert "ailoom demo" in install_text
     assert "ailoom handoff" in install_text
+    assert "ailoom clean --dry-run --all" in install_text
+    assert "Five-Minute Loop" in user_text
     assert "AI coding handoff" in user_text
     assert "Large repository" in user_text
     assert "Long manuscript" in user_text
@@ -1363,6 +1372,17 @@ def _check_user_guides_docs_ok(workspace: Path) -> None:
     assert "v1_beta_readiness" in v1_beta_text
     assert "v1_user_experience_readiness" in v1_beta_text
     assert "ailoom trial-report --write-report" in v1_beta_text
+    assert "Ailoom Context v1.0 Stable Readiness" in v1_stable_text
+    assert "Zero-Learning Command Loop" in v1_stable_text
+    assert "Install Experience Gate" in v1_stable_text
+    assert "First Project Gate" in v1_stable_text
+    assert "Value Gate" in v1_stable_text
+    assert "Safety Gate" in v1_stable_text
+    assert "Performance Gate" in v1_stable_text
+    assert "docs/V1_STABLE_READINESS.md" in readme_text
+    assert "Try It In 3 Commands" in readme_text
+    assert "Current beta proof points" in readme_text
+    assert "93/93" in readme_text
     assert "Attach or paste the savings report" in feedback_text
     assert "ailoom next" in feedback_text
     assert "ailoom trial-report --write-report" in feedback_text
@@ -2114,6 +2134,13 @@ def _check_zero_learning_welcome_output_json(workspace: Path) -> None:
     del workspace
     proc = _run([sys.executable, "-m", "cli"])
     assert "Ailoom Context Welcome" in proc.stdout
+    assert "3-command loop:" in proc.stdout
+    assert "1. ailoom first-run" in proc.stdout
+    assert "2. ailoom handoff --copy --open" in proc.stdout
+    assert "3. ailoom savings" in proc.stdout
+    assert "Share vs keep local:" in proc.stdout
+    assert "Give AI: context_skeleton.mcp" in proc.stdout
+    assert "Keep local: context_manifest.json and restore packages" in proc.stdout
     assert "Copy/paste first:" in proc.stdout
     assert "ailoom first-run" in proc.stdout
     assert "Daily project command:" in proc.stdout

@@ -2,6 +2,26 @@
 
 This guide focuses on real workflows: AI coding handoff, large repository review, long manuscript context, and Patch replay.
 
+## Five-Minute Loop
+
+If you are using Ailoom Context with an AI coding agent for the first time, use this loop before reading the rest of the guide:
+
+```bash
+ailoom first-run
+ailoom handoff --copy --open
+ailoom next
+ailoom savings
+ailoom safety
+```
+
+The loop should answer five questions:
+
+- Is the local install healthy?
+- Which file should I give to AI?
+- Which restore files should stay local?
+- Did this project save meaningful tokens?
+- What should I do next?
+
 ## AI Coding Handoff
 
 Use this when you want an AI assistant or IDE agent to understand a project without pasting the whole source tree.

@@ -8,7 +8,7 @@ Generate local demo materials first:
 python3 testing/demo_artifact_pack.py --force --json
 ```
 
-This writes JSON outputs for `version`, `handoff`, `savings`, `next`, `safety`, and `clean --dry-run`, plus `DEMO_SCREENSHOT_NOTES.md` for screenshots and captions.
+This writes JSON outputs for `version`, `handoff`, `savings`, `next`, `safety`, and `clean --dry-run`, plus `DEMO_SCREENSHOT_NOTES.md` for screenshots and `SOCIAL_CAPTION.md` for copy/paste posting.
 
 ## Goal
 

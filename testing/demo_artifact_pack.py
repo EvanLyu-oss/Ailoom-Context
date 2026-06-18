@@ -118,6 +118,41 @@ def _snippet_from_payloads(payloads: dict[str, dict[str, Any]]) -> str:
     return "\n".join(lines) + "\n"
 
 
+def _social_caption(payloads: dict[str, dict[str, Any]]) -> str:
+    handoff = payloads["handoff"]
+    savings = payloads["savings"]
+    handoff_info = handoff.get("handoff") or {}
+    lines = [
+        "Ailoom Context beta demo",
+        "",
+        "I am building a local-first context compression tool for AI coding agents.",
+        "",
+        "What it does:",
+        "- turns a project into a compact AI-facing skeleton",
+        "- keeps exact restore files local",
+        "- shows token savings and restore safety",
+        "- no telemetry and no source upload",
+        "",
+        "Demo result:",
+        f"- Restore safety: {'OK' if handoff.get('restore_safe') else 'CHECK'}",
+        f"- Source tokens: {savings.get('source_tokens', 0)}",
+        f"- Skeleton tokens: {savings.get('skeleton_tokens', 0)}",
+        f"- Tokens saved: {savings.get('tokens_saved', 0)}",
+        f"- Savings: {savings.get('savings_percent', 0)}%",
+        "",
+        "Files:",
+        f"- Give AI: {handoff_info.get('skeleton_file', 'context_skeleton.mcp')}",
+        f"- Keep local: {handoff.get('manifest_file', 'context_manifest.json')}",
+        "",
+        "GitHub:",
+        "https://github.com/EvanLyu-oss/Ailoom-Context",
+        "",
+        "Author:",
+        "Evan <carwyn910@gmail.com>",
+    ]
+    return "\n".join(lines) + "\n"
+
+
 def build_demo_pack(args: argparse.Namespace) -> dict[str, Any]:
     output_dir = Path(args.output_dir or DEFAULT_OUTPUT_DIR).resolve()
     if output_dir.exists() and args.force:
@@ -138,6 +173,8 @@ def build_demo_pack(args: argparse.Namespace) -> dict[str, Any]:
         _write_json(artifacts_dir / f"{name}.json", payload)
     screenshot_notes = output_dir / "DEMO_SCREENSHOT_NOTES.md"
     screenshot_notes.write_text(_snippet_from_payloads(payloads), encoding="utf-8")
+    social_caption = output_dir / "SOCIAL_CAPTION.md"
+    social_caption.write_text(_social_caption(payloads), encoding="utf-8")
     status = "ok" if all(payload.get("_returncode") == 0 for payload in payloads.values()) else "error"
     summary = {
         "status": status,
@@ -146,6 +183,7 @@ def build_demo_pack(args: argparse.Namespace) -> dict[str, Any]:
         "output_dir": str(output_dir),
         "bundle_dir": str(bundle_dir),
         "screenshot_notes": str(screenshot_notes),
+        "social_caption": str(social_caption),
         "artifacts": {name: str(artifacts_dir / f"{name}.json") for name in payloads},
         "handoff_restore_safe": bool(payloads["handoff"].get("restore_safe")),
         "savings_percent": payloads["savings"].get("savings_percent", 0),

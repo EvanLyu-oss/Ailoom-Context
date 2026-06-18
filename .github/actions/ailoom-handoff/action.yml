@@ -1,0 +1,73 @@
+name: "Ailoom Context Handoff"
+description: "Create a local Ailoom Context skeleton handoff and token savings report in CI."
+author: "Evan <carwyn910@gmail.com>"
+
+inputs:
+  input-dir:
+    description: "Project directory to compress."
+    required: false
+    default: "."
+  output-dir:
+    description: "Directory for the generated Ailoom bundle."
+    required: false
+    default: ".workspace_ail/github-action-handoff"
+  result-dir:
+    description: "Directory for action JSON results."
+    required: false
+    default: ".workspace_ail/github-action-results"
+  install-extras:
+    description: "Install tokenizer metrics extras when possible."
+    required: false
+    default: "true"
+
+outputs:
+  handoff-json:
+    description: "Path to the handoff JSON result."
+    value: ${{ steps.ailoom.outputs.handoff-json }}
+  savings-json:
+    description: "Path to the savings JSON result."
+    value: ${{ steps.ailoom.outputs.savings-json }}
+  skeleton-file:
+    description: "Path to the generated context_skeleton.mcp file."
+    value: ${{ steps.ailoom.outputs.skeleton-file }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Install Ailoom Context
+      shell: bash
+      run: |
+        set -euo pipefail
+        if [ "${{ inputs.install-extras }}" = "true" ]; then
+          python3 -m pip install '.[context-metrics]' || python3 -m pip install .
+        else
+          python3 -m pip install .
+        fi
+
+    - name: Create Ailoom handoff
+      id: ailoom
+      shell: bash
+      run: |
+        set -euo pipefail
+        mkdir -p "${{ inputs.result-dir }}"
+        ailoom handoff \
+          --input-dir "${{ inputs.input-dir }}" \
+          --output-dir "${{ inputs.output-dir }}" \
+          --json > "${{ inputs.result-dir }}/handoff.json"
+        ailoom savings \
+          --input-dir "${{ inputs.input-dir }}" \
+          --json > "${{ inputs.result-dir }}/savings.json"
+        python3 - <<'PY'
+        import json
+        import os
+        from pathlib import Path
+
+        handoff_path = Path("${{ inputs.result-dir }}") / "handoff.json"
+        payload = json.loads(handoff_path.read_text(encoding="utf-8"))
+        skeleton = (payload.get("handoff") or {}).get("skeleton_file", "")
+        output_path = Path(os.environ["GITHUB_OUTPUT"])
+        with output_path.open("a", encoding="utf-8") as fh:
+            fh.write(f"handoff-json={handoff_path}\n")
+            fh.write(f"savings-json={Path('${{ inputs.result-dir }}') / 'savings.json'}\n")
+            fh.write(f"skeleton-file={skeleton}\n")
+        PY

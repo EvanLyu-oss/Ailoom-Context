@@ -52,7 +52,7 @@ Current beta proof points:
 | Check | Current signal |
 | --- | --- |
 | Release readiness | `7/7` checks passing on macOS |
-| Python smoke | `65/65` checks passing |
+| Python smoke | `66/66` checks passing |
 | Benchmark restore | `93/93` cases restore-verified |
 | Benchmark status | `ready / ready / ok` |
 | Dogfood | Ailoom Context compresses and restores its own repository byte-exactly |
@@ -105,9 +105,9 @@ Trying it for the first time? Use [GOOD_FIRST_TRIAL.md](GOOD_FIRST_TRIAL.md).
 
 Public proof points and launch material: [docs/SHOWCASE.md](docs/SHOWCASE.md), [docs/LAUNCH_POSTS.md](docs/LAUNCH_POSTS.md), [docs/PROMOTION_PLAN.md](docs/PROMOTION_PLAN.md).
 
-Integration foundation: [docs/INTEGRATION_CONTRACT.md](docs/INTEGRATION_CONTRACT.md), [docs/AILOOM_SKL_V1_SPEC.md](docs/AILOOM_SKL_V1_SPEC.md), [docs/VSCODE_EXTENSION_MVP.md](docs/VSCODE_EXTENSION_MVP.md), [docs/COMPETITIVE_BENCHMARK_PLAN.md](docs/COMPETITIVE_BENCHMARK_PLAN.md), [docs/DEMO_SCRIPT_2_MIN.md](docs/DEMO_SCRIPT_2_MIN.md).
+Integration foundation: [docs/INTEGRATION_CONTRACT.md](docs/INTEGRATION_CONTRACT.md), [docs/AILOOM_SKL_V1_SPEC.md](docs/AILOOM_SKL_V1_SPEC.md), [docs/VSCODE_EXTENSION_MVP.md](docs/VSCODE_EXTENSION_MVP.md), [docs/GITHUB_ACTION_MVP.md](docs/GITHUB_ACTION_MVP.md), [docs/COMPETITIVE_BENCHMARK_PLAN.md](docs/COMPETITIVE_BENCHMARK_PLAN.md), [docs/DEMO_SCRIPT_2_MIN.md](docs/DEMO_SCRIPT_2_MIN.md).
 
-Early integration code lives under `integrations/vscode/`, and reproducible proof helpers live in `testing/competitive_benchmark.py` and `testing/demo_artifact_pack.py`.
+Early integration code lives under `integrations/vscode/` and `.github/actions/ailoom-handoff/`, and reproducible proof helpers live in `testing/competitive_benchmark.py` and `testing/demo_artifact_pack.py`.
 
 Release checklist and notes template: [docs/RELEASE_CHECKLIST.md](docs/RELEASE_CHECKLIST.md), [docs/GITHUB_RELEASE_TEMPLATE.md](docs/GITHUB_RELEASE_TEMPLATE.md).
 

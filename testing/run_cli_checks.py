@@ -1342,6 +1342,7 @@ def _check_user_guides_docs_ok(workspace: Path) -> None:
     integration_contract = ROOT / "docs" / "INTEGRATION_CONTRACT.md"
     skl_spec = ROOT / "docs" / "AILOOM_SKL_V1_SPEC.md"
     vscode_mvp = ROOT / "docs" / "VSCODE_EXTENSION_MVP.md"
+    github_action_mvp = ROOT / "docs" / "GITHUB_ACTION_MVP.md"
     benchmark_plan = ROOT / "docs" / "COMPETITIVE_BENCHMARK_PLAN.md"
     demo_script = ROOT / "docs" / "DEMO_SCRIPT_2_MIN.md"
     assert install_doc.exists()
@@ -1359,6 +1360,7 @@ def _check_user_guides_docs_ok(workspace: Path) -> None:
     assert integration_contract.exists()
     assert skl_spec.exists()
     assert vscode_mvp.exists()
+    assert github_action_mvp.exists()
     assert benchmark_plan.exists()
     assert demo_script.exists()
     install_text = install_doc.read_text(encoding="utf-8")
@@ -1377,6 +1379,7 @@ def _check_user_guides_docs_ok(workspace: Path) -> None:
     integration_contract_text = integration_contract.read_text(encoding="utf-8")
     skl_spec_text = skl_spec.read_text(encoding="utf-8")
     vscode_mvp_text = vscode_mvp.read_text(encoding="utf-8")
+    github_action_mvp_text = github_action_mvp.read_text(encoding="utf-8")
     benchmark_plan_text = benchmark_plan.read_text(encoding="utf-8")
     demo_script_text = demo_script.read_text(encoding="utf-8")
     assert "Install in 30 seconds" in install_text
@@ -1446,6 +1449,10 @@ def _check_user_guides_docs_ok(workspace: Path) -> None:
     assert "context_manifest.json" in skl_spec_text
     assert "VS Code Extension MVP Plan" in vscode_mvp_text
     assert "Ailoom: Handoff Current Workspace" in vscode_mvp_text
+    assert "node --check extension.js" in vscode_mvp_text
+    assert "GitHub Action MVP" in github_action_mvp_text
+    assert ".github/actions/ailoom-handoff/action.yml" in github_action_mvp_text
+    assert "skeleton-file" in github_action_mvp_text
     assert "Competitive Benchmark Plan" in benchmark_plan_text
     assert "Repomix" in benchmark_plan_text
     assert "Two-Minute Demo Script" in demo_script_text
@@ -1469,13 +1476,21 @@ def _check_vscode_extension_mvp_json(workspace: Path) -> None:
     assert commands["ailoom.showSavings"] == "Ailoom: Show Savings"
     assert commands["ailoom.openSkeleton"] == "Ailoom: Open Skeleton"
     assert commands["ailoom.openHandoffPrompt"] == "Ailoom: Open AI Handoff Prompt"
+    assert commands["ailoom.versionCheck"] == "Ailoom: Version / Install Check"
     assert commands["ailoom.doctor"] == "Ailoom: Doctor"
     assert commands["ailoom.cleanPreview"] == "Ailoom: Clean Preview"
     assert package["main"] == "./extension.js"
     assert package["contributes"]["configuration"]["properties"]["ailoom.commandPath"]["default"] == "ailoom"
+    assert package["contributes"]["configuration"]["properties"]["ailoom.enablePythonModuleFallback"]["default"] is True
+    assert package["scripts"]["lint"] == "node --check extension.js"
+    assert "vsce package" in package["scripts"]["package"]
     extension_text = extension_file.read_text(encoding="utf-8")
     assert 'require("child_process")' in extension_text
     assert "execFile" in extension_text
+    assert "commandCandidates" in extension_text
+    assert "versionCheck" in extension_text
+    assert "installHelpMessage" in extension_text
+    assert "python -m cli" in extension_text
     assert "handoff" in extension_text
     assert "savings" in extension_text
     assert "clean" in extension_text
@@ -1486,7 +1501,32 @@ def _check_vscode_extension_mvp_json(workspace: Path) -> None:
     readme_text = readme_file.read_text(encoding="utf-8")
     assert "local-first" in readme_text
     assert "Ailoom: Handoff Current Workspace" in readme_text
+    assert "Ailoom: Version / Install Check" in readme_text
     assert "ailoom.commandPath" in readme_text
+    assert "npm run package" in readme_text
+
+
+def _check_github_action_mvp_json(workspace: Path) -> None:
+    del workspace
+    action_file = ROOT / ".github" / "actions" / "ailoom-handoff" / "action.yml"
+    doc_file = ROOT / "docs" / "GITHUB_ACTION_MVP.md"
+    assert action_file.exists()
+    assert doc_file.exists()
+    text = action_file.read_text(encoding="utf-8")
+    assert 'name: "Ailoom Context Handoff"' in text
+    assert "runs:" in text
+    assert 'using: "composite"' in text
+    assert "python3 -m pip install" in text
+    assert "ailoom handoff" in text
+    assert "ailoom savings" in text
+    assert "handoff-json" in text
+    assert "savings-json" in text
+    assert "skeleton-file" in text
+    assert "GITHUB_OUTPUT" in text
+    doc_text = doc_file.read_text(encoding="utf-8")
+    assert "uses: ./.github/actions/ailoom-handoff" in doc_text
+    assert "local-first" in doc_text
+    assert "Not In MVP" in doc_text
 
 
 def _check_competitive_benchmark_json(workspace: Path) -> None:
@@ -1506,9 +1546,12 @@ def _check_competitive_benchmark_json(workspace: Path) -> None:
     assert results["raw_concat"]["status"] == "ok"
     assert results["raw_concat"]["restore_fidelity"] == "not-supported"
     assert payload["summary"]["ailoom_vs_raw_token_ratio"] >= 0
+    assert payload["public_report_template"]["safe_claim"]
+    assert payload["public_report_template"]["avoid_claim"]
     report_text = Path(payload["artifacts"]["output_md"]).read_text(encoding="utf-8")
     assert "Competitive Benchmark Report" in report_text
     assert "Ailoom vs raw token ratio" in report_text
+    assert "Public claim draft" in report_text
 
 
 def _check_demo_artifact_pack_json(workspace: Path) -> None:
@@ -1523,11 +1566,16 @@ def _check_demo_artifact_pack_json(workspace: Path) -> None:
     assert payload["local_only"] is True
     assert payload["no_telemetry"] is True
     assert Path(payload["screenshot_notes"]).exists()
+    assert Path(payload["social_caption"]).exists()
     for artifact in payload["artifacts"].values():
         assert Path(artifact).exists()
     notes = Path(payload["screenshot_notes"]).read_text(encoding="utf-8")
     assert "Ailoom Demo Screenshot Notes" in notes
     assert "Copyable Caption" in notes
+    caption = Path(payload["social_caption"]).read_text(encoding="utf-8")
+    assert "GitHub:" in caption
+    assert "Evan <carwyn910@gmail.com>" in caption
+    assert "no telemetry" in caption
 
 
 def _check_python_sdk_json(workspace: Path) -> None:
@@ -3810,6 +3858,7 @@ CHECKS: list[tuple[str, Callable[[Path], None]]] = [
     ("context_clean_json_ok", _check_context_clean_json),
     ("python_sdk_json_ok", _check_python_sdk_json),
     ("vscode_extension_mvp_json_ok", _check_vscode_extension_mvp_json),
+    ("github_action_mvp_json_ok", _check_github_action_mvp_json),
     ("competitive_benchmark_json_ok", _check_competitive_benchmark_json),
     ("demo_artifact_pack_json_ok", _check_demo_artifact_pack_json),
     ("top_level_version_json_ok", _check_top_level_version_json),

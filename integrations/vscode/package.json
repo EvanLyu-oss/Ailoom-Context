@@ -15,6 +15,7 @@
     "onCommand:ailoom.showSavings",
     "onCommand:ailoom.openSkeleton",
     "onCommand:ailoom.openHandoffPrompt",
+    "onCommand:ailoom.versionCheck",
     "onCommand:ailoom.doctor",
     "onCommand:ailoom.cleanPreview"
   ],
@@ -38,6 +39,10 @@
         "title": "Ailoom: Open AI Handoff Prompt"
       },
       {
+        "command": "ailoom.versionCheck",
+        "title": "Ailoom: Version / Install Check"
+      },
+      {
         "command": "ailoom.doctor",
         "title": "Ailoom: Doctor"
       },
@@ -52,13 +57,24 @@
         "ailoom.commandPath": {
           "type": "string",
           "default": "ailoom",
-          "description": "Path to the local ailoom command. The extension never uploads source code."
+          "description": "Path to the local ailoom command. Use an executable path, not shell syntax."
+        },
+        "ailoom.pythonPath": {
+          "type": "string",
+          "default": "",
+          "description": "Optional Python executable used for the python -m cli fallback when ailoom is not on PATH."
+        },
+        "ailoom.enablePythonModuleFallback": {
+          "type": "boolean",
+          "default": true,
+          "description": "Try python -m cli fallbacks when the ailoom command is not found."
         }
       }
     }
   },
   "scripts": {
-    "lint": "node --check extension.js"
+    "lint": "node --check extension.js",
+    "package": "npx @vscode/vsce package --no-dependencies"
   },
   "devDependencies": {
     "@types/vscode": "^1.85.0"

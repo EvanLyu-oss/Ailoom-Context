@@ -226,12 +226,15 @@ def _ailoom_benchmark(input_dir: Path, output_dir: Path) -> dict[str, Any]:
 
 def _external_tool_status(name: str, *, run_external_tools: bool) -> dict[str, Any]:
     path = shutil.which(name)
+    command_placeholder = f"{name} <fixture> --output <output-file>"
     if not path:
         return {
             "tool": name,
             "status": "skipped",
             "reason": f"{name} was not found on PATH",
             "detected": False,
+            "command_placeholder": command_placeholder,
+            "install_note": "install the tool locally and rerun with --run-external-tools when a reproducible command is available",
         }
     if not run_external_tools:
         return {
@@ -240,6 +243,7 @@ def _external_tool_status(name: str, *, run_external_tools: bool) -> dict[str, A
             "path": path,
             "detected": True,
             "reason": "external tools are not executed unless --run-external-tools is set",
+            "command_placeholder": command_placeholder,
         }
     started_at = time.perf_counter()
     proc = subprocess.run([path, "--version"], text=True, capture_output=True)
@@ -252,6 +256,7 @@ def _external_tool_status(name: str, *, run_external_tools: bool) -> dict[str, A
         "runtime_ms": _elapsed_ms(started_at),
         "stdout_tail": proc.stdout[-1200:],
         "stderr_tail": proc.stderr[-1200:],
+        "command_placeholder": command_placeholder,
         "note": "first MVP only records external tool availability/version; full tool-specific runs come later",
     }
 
@@ -283,6 +288,7 @@ def _render_markdown(payload: dict[str, Any]) -> str:
             )
         )
     summary = payload.get("summary") or {}
+    public_template = payload.get("public_report_template") or {}
     lines.extend(
         [
             "",
@@ -291,6 +297,7 @@ def _render_markdown(payload: dict[str, Any]) -> str:
             f"- Ailoom vs raw token ratio: `{summary.get('ailoom_vs_raw_token_ratio', '')}`",
             f"- Ailoom restore fidelity: `{summary.get('ailoom_restore_fidelity', '')}`",
             f"- External tools checked: `{', '.join(summary.get('external_tools', []))}`",
+            f"- Public claim draft: {public_template.get('safe_claim', '')}",
             "",
             "This benchmark is local-only and reproducible. It should be treated as observed data, not a universal claim.",
         ]
@@ -333,6 +340,14 @@ def build_benchmark_payload(args: argparse.Namespace) -> dict[str, Any]:
             "raw_restore_fidelity": raw.get("restore_fidelity"),
             "external_tools": [item["tool"] for item in external],
             "claim_guidance": "use observed/local/reproducible wording; avoid universal competitor claims",
+        },
+        "public_report_template": {
+            "safe_claim": (
+                f"In this local fixture, Ailoom used {ratio}x the raw-concat token output "
+                f"while preserving restore fidelity: {ailoom.get('restore_fidelity')}."
+            ),
+            "avoid_claim": "Ailoom is always smaller/faster than every competitor.",
+            "next_benchmark_step": "install repomix/repopack locally, record exact versions, then rerun with --run-external-tools",
         },
     }
     output_json = Path(args.output_json or output_dir / "competitive_benchmark.json")

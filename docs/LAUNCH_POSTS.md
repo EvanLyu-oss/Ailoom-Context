@@ -22,7 +22,7 @@ I am building Ailoom Context, a local-first context compression tool for AI codi
 It turns a large repo or long document into a compact AI-readable skeleton, while keeping exact restore files local.
 
 Current beta checks:
-- 65/65 Python smoke checks passing
+- 66/66 Python smoke checks passing
 - 93/93 benchmark cases restore-verified
 - local-only, zero telemetry
 - best observed large-directory savings around 94% vs baseline
@@ -41,7 +41,7 @@ https://github.com/EvanLyu-oss/Ailoom-Context
 它是给 AI 编程 Agent 用的本地上下文压缩工具：把大项目、长文档转成更小的 AI 可读 skeleton，同时把精确还原文件留在本地。
 
 目前 beta 检查：
-- Python smoke 65/65 通过
+- Python smoke 66/66 通过
 - benchmark 93/93 可还原
 - 本地运行，零遥测
 - 大目录场景最高观察到约 94% token 节省
@@ -93,7 +93,7 @@ It is not a hosted service and does not upload source code or usage logs.
 
 Current beta checks include:
 
-- 65/65 Python smoke checks passing
+- 66/66 Python smoke checks passing
 - 93/93 benchmark cases restore-verified
 - dogfood restore of this repo
 - local-only / zero telemetry safety model

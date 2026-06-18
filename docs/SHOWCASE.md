@@ -25,7 +25,7 @@ These are conservative beta-era signals. They should be phrased as observed resu
 | --- | --- |
 | Dogfood restore | Ailoom Context compresses and restores its own repository byte-exactly |
 | Latest release readiness | `7/7` release checks passing on macOS |
-| Python smoke coverage | `65/65` checks passing |
+| Python smoke coverage | `66/66` checks passing |
 | Quick benchmark restore | `93/93` benchmark cases restore-verified |
 | Benchmark status | `ready / ready / ok` |
 | Large-directory benchmark | Best observed savings about `94%` vs baseline |

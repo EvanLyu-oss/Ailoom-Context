@@ -6,6 +6,7 @@ const vscode = require("vscode");
 let output;
 let statusBar;
 let latestHandoff = null;
+let lastCommandLabel = "ailoom";
 
 function workspaceRoot() {
   const folder = vscode.workspace.workspaceFolders && vscode.workspace.workspaceFolders[0];
@@ -15,16 +16,62 @@ function workspaceRoot() {
   return folder.uri.fsPath;
 }
 
-function ailoomCommand() {
-  return vscode.workspace.getConfiguration("ailoom").get("commandPath", "ailoom");
+function ailoomConfig() {
+  return vscode.workspace.getConfiguration("ailoom");
+}
+
+function installHelpMessage() {
+  return [
+    "Ailoom command was not found or did not return JSON.",
+    "Install locally with: sh install.sh --setup-shell",
+    "On Windows PowerShell: .\\install.ps1 -SetupShell",
+    "Or set VS Code setting ailoom.commandPath to the local ailoom executable.",
+  ].join(" ");
+}
+
+function commandCandidates() {
+  const config = ailoomConfig();
+  const configured = config.get("commandPath", "ailoom");
+  const pythonPath = config.get("pythonPath", "");
+  const enablePythonFallback = config.get("enablePythonModuleFallback", true);
+  const candidates = [];
+  const seen = new Set();
+
+  function add(label, command, prefixArgs = []) {
+    const key = `${command}\u0000${prefixArgs.join("\u0000")}`;
+    if (!command || seen.has(key)) {
+      return;
+    }
+    seen.add(key);
+    candidates.push({ label, command, prefixArgs });
+  }
+
+  add(configured, configured, []);
+  add("ailoom", "ailoom", []);
+  add("mcp-skeleton", "mcp-skeleton", []);
+  if (enablePythonFallback) {
+    add(`${pythonPath || "python3"} -m cli`, pythonPath || "python3", ["-m", "cli"]);
+    add("python -m cli", "python", ["-m", "cli"]);
+    add("py -3 -m cli", "py", ["-3", "-m", "cli"]);
+  }
+  return candidates;
 }
 
 function runAiloom(args, cwd) {
   return new Promise((resolve, reject) => {
-    const command = ailoomCommand();
-    const fullArgs = [...args, "--json"];
-    output.appendLine(`$ ${command} ${fullArgs.join(" ")}`);
-    cp.execFile(command, fullArgs, { cwd }, (error, stdout, stderr) => {
+    const candidates = commandCandidates();
+    let index = 0;
+    const errors = [];
+
+    function tryNext() {
+      const candidate = candidates[index++];
+      if (!candidate) {
+        reject(new Error(`${installHelpMessage()} Tried: ${candidates.map((item) => item.label).join(", ")}. Last errors: ${errors.join(" | ")}`));
+        return;
+      }
+      const fullArgs = [...candidate.prefixArgs, ...args, "--json"];
+      output.appendLine(`$ ${candidate.label} ${args.join(" ")} --json`);
+      cp.execFile(candidate.command, fullArgs, { cwd }, (error, stdout, stderr) => {
       if (stderr) {
         output.appendLine(stderr.trim());
       }
@@ -32,18 +79,32 @@ function runAiloom(args, cwd) {
       try {
         payload = JSON.parse(stdout || "{}");
       } catch (parseError) {
-        reject(new Error(`Ailoom did not return JSON. Is '${command}' installed and on PATH?`));
+        errors.push(`${candidate.label}: invalid JSON`);
+        if (error && (error.code === "ENOENT" || error.code === 127)) {
+          tryNext();
+          return;
+        }
+        reject(new Error(`${installHelpMessage()} ${candidate.label} did not return JSON.`));
         return;
       }
       if (error) {
         const message = payload && payload.error && payload.error.message
           ? payload.error.message
           : error.message;
+        errors.push(`${candidate.label}: ${message}`);
+        if (error.code === "ENOENT" || error.code === 127) {
+          tryNext();
+          return;
+        }
         reject(new Error(message));
         return;
       }
+      lastCommandLabel = candidate.label;
       resolve(payload);
-    });
+      });
+    }
+
+    tryNext();
   });
 }
 
@@ -98,6 +159,30 @@ async function showSavings() {
   output.show(true);
 }
 
+async function versionCheck() {
+  const root = workspaceRoot();
+  const version = await runAiloom(["version"], root);
+  let install = {};
+  try {
+    install = await runAiloom(["doctor", "--install"], root);
+  } catch (error) {
+    install = { install_doctor_status: "watch", error: { message: error.message } };
+  }
+  output.appendLine("");
+  output.appendLine("Ailoom version / install check");
+  output.appendLine(`Command used: ${lastCommandLabel}`);
+  output.appendLine(`Version: ${version.version || ""}`);
+  output.appendLine(`Release channel: ${version.release_channel || ""}`);
+  output.appendLine(`Version check: ${version.version_check || ""}`);
+  output.appendLine(`Install readiness: ${version.install_readiness_status || ""}`);
+  output.appendLine(`Install doctor: ${install.install_doctor_status || install.status || ""}`);
+  output.appendLine(`First run: ${version.recommended_first_command_text || "ailoom first-run"}`);
+  output.appendLine(`Project handoff: ${version.recommended_project_command_text || "ailoom handoff"}`);
+  output.appendLine(`PATH fix: ${version.path_setup_command_text || "sh install.sh --setup-shell"}`);
+  output.show(true);
+  vscode.window.showInformationMessage(`Ailoom ${version.version || ""}: ${version.version_check || "checked"}`);
+}
+
 async function openFileFromLatest(kind) {
   if (!latestHandoff) {
     await handoffWorkspace();
@@ -113,6 +198,7 @@ async function openFileFromLatest(kind) {
 
 async function doctor() {
   const root = workspaceRoot();
+  await versionCheck();
   const install = await runAiloom(["doctor", "--install"], root);
   const next = await runAiloom(["next", "--input-dir", root], root);
   output.appendLine("");
@@ -158,6 +244,7 @@ function activate(context) {
   register(context, "ailoom.showSavings", showSavings);
   register(context, "ailoom.openSkeleton", () => openFileFromLatest("skeleton"));
   register(context, "ailoom.openHandoffPrompt", () => openFileFromLatest("prompt"));
+  register(context, "ailoom.versionCheck", versionCheck);
   register(context, "ailoom.doctor", doctor);
   register(context, "ailoom.cleanPreview", cleanPreview);
 }

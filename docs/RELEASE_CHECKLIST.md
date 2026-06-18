@@ -70,7 +70,7 @@ Required documentation result:
 - INSTALL shows the no-learning path for macOS and Windows.
 - USER_GUIDE starts with the five-minute loop.
 - V1 stable readiness states install, first project, value, safety, performance, and release gates.
-- Integration docs cover Python SDK, JSON contract, AILOOM-SKL.v1, VS Code MVP, competitive benchmark runner, and two-minute demo artifact generator.
+- Integration docs cover Python SDK, JSON contract, AILOOM-SKL.v1, VS Code MVP, GitHub Action MVP, competitive benchmark runner, and two-minute demo artifact generator.
 
 ## 5. Release Notes
 

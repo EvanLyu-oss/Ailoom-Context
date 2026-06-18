@@ -10,6 +10,7 @@ It is intentionally minimal and not yet published to the Marketplace. The MVP va
 - `Ailoom: Show Savings`
 - `Ailoom: Open Skeleton`
 - `Ailoom: Open AI Handoff Prompt`
+- `Ailoom: Version / Install Check`
 - `Ailoom: Doctor`
 - `Ailoom: Clean Preview`
 
@@ -34,6 +35,26 @@ Set `ailoom.commandPath` if `ailoom` is not on PATH:
   "ailoom.commandPath": "/absolute/path/to/ailoom"
 }
 ```
+
+Optional fallback settings:
+
+```json
+{
+  "ailoom.pythonPath": "python3",
+  "ailoom.enablePythonModuleFallback": true
+}
+```
+
+The extension tries `ailoom`, `mcp-skeleton`, and optionally `python -m cli` fallbacks before showing install recovery guidance.
+
+## Packaging Check
+
+```bash
+npm run lint
+npm run package
+```
+
+`npm run package` uses `npx @vscode/vsce package --no-dependencies`. If `vsce` is not available locally, keep using `npm run lint` plus the smoke checks until Marketplace packaging is required.
 
 ## MVP Success Criteria
 

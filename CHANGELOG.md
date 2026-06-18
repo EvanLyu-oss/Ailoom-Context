@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- added the first public `ailoom_core` Python SDK wrapper plus integration contract, AILOOM-SKL.v1 spec, VS Code extension MVP plan, competitive benchmark plan, and two-minute demo script for IDE/agent/CI adoption
 - added v1.0 stable readiness documentation and strengthened the zero-learning install, handoff, next, savings, safety, and cleanup path across README, INSTALL, USER_GUIDE, release checklist, and the top-level welcome screen
 - added Launch Kit documentation for public promotion: first-trial flow, showcase proof points, launch post drafts, social image prompt, and a 30-day promotion plan
 - added `ailoom next` / `context next`, a state-aware project guide that tells users whether to create the first handoff, share a fresh skeleton, refresh stale context, check savings, or write a trial report

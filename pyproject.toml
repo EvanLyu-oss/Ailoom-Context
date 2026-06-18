@@ -32,4 +32,4 @@ ailoom = "cli.ail_cli:main"
 mcp-skeleton = "cli.ail_cli:main"
 
 [tool.setuptools.packages.find]
-include = ["cli*"]
+include = ["cli*", "ailoom_core*"]

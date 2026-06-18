@@ -52,7 +52,7 @@ Current beta proof points:
 | Check | Current signal |
 | --- | --- |
 | Release readiness | `7/7` checks passing on macOS |
-| Python smoke | `61/61` checks passing |
+| Python smoke | `62/62` checks passing |
 | Benchmark restore | `93/93` cases restore-verified |
 | Benchmark status | `ready / ready / ok` |
 | Dogfood | Ailoom Context compresses and restores its own repository byte-exactly |
@@ -104,6 +104,8 @@ Beta users: start here with [docs/BETA_TESTING.md](docs/BETA_TESTING.md), then s
 Trying it for the first time? Use [GOOD_FIRST_TRIAL.md](GOOD_FIRST_TRIAL.md).
 
 Public proof points and launch material: [docs/SHOWCASE.md](docs/SHOWCASE.md), [docs/LAUNCH_POSTS.md](docs/LAUNCH_POSTS.md), [docs/PROMOTION_PLAN.md](docs/PROMOTION_PLAN.md).
+
+Integration foundation: [docs/INTEGRATION_CONTRACT.md](docs/INTEGRATION_CONTRACT.md), [docs/AILOOM_SKL_V1_SPEC.md](docs/AILOOM_SKL_V1_SPEC.md), [docs/VSCODE_EXTENSION_MVP.md](docs/VSCODE_EXTENSION_MVP.md), [docs/COMPETITIVE_BENCHMARK_PLAN.md](docs/COMPETITIVE_BENCHMARK_PLAN.md), [docs/DEMO_SCRIPT_2_MIN.md](docs/DEMO_SCRIPT_2_MIN.md).
 
 Release checklist and notes template: [docs/RELEASE_CHECKLIST.md](docs/RELEASE_CHECKLIST.md), [docs/GITHUB_RELEASE_TEMPLATE.md](docs/GITHUB_RELEASE_TEMPLATE.md).
 
@@ -194,6 +196,7 @@ The human output for `quick`, `handoff`, `doctor`, `recent`, and `next` starts w
 
 ## What it does
 
+- `ailoom_core`: a thin Python SDK for IDEs, agents, CI jobs, and scripts that need stable local JSON results without parsing terminal text
 - `context compress`: build one skeleton + restore package from text, file, or directory input
 - `context inspect`: read one bundle without restoring the original source
 - `context restore`: reconstruct the original text, file, or directory exactly

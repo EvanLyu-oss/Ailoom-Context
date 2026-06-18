@@ -247,6 +247,8 @@ def build_release_readiness_payload() -> dict[str, Any]:
             "py_compile",
             str(ROOT / "cli" / "ail_cli.py"),
             str(ROOT / "cli" / "context_compression.py"),
+            str(ROOT / "ailoom_core" / "__init__.py"),
+            str(ROOT / "ailoom_core" / "sdk.py"),
             str(ROOT / "testing" / "context_scale_benchmark.py"),
             str(ROOT / "testing" / "run_cli_checks.py"),
             str(ROOT / "testing" / "quickstart_check.py"),

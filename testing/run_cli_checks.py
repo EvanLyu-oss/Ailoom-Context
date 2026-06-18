@@ -18,6 +18,8 @@ from typing import Any, Callable
 ROOT = Path(__file__).resolve().parents[1]
 RESULTS_DIR = ROOT / "testing" / "results"
 DEFAULT_RESULTS_JSON = RESULTS_DIR / "cli_smoke_python_results.json"
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 
 
 class SmokeFailure(AssertionError):
@@ -152,6 +154,8 @@ def _check_py_compile(workspace: Path) -> None:
             "py_compile",
             str(ROOT / "cli" / "ail_cli.py"),
             str(ROOT / "cli" / "context_compression.py"),
+            str(ROOT / "ailoom_core" / "__init__.py"),
+            str(ROOT / "ailoom_core" / "sdk.py"),
             str(ROOT / "testing" / "context_scale_benchmark.py"),
             str(ROOT / "testing" / "dogfood_self_check.py"),
             str(ROOT / "testing" / "quickstart_check.py"),
@@ -1319,6 +1323,11 @@ def _check_user_guides_docs_ok(workspace: Path) -> None:
     launch_posts = ROOT / "docs" / "LAUNCH_POSTS.md"
     promotion_plan = ROOT / "docs" / "PROMOTION_PLAN.md"
     readme = ROOT / "README.md"
+    integration_contract = ROOT / "docs" / "INTEGRATION_CONTRACT.md"
+    skl_spec = ROOT / "docs" / "AILOOM_SKL_V1_SPEC.md"
+    vscode_mvp = ROOT / "docs" / "VSCODE_EXTENSION_MVP.md"
+    benchmark_plan = ROOT / "docs" / "COMPETITIVE_BENCHMARK_PLAN.md"
+    demo_script = ROOT / "docs" / "DEMO_SCRIPT_2_MIN.md"
     assert install_doc.exists()
     assert user_guide.exists()
     assert beta_testing.exists()
@@ -1331,6 +1340,11 @@ def _check_user_guides_docs_ok(workspace: Path) -> None:
     assert launch_posts.exists()
     assert promotion_plan.exists()
     assert readme.exists()
+    assert integration_contract.exists()
+    assert skl_spec.exists()
+    assert vscode_mvp.exists()
+    assert benchmark_plan.exists()
+    assert demo_script.exists()
     install_text = install_doc.read_text(encoding="utf-8")
     user_text = user_guide.read_text(encoding="utf-8")
     beta_text = beta_testing.read_text(encoding="utf-8")
@@ -1344,6 +1358,11 @@ def _check_user_guides_docs_ok(workspace: Path) -> None:
     launch_posts_text = launch_posts.read_text(encoding="utf-8")
     promotion_plan_text = promotion_plan.read_text(encoding="utf-8")
     readme_text = readme.read_text(encoding="utf-8")
+    integration_contract_text = integration_contract.read_text(encoding="utf-8")
+    skl_spec_text = skl_spec.read_text(encoding="utf-8")
+    vscode_mvp_text = vscode_mvp.read_text(encoding="utf-8")
+    benchmark_plan_text = benchmark_plan.read_text(encoding="utf-8")
+    demo_script_text = demo_script.read_text(encoding="utf-8")
     assert "Install in 30 seconds" in install_text
     assert "The No-Learning Path" in install_text
     assert "Confirm You Have The Current Beta" in install_text
@@ -1380,6 +1399,8 @@ def _check_user_guides_docs_ok(workspace: Path) -> None:
     assert "Safety Gate" in v1_stable_text
     assert "Performance Gate" in v1_stable_text
     assert "docs/V1_STABLE_READINESS.md" in readme_text
+    assert "docs/INTEGRATION_CONTRACT.md" in readme_text
+    assert "ailoom_core" in readme_text
     assert "Try It In 3 Commands" in readme_text
     assert "Current beta proof points" in readme_text
     assert "93/93" in readme_text
@@ -1400,6 +1421,65 @@ def _check_user_guides_docs_ok(workspace: Path) -> None:
     assert "Promotion Plan" in promotion_plan_text
     assert "GitHub stars: 7" in promotion_plan_text
     assert "30-Day Goals" in promotion_plan_text
+    assert "Ailoom Integration Contract" in integration_contract_text
+    assert "from ailoom_core import handoff_project" in integration_contract_text
+    assert "Handoff Payload Contract" in integration_contract_text
+    assert "AiloomResult" in integration_contract_text
+    assert "AILOOM-SKL.v1 Format Spec" in skl_spec_text
+    assert "Redaction Boundary" in skl_spec_text
+    assert "context_manifest.json" in skl_spec_text
+    assert "VS Code Extension MVP Plan" in vscode_mvp_text
+    assert "Ailoom: Handoff Current Workspace" in vscode_mvp_text
+    assert "Competitive Benchmark Plan" in benchmark_plan_text
+    assert "Repomix" in benchmark_plan_text
+    assert "Two-Minute Demo Script" in demo_script_text
+    assert "ailoom handoff --copy --open" in demo_script_text
+
+
+def _check_python_sdk_json(workspace: Path) -> None:
+    project = workspace / "sdk_project"
+    (project / "src").mkdir(parents=True)
+    (project / "src" / "app.py").write_text(
+        "def run() -> str:\n"
+        "    return 'sdk-ready'\n",
+        encoding="utf-8",
+    )
+    (project / "README.md").write_text(
+        "# SDK Project\n\n" + "Ailoom SDK integration contract.\n\n" * 80,
+        encoding="utf-8",
+    )
+    output_dir = workspace / "sdk_handoff_bundle"
+
+    from ailoom_core import get_savings, handoff_project, next_action, safety
+
+    handoff = handoff_project(project, output_dir=output_dir)
+    assert handoff.returncode == 0
+    assert handoff.payload["status"] == "ok"
+    assert handoff.payload["quick_status"] == "ready"
+    assert handoff.payload["restore_safe"] is True
+    assert handoff.payload["handoff"]["skeleton_file"].endswith("context_skeleton.mcp")
+    assert Path(handoff.payload["handoff"]["skeleton_file"]).exists()
+    assert handoff.payload["handoff"]["ai_handoff_file"].endswith("AI_HANDOFF.md")
+    assert Path(handoff.payload["handoff"]["ai_handoff_file"]).exists()
+    assert handoff.payload["value_summary"]["token_savings"]["source_tokens"] >= 0
+
+    savings = get_savings(project)
+    assert savings.returncode == 0
+    assert savings.payload["entrypoint"] == "context-savings"
+    assert savings.payload["savings_status"] == "ready"
+    assert savings.payload["source_tokens"] > 0
+    assert savings.payload["value_summary"]["agent_context_reading"]["message"]
+
+    next_result = next_action(project)
+    assert next_result.returncode == 0
+    assert next_result.payload["entrypoint"] == "context-next"
+    assert next_result.payload["primary_command_text"].startswith("ailoom handoff")
+
+    safety_result = safety()
+    assert safety_result.returncode == 0
+    assert safety_result.payload["entrypoint"] == "context-safety"
+    assert safety_result.payload["guarantees"]["local_only_processing"] is True
+    assert safety_result.payload["guarantees"]["no_telemetry"] is True
 
 
 def _check_context_quick_windows_command_text_json(workspace: Path) -> None:
@@ -3634,6 +3714,7 @@ CHECKS: list[tuple[str, Callable[[Path], None]]] = [
     ("context_safety_json_ok", _check_context_safety_json),
     ("context_redaction_json_ok", _check_context_redaction_json),
     ("context_clean_json_ok", _check_context_clean_json),
+    ("python_sdk_json_ok", _check_python_sdk_json),
     ("top_level_version_json_ok", _check_top_level_version_json),
     ("installer_lifecycle_json_ok", _check_installer_lifecycle_json),
     ("windows_installer_script_json_ok", _check_windows_installer_script_json),

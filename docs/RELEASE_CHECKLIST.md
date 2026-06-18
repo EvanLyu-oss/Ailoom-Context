@@ -6,6 +6,7 @@ Use this checklist before publishing a beta or v1.0 release.
 
 ```bash
 python3 -m py_compile cli/ail_cli.py cli/context_compression.py testing/context_scale_benchmark.py testing/run_cli_checks.py testing/quickstart_check.py testing/dogfood_self_check.py testing/release_readiness_check.py
+python3 -m py_compile ailoom_core/__init__.py ailoom_core/sdk.py
 python3 testing/run_cli_checks.py
 python3 testing/release_readiness_check.py
 ```
@@ -69,6 +70,7 @@ Required documentation result:
 - INSTALL shows the no-learning path for macOS and Windows.
 - USER_GUIDE starts with the five-minute loop.
 - V1 stable readiness states install, first project, value, safety, performance, and release gates.
+- Integration docs cover Python SDK, JSON contract, AILOOM-SKL.v1, VS Code MVP, competitive benchmark plan, and two-minute demo script.
 
 ## 5. Release Notes
 

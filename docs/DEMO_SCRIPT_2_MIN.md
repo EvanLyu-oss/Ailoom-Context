@@ -2,6 +2,14 @@
 
 Use this script for a short screen recording or social post demo.
 
+Generate local demo materials first:
+
+```bash
+python3 testing/demo_artifact_pack.py --force --json
+```
+
+This writes JSON outputs for `version`, `handoff`, `savings`, `next`, `safety`, and `clean --dry-run`, plus `DEMO_SCREENSHOT_NOTES.md` for screenshots and captions.
+
 ## Goal
 
 Show that Ailoom Context can:

@@ -250,6 +250,8 @@ def build_release_readiness_payload() -> dict[str, Any]:
             str(ROOT / "ailoom_core" / "__init__.py"),
             str(ROOT / "ailoom_core" / "sdk.py"),
             str(ROOT / "testing" / "context_scale_benchmark.py"),
+            str(ROOT / "testing" / "competitive_benchmark.py"),
+            str(ROOT / "testing" / "demo_artifact_pack.py"),
             str(ROOT / "testing" / "run_cli_checks.py"),
             str(ROOT / "testing" / "quickstart_check.py"),
             str(ROOT / "testing" / "dogfood_self_check.py"),

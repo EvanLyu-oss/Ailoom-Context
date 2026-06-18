@@ -4,6 +4,14 @@ This plan defines a fair, reproducible comparison between Ailoom Context and oth
 
 The goal is not to attack competitors. The goal is to show where Ailoom's lossless restore boundary and token efficiency are objectively useful.
 
+MVP runner:
+
+```bash
+python3 testing/competitive_benchmark.py --force --json
+```
+
+The first runner compares Ailoom Context with a raw concatenation baseline and detects local `repomix` / `repopack` binaries without installing or running them by default.
+
 ## Tools To Compare
 
 Initial candidates:

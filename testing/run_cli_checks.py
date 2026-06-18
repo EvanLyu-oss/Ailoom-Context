@@ -109,6 +109,20 @@ def _run_top_level_cli_json(
         raise SmokeFailure(f"top-level command did not emit JSON: {' '.join(args)}\nSTDOUT:\n{proc.stdout}") from exc
 
 
+def _run_cli_script_json(
+    script: Path,
+    args: list[str],
+    *,
+    cwd: Path = ROOT,
+    expect: int = 0,
+) -> dict[str, Any]:
+    proc = _run([sys.executable, str(script), *args, "--json"], cwd=cwd, expect=expect)
+    try:
+        return json.loads(proc.stdout)
+    except json.JSONDecodeError as exc:
+        raise SmokeFailure(f"script did not emit JSON: {script} {' '.join(args)}\nSTDOUT:\n{proc.stdout}") from exc
+
+
 def _assert_command_contains_option(command_text: str, option: str, expected_value: str) -> None:
     parts = shlex.split(command_text)
     assert option in parts
@@ -157,6 +171,8 @@ def _check_py_compile(workspace: Path) -> None:
             str(ROOT / "ailoom_core" / "__init__.py"),
             str(ROOT / "ailoom_core" / "sdk.py"),
             str(ROOT / "testing" / "context_scale_benchmark.py"),
+            str(ROOT / "testing" / "competitive_benchmark.py"),
+            str(ROOT / "testing" / "demo_artifact_pack.py"),
             str(ROOT / "testing" / "dogfood_self_check.py"),
             str(ROOT / "testing" / "quickstart_check.py"),
             str(ROOT / "testing" / "release_readiness_check.py"),
@@ -1434,6 +1450,84 @@ def _check_user_guides_docs_ok(workspace: Path) -> None:
     assert "Repomix" in benchmark_plan_text
     assert "Two-Minute Demo Script" in demo_script_text
     assert "ailoom handoff --copy --open" in demo_script_text
+
+
+def _check_vscode_extension_mvp_json(workspace: Path) -> None:
+    del workspace
+    root = ROOT / "integrations" / "vscode"
+    package_file = root / "package.json"
+    extension_file = root / "extension.js"
+    readme_file = root / "README.md"
+    ignore_file = root / ".vscodeignore"
+    assert package_file.exists()
+    assert extension_file.exists()
+    assert readme_file.exists()
+    assert ignore_file.exists()
+    package = json.loads(package_file.read_text(encoding="utf-8"))
+    commands = {item["command"]: item["title"] for item in package["contributes"]["commands"]}
+    assert commands["ailoom.handoffWorkspace"] == "Ailoom: Handoff Current Workspace"
+    assert commands["ailoom.showSavings"] == "Ailoom: Show Savings"
+    assert commands["ailoom.openSkeleton"] == "Ailoom: Open Skeleton"
+    assert commands["ailoom.openHandoffPrompt"] == "Ailoom: Open AI Handoff Prompt"
+    assert commands["ailoom.doctor"] == "Ailoom: Doctor"
+    assert commands["ailoom.cleanPreview"] == "Ailoom: Clean Preview"
+    assert package["main"] == "./extension.js"
+    assert package["contributes"]["configuration"]["properties"]["ailoom.commandPath"]["default"] == "ailoom"
+    extension_text = extension_file.read_text(encoding="utf-8")
+    assert 'require("child_process")' in extension_text
+    assert "execFile" in extension_text
+    assert "handoff" in extension_text
+    assert "savings" in extension_text
+    assert "clean" in extension_text
+    assert "--json" in extension_text
+    assert "Keep restore packages local" in extension_text
+    if shutil.which("node"):
+        _run(["node", "--check", str(extension_file)])
+    readme_text = readme_file.read_text(encoding="utf-8")
+    assert "local-first" in readme_text
+    assert "Ailoom: Handoff Current Workspace" in readme_text
+    assert "ailoom.commandPath" in readme_text
+
+
+def _check_competitive_benchmark_json(workspace: Path) -> None:
+    output_dir = workspace / "competitive_benchmark"
+    payload = _run_cli_script_json(
+        ROOT / "testing" / "competitive_benchmark.py",
+        ["--output-dir", str(output_dir), "--force"],
+    )
+    assert payload["status"] == "ok"
+    assert payload["entrypoint"] == "competitive-benchmark"
+    assert Path(payload["artifacts"]["output_json"]).exists()
+    assert Path(payload["artifacts"]["output_md"]).exists()
+    results = {item["tool"]: item for item in payload["results"]}
+    assert results["ailoom"]["status"] == "ok"
+    assert results["ailoom"]["restore_fidelity"] == "ok"
+    assert results["ailoom"]["output_tokens"] > 0
+    assert results["raw_concat"]["status"] == "ok"
+    assert results["raw_concat"]["restore_fidelity"] == "not-supported"
+    assert payload["summary"]["ailoom_vs_raw_token_ratio"] >= 0
+    report_text = Path(payload["artifacts"]["output_md"]).read_text(encoding="utf-8")
+    assert "Competitive Benchmark Report" in report_text
+    assert "Ailoom vs raw token ratio" in report_text
+
+
+def _check_demo_artifact_pack_json(workspace: Path) -> None:
+    output_dir = workspace / "demo_artifacts"
+    payload = _run_cli_script_json(
+        ROOT / "testing" / "demo_artifact_pack.py",
+        ["--output-dir", str(output_dir), "--force"],
+    )
+    assert payload["status"] == "ok"
+    assert payload["entrypoint"] == "demo-artifact-pack"
+    assert payload["handoff_restore_safe"] is True
+    assert payload["local_only"] is True
+    assert payload["no_telemetry"] is True
+    assert Path(payload["screenshot_notes"]).exists()
+    for artifact in payload["artifacts"].values():
+        assert Path(artifact).exists()
+    notes = Path(payload["screenshot_notes"]).read_text(encoding="utf-8")
+    assert "Ailoom Demo Screenshot Notes" in notes
+    assert "Copyable Caption" in notes
 
 
 def _check_python_sdk_json(workspace: Path) -> None:
@@ -3715,6 +3809,9 @@ CHECKS: list[tuple[str, Callable[[Path], None]]] = [
     ("context_redaction_json_ok", _check_context_redaction_json),
     ("context_clean_json_ok", _check_context_clean_json),
     ("python_sdk_json_ok", _check_python_sdk_json),
+    ("vscode_extension_mvp_json_ok", _check_vscode_extension_mvp_json),
+    ("competitive_benchmark_json_ok", _check_competitive_benchmark_json),
+    ("demo_artifact_pack_json_ok", _check_demo_artifact_pack_json),
     ("top_level_version_json_ok", _check_top_level_version_json),
     ("installer_lifecycle_json_ok", _check_installer_lifecycle_json),
     ("windows_installer_script_json_ok", _check_windows_installer_script_json),

@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- added a local VS Code extension MVP skeleton, a competitive benchmark runner, and a demo artifact generator for the next proof-and-integration phase
 - added the first public `ailoom_core` Python SDK wrapper plus integration contract, AILOOM-SKL.v1 spec, VS Code extension MVP plan, competitive benchmark plan, and two-minute demo script for IDE/agent/CI adoption
 - added v1.0 stable readiness documentation and strengthened the zero-learning install, handoff, next, savings, safety, and cleanup path across README, INSTALL, USER_GUIDE, release checklist, and the top-level welcome screen
 - added Launch Kit documentation for public promotion: first-trial flow, showcase proof points, launch post drafts, social image prompt, and a 30-day promotion plan

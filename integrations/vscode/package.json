@@ -1,0 +1,66 @@
+{
+  "name": "ailoom-context-vscode",
+  "displayName": "Ailoom Context",
+  "description": "Local-first AI/IDE handoff for Ailoom Context skeletons, savings, and safety checks.",
+  "version": "0.0.1",
+  "publisher": "ailoom",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onCommand:ailoom.handoffWorkspace",
+    "onCommand:ailoom.showSavings",
+    "onCommand:ailoom.openSkeleton",
+    "onCommand:ailoom.openHandoffPrompt",
+    "onCommand:ailoom.doctor",
+    "onCommand:ailoom.cleanPreview"
+  ],
+  "main": "./extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "ailoom.handoffWorkspace",
+        "title": "Ailoom: Handoff Current Workspace"
+      },
+      {
+        "command": "ailoom.showSavings",
+        "title": "Ailoom: Show Savings"
+      },
+      {
+        "command": "ailoom.openSkeleton",
+        "title": "Ailoom: Open Skeleton"
+      },
+      {
+        "command": "ailoom.openHandoffPrompt",
+        "title": "Ailoom: Open AI Handoff Prompt"
+      },
+      {
+        "command": "ailoom.doctor",
+        "title": "Ailoom: Doctor"
+      },
+      {
+        "command": "ailoom.cleanPreview",
+        "title": "Ailoom: Clean Preview"
+      }
+    ],
+    "configuration": {
+      "title": "Ailoom Context",
+      "properties": {
+        "ailoom.commandPath": {
+          "type": "string",
+          "default": "ailoom",
+          "description": "Path to the local ailoom command. The extension never uploads source code."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "lint": "node --check extension.js"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.85.0"
+  }
+}

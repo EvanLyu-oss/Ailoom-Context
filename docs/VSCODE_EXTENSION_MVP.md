@@ -4,6 +4,14 @@ This plan defines the smallest useful VS Code extension for Ailoom Context.
 
 The extension should stay local-first: it calls the local Ailoom command or Python SDK and does not upload source code, skeletons, restore packages, or usage logs.
 
+MVP skeleton location:
+
+```text
+integrations/vscode/
+```
+
+The first skeleton is intentionally plain JavaScript with no build step. It can be opened in VS Code and launched as an Extension Development Host.
+
 ## Goal
 
 Make Ailoom usable without terminal hopping.
@@ -56,6 +64,19 @@ ailoom next --json
 ```
 
 The extension should never parse human terminal output.
+
+## Development
+
+From the repository root:
+
+```bash
+cd integrations/vscode
+node --check extension.js
+```
+
+Then open `integrations/vscode/` in VS Code and press `F5`.
+
+The MVP uses `ailoom.commandPath` to find the local command. It never parses human terminal text; it only reads `--json` output.
 
 ## First Flow
 

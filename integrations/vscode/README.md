@@ -56,6 +56,17 @@ npm run package
 
 `npm run package` uses `npx @vscode/vsce package --no-dependencies`. If `vsce` is not available locally, keep using `npm run lint` plus the smoke checks until Marketplace packaging is required.
 
+## Marketplace Readiness
+
+Before publishing:
+
+1. Confirm the Marketplace publisher id and update `publisher` in `package.json` if it is not `ailoom`.
+2. Run `npm run prepublish-check`.
+3. Inspect the generated `.vsix` in this directory.
+4. Publish with `npx @vscode/vsce publish` from `integrations/vscode/`.
+
+The extension icon is `assets/ailoom-icon.png`. The extension remains local-first: every command shells out to local Ailoom CLI JSON output and does not upload source, skeletons, restore packages, logs, or usage records.
+
 ## MVP Success Criteria
 
 - Create or reuse a handoff for the current workspace.

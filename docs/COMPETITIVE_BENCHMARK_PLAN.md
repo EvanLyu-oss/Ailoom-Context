@@ -7,10 +7,12 @@ The goal is not to attack competitors. The goal is to show where Ailoom's lossle
 MVP runner:
 
 ```bash
-python3 testing/competitive_benchmark.py --force --json
+python3 testing/competitive_benchmark.py --force --check-npm-registry --json
 ```
 
-The first runner compares Ailoom Context with a raw concatenation baseline and detects local `repomix` / `repopack` binaries without installing or running them by default.
+The first runner compares Ailoom Context with a raw concatenation baseline, detects local `repomix` / `repopack` binaries, and can record npm registry versions without installing or running competitors by default.
+
+Important package note: `repopack` is the older package name and is deprecated in favor of `repomix`. Public reports should avoid presenting it as a separate modern competitor unless a user specifically asks for the old package lineage.
 
 ## Tools To Compare
 
@@ -67,6 +69,21 @@ Raw concatenation should be implemented by a short script that:
 
 Competitor tools should use their documented recommended commands. Record exact versions.
 
+For version discovery without global installation:
+
+```bash
+npm view repomix version --silent
+npm view repopack version --silent
+```
+
+For a local external-tool readiness check:
+
+```bash
+python3 testing/competitive_benchmark.py --force --check-npm-registry --run-external-tools --json
+```
+
+The MVP records external availability/version. Full output-level competitor runs should only be published after each tool-specific command is implemented and reviewed for fairness.
+
 ## Report Shape
 
 Each benchmark report should include:
@@ -82,6 +99,8 @@ Each benchmark report should include:
 - runtime
 - restore fidelity result
 - notes on redaction/default skips
+- npm registry versions when `--check-npm-registry` is used
+- exact next command required to reproduce the run
 
 ## Fairness Rules
 

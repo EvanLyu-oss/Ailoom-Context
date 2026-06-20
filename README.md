@@ -57,6 +57,17 @@ Current beta proof points:
 | Benchmark status | `ready / ready / ok` |
 | Dogfood | Ailoom Context compresses and restores its own repository byte-exactly |
 
+Launch assets now exist for users who prefer IDEs, CI, or a quick proof video:
+
+| Path | Use it for |
+| --- | --- |
+| `integrations/vscode/` | VS Code handoff, savings, doctor, and clean-preview commands |
+| `.github/actions/ailoom-handoff/` | Local-first CI handoff JSON and savings JSON |
+| `docs/VSCODE_MARKETPLACE_RELEASE.md` | Marketplace upload checklist |
+| `docs/LAUNCH_READINESS.md` | Public-trial launch checklist |
+| `testing/demo_artifact_pack.py` | Screenshot notes, recording runbook, and social caption |
+| `testing/competitive_benchmark.py` | Local benchmark against Ailoom/raw concat plus external-tool version checks |
+
 ```mermaid
 flowchart LR
     A["Large repo or long document"] --> B["ailoom handoff"]
@@ -103,9 +114,9 @@ Beta users: start here with [docs/BETA_TESTING.md](docs/BETA_TESTING.md), then s
 
 Trying it for the first time? Use [GOOD_FIRST_TRIAL.md](GOOD_FIRST_TRIAL.md).
 
-Public proof points and launch material: [docs/SHOWCASE.md](docs/SHOWCASE.md), [docs/LAUNCH_POSTS.md](docs/LAUNCH_POSTS.md), [docs/PROMOTION_PLAN.md](docs/PROMOTION_PLAN.md).
+Public proof points and launch material: [docs/SHOWCASE.md](docs/SHOWCASE.md), [docs/LAUNCH_POSTS.md](docs/LAUNCH_POSTS.md), [docs/PROMOTION_PLAN.md](docs/PROMOTION_PLAN.md), [docs/LAUNCH_READINESS.md](docs/LAUNCH_READINESS.md), [docs/COMPETITIVE_BENCHMARK_REPORT.md](docs/COMPETITIVE_BENCHMARK_REPORT.md).
 
-Integration foundation: [docs/INTEGRATION_CONTRACT.md](docs/INTEGRATION_CONTRACT.md), [docs/AILOOM_SKL_V1_SPEC.md](docs/AILOOM_SKL_V1_SPEC.md), [docs/VSCODE_EXTENSION_MVP.md](docs/VSCODE_EXTENSION_MVP.md), [docs/GITHUB_ACTION_MVP.md](docs/GITHUB_ACTION_MVP.md), [docs/COMPETITIVE_BENCHMARK_PLAN.md](docs/COMPETITIVE_BENCHMARK_PLAN.md), [docs/DEMO_SCRIPT_2_MIN.md](docs/DEMO_SCRIPT_2_MIN.md).
+Integration foundation: [docs/INTEGRATION_CONTRACT.md](docs/INTEGRATION_CONTRACT.md), [docs/AILOOM_SKL_V1_SPEC.md](docs/AILOOM_SKL_V1_SPEC.md), [docs/VSCODE_EXTENSION_MVP.md](docs/VSCODE_EXTENSION_MVP.md), [docs/VSCODE_MARKETPLACE_RELEASE.md](docs/VSCODE_MARKETPLACE_RELEASE.md), [docs/GITHUB_ACTION_MVP.md](docs/GITHUB_ACTION_MVP.md), [docs/COMPETITIVE_BENCHMARK_PLAN.md](docs/COMPETITIVE_BENCHMARK_PLAN.md), [docs/DEMO_SCRIPT_2_MIN.md](docs/DEMO_SCRIPT_2_MIN.md).
 
 Early integration code lives under `integrations/vscode/` and `.github/actions/ailoom-handoff/`, and reproducible proof helpers live in `testing/competitive_benchmark.py` and `testing/demo_artifact_pack.py`.
 

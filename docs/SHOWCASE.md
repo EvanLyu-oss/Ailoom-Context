@@ -65,6 +65,14 @@ Show these outputs:
 - `Agent reading: ...x fewer input tokens`
 - `Reuse policy: active`
 
+For repeatable screenshot and video assets, run:
+
+```bash
+python3 testing/demo_artifact_pack.py --force --json
+```
+
+It writes `DEMO_SCREENSHOT_NOTES.md`, `RECORDING_RUNBOOK.md`, and `SOCIAL_CAPTION.md` under the generated demo artifact directory.
+
 ## What To Screenshot
 
 For social posts or README images, capture:
@@ -99,3 +107,6 @@ Less ideal early audiences:
 - Beta testing guide: `docs/BETA_TESTING.md`
 - User guide: `docs/USER_GUIDE.md`
 - Feedback template: `FEEDBACK_TEMPLATE.md`
+- Launch readiness: `docs/LAUNCH_READINESS.md`
+- VS Code Marketplace checklist: `docs/VSCODE_MARKETPLACE_RELEASE.md`
+- Competitive benchmark report: `docs/COMPETITIVE_BENCHMARK_REPORT.md`

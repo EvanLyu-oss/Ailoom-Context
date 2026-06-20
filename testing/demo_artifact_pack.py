@@ -153,6 +153,79 @@ def _social_caption(payloads: dict[str, dict[str, Any]]) -> str:
     return "\n".join(lines) + "\n"
 
 
+def _recording_runbook(payloads: dict[str, dict[str, Any]]) -> str:
+    handoff = payloads["handoff"]
+    savings = payloads["savings"]
+    clean = payloads["clean_preview"]
+    handoff_info = handoff.get("handoff") or {}
+    lines = [
+        "# Ailoom Two-Minute Recording Runbook",
+        "",
+        "Use this as a tight recording checklist. Do not show private source files, restore package contents, `.env` files, or customer data.",
+        "",
+        "## Shot 1: Positioning",
+        "",
+        "Say: Ailoom Context is a local-first context compression tool for AI coding agents.",
+        "",
+        "Show:",
+        "",
+        "```bash",
+        "ailoom version",
+        "```",
+        "",
+        "## Shot 2: Handoff",
+        "",
+        "Show the `Restore safety`, `Give AI`, and `Keep local` lines.",
+        "",
+        "```bash",
+        "ailoom handoff --copy --open",
+        "```",
+        "",
+        "Expected demo file paths:",
+        "",
+        f"- Skeleton: `{handoff_info.get('skeleton_file', '')}`",
+        f"- AI prompt: `{handoff_info.get('ai_handoff_file', '')}`",
+        f"- Manifest kept local: `{handoff.get('manifest_file', '')}`",
+        "",
+        "## Shot 3: Token Value",
+        "",
+        "```bash",
+        "ailoom savings",
+        "```",
+        "",
+        f"- Source tokens: `{savings.get('source_tokens', 0)}`",
+        f"- Skeleton tokens: `{savings.get('skeleton_tokens', 0)}`",
+        f"- Tokens saved: `{savings.get('tokens_saved', 0)}`",
+        f"- Savings percent: `{savings.get('savings_percent', 0)}%`",
+        "",
+        "## Shot 4: Safety Boundary",
+        "",
+        "```bash",
+        "ailoom safety",
+        "```",
+        "",
+        "Point out: local-only, no telemetry, AI-facing skeleton, restore files kept local.",
+        "",
+        "## Shot 5: Cleanup",
+        "",
+        "```bash",
+        "ailoom doctor --storage",
+        "ailoom clean --dry-run --all",
+        "```",
+        "",
+        f"- Clean preview status: `{clean.get('clean_status', clean.get('status', ''))}`",
+        f"- Reclaimable bytes in demo: `{clean.get('total_bytes', 0)}`",
+        "",
+        "## Closing Line",
+        "",
+        "Ailoom reduces context pressure for large AI coding workflows without giving up local exact restore.",
+        "",
+        "Repository: https://github.com/EvanLyu-oss/Ailoom-Context",
+        "Author: Evan <carwyn910@gmail.com>",
+    ]
+    return "\n".join(lines) + "\n"
+
+
 def build_demo_pack(args: argparse.Namespace) -> dict[str, Any]:
     output_dir = Path(args.output_dir or DEFAULT_OUTPUT_DIR).resolve()
     if output_dir.exists() and args.force:
@@ -175,6 +248,8 @@ def build_demo_pack(args: argparse.Namespace) -> dict[str, Any]:
     screenshot_notes.write_text(_snippet_from_payloads(payloads), encoding="utf-8")
     social_caption = output_dir / "SOCIAL_CAPTION.md"
     social_caption.write_text(_social_caption(payloads), encoding="utf-8")
+    recording_runbook = output_dir / "RECORDING_RUNBOOK.md"
+    recording_runbook.write_text(_recording_runbook(payloads), encoding="utf-8")
     status = "ok" if all(payload.get("_returncode") == 0 for payload in payloads.values()) else "error"
     summary = {
         "status": status,
@@ -184,6 +259,7 @@ def build_demo_pack(args: argparse.Namespace) -> dict[str, Any]:
         "bundle_dir": str(bundle_dir),
         "screenshot_notes": str(screenshot_notes),
         "social_caption": str(social_caption),
+        "recording_runbook": str(recording_runbook),
         "artifacts": {name: str(artifacts_dir / f"{name}.json") for name in payloads},
         "handoff_restore_safe": bool(payloads["handoff"].get("restore_safe")),
         "savings_percent": payloads["savings"].get("savings_percent", 0),

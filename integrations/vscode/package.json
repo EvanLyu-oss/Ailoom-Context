@@ -4,11 +4,39 @@
   "description": "Local-first AI/IDE handoff for Ailoom Context skeletons, savings, and safety checks.",
   "version": "0.0.1",
   "publisher": "ailoom",
+  "license": "MIT",
+  "icon": "assets/ailoom-icon.png",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/EvanLyu-oss/Ailoom-Context.git",
+    "directory": "integrations/vscode"
+  },
+  "homepage": "https://github.com/EvanLyu-oss/Ailoom-Context",
+  "bugs": {
+    "url": "https://github.com/EvanLyu-oss/Ailoom-Context/issues"
+  },
+  "keywords": [
+    "ai",
+    "context",
+    "local-first",
+    "token-savings",
+    "coding-agents",
+    "handoff",
+    "restore"
+  ],
   "engines": {
     "vscode": "^1.85.0"
   },
   "categories": [
-    "Other"
+    "Other",
+    "Machine Learning"
+  ],
+  "galleryBanner": {
+    "color": "#0B2D48",
+    "theme": "dark"
+  },
+  "extensionKind": [
+    "workspace"
   ],
   "activationEvents": [
     "onCommand:ailoom.handoffWorkspace",
@@ -74,7 +102,8 @@
   },
   "scripts": {
     "lint": "node --check extension.js",
-    "package": "npx @vscode/vsce package --no-dependencies"
+    "package": "npx @vscode/vsce package --no-dependencies",
+    "prepublish-check": "npm run lint && npm run package"
   },
   "devDependencies": {
     "@types/vscode": "^1.85.0"

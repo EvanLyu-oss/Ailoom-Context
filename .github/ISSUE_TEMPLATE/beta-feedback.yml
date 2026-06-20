@@ -1,0 +1,81 @@
+name: Ailoom Context beta feedback
+description: Share install, handoff, savings, speed, safety, or IDE feedback from a real trial.
+title: "[Beta feedback]: "
+labels:
+  - beta-feedback
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for trying Ailoom Context. Please avoid attaching private source code, restore packages, `.env` files, secrets, or customer data.
+  - type: input
+    id: version
+    attributes:
+      label: Ailoom version or commit
+      description: Run `ailoom version --json` if possible.
+      placeholder: v1.0.0-beta.1 / commit hash
+    validations:
+      required: true
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options:
+        - macOS
+        - Windows
+        - Linux
+        - Other
+    validations:
+      required: true
+  - type: input
+    id: install_method
+    attributes:
+      label: Install method
+      placeholder: sh install.sh --setup-shell / install.ps1 / source checkout / VS Code extension
+    validations:
+      required: true
+  - type: textarea
+    id: project_shape
+    attributes:
+      label: Project shape
+      description: Approximate file count, repo size, language/framework, generated folders, or long-document size.
+      placeholder: Python repo, 1,200 files, node_modules present, about 80MB
+    validations:
+      required: true
+  - type: textarea
+    id: commands
+    attributes:
+      label: Commands tried
+      description: Paste commands, not private output.
+      value: |
+        ailoom version
+        ailoom first-run
+        ailoom handoff
+        ailoom savings
+        ailoom trial-report --write-report ailoom-trial-report.md
+    validations:
+      required: true
+  - type: textarea
+    id: result
+    attributes:
+      label: Result summary
+      description: Include restore safety, source tokens, skeleton tokens, savings percent, first run time, reuse run time, and AI/IDE used if known.
+      placeholder: Restore safety OK, savings 72%, Cursor understood the skeleton, second handoff reused bundle.
+    validations:
+      required: true
+  - type: textarea
+    id: friction
+    attributes:
+      label: Confusion or friction
+      description: What felt slow, unclear, hard to install, hard to trust, or hard to explain?
+      placeholder: The first command was clear, but I did not know whether to share AI_HANDOFF.md or context_skeleton.mcp.
+    validations:
+      required: false
+  - type: textarea
+    id: logs
+    attributes:
+      label: Non-sensitive logs or reports
+      description: Paste `trial-report` or `savings` excerpts only after removing private paths, source, secrets, and restore package data.
+      render: text
+    validations:
+      required: false

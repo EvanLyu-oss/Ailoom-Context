@@ -61,6 +61,9 @@ Check:
 - [docs/USER_GUIDE.md](USER_GUIDE.md)
 - [docs/BETA_TESTING.md](BETA_TESTING.md)
 - [docs/V1_STABLE_READINESS.md](V1_STABLE_READINESS.md)
+- [docs/LAUNCH_READINESS.md](LAUNCH_READINESS.md)
+- [docs/VSCODE_MARKETPLACE_RELEASE.md](VSCODE_MARKETPLACE_RELEASE.md)
+- [docs/COMPETITIVE_BENCHMARK_REPORT.md](COMPETITIVE_BENCHMARK_REPORT.md)
 - [FEEDBACK_TEMPLATE.md](../FEEDBACK_TEMPLATE.md)
 - [SECURITY.md](../SECURITY.md)
 
@@ -70,7 +73,7 @@ Required documentation result:
 - INSTALL shows the no-learning path for macOS and Windows.
 - USER_GUIDE starts with the five-minute loop.
 - V1 stable readiness states install, first project, value, safety, performance, and release gates.
-- Integration docs cover Python SDK, JSON contract, AILOOM-SKL.v1, VS Code MVP, GitHub Action MVP, competitive benchmark runner, and two-minute demo artifact generator.
+- Integration docs cover Python SDK, JSON contract, AILOOM-SKL.v1, VS Code MVP, Marketplace checklist, GitHub Action MVP, competitive benchmark runner, and two-minute demo artifact generator.
 
 ## 5. Release Notes
 

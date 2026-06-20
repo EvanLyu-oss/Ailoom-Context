@@ -1342,9 +1342,13 @@ def _check_user_guides_docs_ok(workspace: Path) -> None:
     integration_contract = ROOT / "docs" / "INTEGRATION_CONTRACT.md"
     skl_spec = ROOT / "docs" / "AILOOM_SKL_V1_SPEC.md"
     vscode_mvp = ROOT / "docs" / "VSCODE_EXTENSION_MVP.md"
+    vscode_marketplace = ROOT / "docs" / "VSCODE_MARKETPLACE_RELEASE.md"
     github_action_mvp = ROOT / "docs" / "GITHUB_ACTION_MVP.md"
     benchmark_plan = ROOT / "docs" / "COMPETITIVE_BENCHMARK_PLAN.md"
+    benchmark_report = ROOT / "docs" / "COMPETITIVE_BENCHMARK_REPORT.md"
     demo_script = ROOT / "docs" / "DEMO_SCRIPT_2_MIN.md"
+    launch_readiness = ROOT / "docs" / "LAUNCH_READINESS.md"
+    beta_feedback_issue = ROOT / ".github" / "ISSUE_TEMPLATE" / "beta-feedback.yml"
     assert install_doc.exists()
     assert user_guide.exists()
     assert beta_testing.exists()
@@ -1360,9 +1364,13 @@ def _check_user_guides_docs_ok(workspace: Path) -> None:
     assert integration_contract.exists()
     assert skl_spec.exists()
     assert vscode_mvp.exists()
+    assert vscode_marketplace.exists()
     assert github_action_mvp.exists()
     assert benchmark_plan.exists()
+    assert benchmark_report.exists()
     assert demo_script.exists()
+    assert launch_readiness.exists()
+    assert beta_feedback_issue.exists()
     install_text = install_doc.read_text(encoding="utf-8")
     user_text = user_guide.read_text(encoding="utf-8")
     beta_text = beta_testing.read_text(encoding="utf-8")
@@ -1379,9 +1387,13 @@ def _check_user_guides_docs_ok(workspace: Path) -> None:
     integration_contract_text = integration_contract.read_text(encoding="utf-8")
     skl_spec_text = skl_spec.read_text(encoding="utf-8")
     vscode_mvp_text = vscode_mvp.read_text(encoding="utf-8")
+    vscode_marketplace_text = vscode_marketplace.read_text(encoding="utf-8")
     github_action_mvp_text = github_action_mvp.read_text(encoding="utf-8")
     benchmark_plan_text = benchmark_plan.read_text(encoding="utf-8")
+    benchmark_report_text = benchmark_report.read_text(encoding="utf-8")
     demo_script_text = demo_script.read_text(encoding="utf-8")
+    launch_readiness_text = launch_readiness.read_text(encoding="utf-8")
+    beta_feedback_issue_text = beta_feedback_issue.read_text(encoding="utf-8")
     assert "Install in 30 seconds" in install_text
     assert "The No-Learning Path" in install_text
     assert "Confirm You Have The Current Beta" in install_text
@@ -1418,6 +1430,9 @@ def _check_user_guides_docs_ok(workspace: Path) -> None:
     assert "Safety Gate" in v1_stable_text
     assert "Performance Gate" in v1_stable_text
     assert "docs/V1_STABLE_READINESS.md" in readme_text
+    assert "docs/LAUNCH_READINESS.md" in readme_text
+    assert "docs/VSCODE_MARKETPLACE_RELEASE.md" in readme_text
+    assert "docs/COMPETITIVE_BENCHMARK_REPORT.md" in readme_text
     assert "docs/INTEGRATION_CONTRACT.md" in readme_text
     assert "ailoom_core" in readme_text
     assert "Try It In 3 Commands" in readme_text
@@ -1450,13 +1465,30 @@ def _check_user_guides_docs_ok(workspace: Path) -> None:
     assert "VS Code Extension MVP Plan" in vscode_mvp_text
     assert "Ailoom: Handoff Current Workspace" in vscode_mvp_text
     assert "node --check extension.js" in vscode_mvp_text
+    assert "VS Code Marketplace Release Checklist" in vscode_marketplace_text
+    assert "npm run package" in vscode_marketplace_text
+    assert "assets/ailoom-icon.png" in vscode_marketplace_text
+    assert "No source upload" in vscode_marketplace_text or "No source upload".lower() in vscode_marketplace_text.lower()
     assert "GitHub Action MVP" in github_action_mvp_text
     assert ".github/actions/ailoom-handoff/action.yml" in github_action_mvp_text
     assert "skeleton-file" in github_action_mvp_text
     assert "Competitive Benchmark Plan" in benchmark_plan_text
     assert "Repomix" in benchmark_plan_text
+    assert "--check-npm-registry" in benchmark_plan_text
+    assert "repopack" in benchmark_plan_text
+    assert "Competitive Benchmark Report" in benchmark_report_text
+    assert "0.1044x" in benchmark_report_text
+    assert "restore fidelity: `ok`" in benchmark_report_text
+    assert "observed local result" in benchmark_report_text
     assert "Two-Minute Demo Script" in demo_script_text
     assert "ailoom handoff --copy --open" in demo_script_text
+    assert "RECORDING_RUNBOOK.md" in demo_script_text
+    assert "Launch Readiness" in launch_readiness_text
+    assert "Public Trial Success Criteria" in launch_readiness_text
+    assert "VS Code Marketplace checklist" in launch_readiness_text
+    assert "Ailoom Context beta feedback" in beta_feedback_issue_text
+    assert "private source code" in beta_feedback_issue_text
+    assert "trial-report" in beta_feedback_issue_text
 
 
 def _check_vscode_extension_mvp_json(workspace: Path) -> None:
@@ -1466,11 +1498,23 @@ def _check_vscode_extension_mvp_json(workspace: Path) -> None:
     extension_file = root / "extension.js"
     readme_file = root / "README.md"
     ignore_file = root / ".vscodeignore"
+    icon_file = root / "assets" / "ailoom-icon.png"
+    license_file = root / "LICENSE"
     assert package_file.exists()
     assert extension_file.exists()
     assert readme_file.exists()
     assert ignore_file.exists()
+    assert icon_file.exists()
+    assert license_file.exists()
+    assert icon_file.stat().st_size > 1000
     package = json.loads(package_file.read_text(encoding="utf-8"))
+    assert package["icon"] == "assets/ailoom-icon.png"
+    assert package["license"] == "MIT"
+    assert package["repository"]["url"] == "https://github.com/EvanLyu-oss/Ailoom-Context.git"
+    assert package["homepage"] == "https://github.com/EvanLyu-oss/Ailoom-Context"
+    assert "token-savings" in package["keywords"]
+    assert "Machine Learning" in package["categories"]
+    assert package["extensionKind"] == ["workspace"]
     commands = {item["command"]: item["title"] for item in package["contributes"]["commands"]}
     assert commands["ailoom.handoffWorkspace"] == "Ailoom: Handoff Current Workspace"
     assert commands["ailoom.showSavings"] == "Ailoom: Show Savings"
@@ -1484,6 +1528,7 @@ def _check_vscode_extension_mvp_json(workspace: Path) -> None:
     assert package["contributes"]["configuration"]["properties"]["ailoom.enablePythonModuleFallback"]["default"] is True
     assert package["scripts"]["lint"] == "node --check extension.js"
     assert "vsce package" in package["scripts"]["package"]
+    assert package["scripts"]["prepublish-check"] == "npm run lint && npm run package"
     extension_text = extension_file.read_text(encoding="utf-8")
     assert 'require("child_process")' in extension_text
     assert "execFile" in extension_text
@@ -1504,6 +1549,7 @@ def _check_vscode_extension_mvp_json(workspace: Path) -> None:
     assert "Ailoom: Version / Install Check" in readme_text
     assert "ailoom.commandPath" in readme_text
     assert "npm run package" in readme_text
+    assert "Marketplace Readiness" in readme_text
 
 
 def _check_github_action_mvp_json(workspace: Path) -> None:
@@ -1548,10 +1594,14 @@ def _check_competitive_benchmark_json(workspace: Path) -> None:
     assert payload["summary"]["ailoom_vs_raw_token_ratio"] >= 0
     assert payload["public_report_template"]["safe_claim"]
     assert payload["public_report_template"]["avoid_claim"]
+    assert payload["public_report_template"]["next_benchmark_command"]
+    assert payload["summary"]["npm_registry_checked"] is False
+    assert results["repopack"]["relationship_note"]
     report_text = Path(payload["artifacts"]["output_md"]).read_text(encoding="utf-8")
     assert "Competitive Benchmark Report" in report_text
     assert "Ailoom vs raw token ratio" in report_text
     assert "Public claim draft" in report_text
+    assert "Next benchmark command" in report_text
 
 
 def _check_demo_artifact_pack_json(workspace: Path) -> None:
@@ -1567,6 +1617,7 @@ def _check_demo_artifact_pack_json(workspace: Path) -> None:
     assert payload["no_telemetry"] is True
     assert Path(payload["screenshot_notes"]).exists()
     assert Path(payload["social_caption"]).exists()
+    assert Path(payload["recording_runbook"]).exists()
     for artifact in payload["artifacts"].values():
         assert Path(artifact).exists()
     notes = Path(payload["screenshot_notes"]).read_text(encoding="utf-8")
@@ -1576,6 +1627,10 @@ def _check_demo_artifact_pack_json(workspace: Path) -> None:
     assert "GitHub:" in caption
     assert "Evan <carwyn910@gmail.com>" in caption
     assert "no telemetry" in caption
+    runbook = Path(payload["recording_runbook"]).read_text(encoding="utf-8")
+    assert "Ailoom Two-Minute Recording Runbook" in runbook
+    assert "ailoom handoff --copy --open" in runbook
+    assert "private source files" in runbook
 
 
 def _check_python_sdk_json(workspace: Path) -> None:

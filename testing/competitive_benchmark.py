@@ -224,9 +224,56 @@ def _ailoom_benchmark(input_dir: Path, output_dir: Path) -> dict[str, Any]:
     }
 
 
-def _external_tool_status(name: str, *, run_external_tools: bool) -> dict[str, Any]:
+def _npm_registry_version(package: str, *, enabled: bool) -> dict[str, Any]:
+    if not enabled:
+        return {
+            "checked": False,
+            "status": "skipped",
+            "reason": "npm registry checks are disabled unless --check-npm-registry is set",
+        }
+    npm = shutil.which("npm")
+    if not npm:
+        return {
+            "checked": True,
+            "status": "unavailable",
+            "reason": "npm was not found on PATH",
+        }
+    started_at = time.perf_counter()
+    try:
+        proc = subprocess.run(
+            [npm, "view", package, "version", "--silent"],
+            text=True,
+            capture_output=True,
+            timeout=20,
+        )
+    except subprocess.TimeoutExpired:
+        return {
+            "checked": True,
+            "status": "timeout",
+            "runtime_ms": _elapsed_ms(started_at),
+            "reason": "npm view timed out after 20 seconds",
+        }
+    version = proc.stdout.strip().splitlines()[-1] if proc.stdout.strip() else ""
+    return {
+        "checked": True,
+        "status": "ok" if proc.returncode == 0 and version else "error",
+        "returncode": proc.returncode,
+        "runtime_ms": _elapsed_ms(started_at),
+        "version": version,
+        "stderr_tail": proc.stderr[-1200:] if proc.stderr else "",
+    }
+
+
+def _external_tool_status(name: str, *, run_external_tools: bool, check_npm_registry: bool = False) -> dict[str, Any]:
     path = shutil.which(name)
     command_placeholder = f"{name} <fixture> --output <output-file>"
+    npm_package = name
+    registry = _npm_registry_version(npm_package, enabled=check_npm_registry)
+    relationship_note = (
+        "repopack is the old package name and is deprecated in favor of repomix"
+        if name == "repopack"
+        else ""
+    )
     if not path:
         return {
             "tool": name,
@@ -234,6 +281,9 @@ def _external_tool_status(name: str, *, run_external_tools: bool) -> dict[str, A
             "reason": f"{name} was not found on PATH",
             "detected": False,
             "command_placeholder": command_placeholder,
+            "npm_package": npm_package,
+            "npm_registry": registry,
+            "relationship_note": relationship_note,
             "install_note": "install the tool locally and rerun with --run-external-tools when a reproducible command is available",
         }
     if not run_external_tools:
@@ -244,6 +294,9 @@ def _external_tool_status(name: str, *, run_external_tools: bool) -> dict[str, A
             "detected": True,
             "reason": "external tools are not executed unless --run-external-tools is set",
             "command_placeholder": command_placeholder,
+            "npm_package": npm_package,
+            "npm_registry": registry,
+            "relationship_note": relationship_note,
         }
     started_at = time.perf_counter()
     proc = subprocess.run([path, "--version"], text=True, capture_output=True)
@@ -257,6 +310,9 @@ def _external_tool_status(name: str, *, run_external_tools: bool) -> dict[str, A
         "stdout_tail": proc.stdout[-1200:],
         "stderr_tail": proc.stderr[-1200:],
         "command_placeholder": command_placeholder,
+        "npm_package": npm_package,
+        "npm_registry": registry,
+        "relationship_note": relationship_note,
         "note": "first MVP only records external tool availability/version; full tool-specific runs come later",
     }
 
@@ -298,6 +354,7 @@ def _render_markdown(payload: dict[str, Any]) -> str:
             f"- Ailoom restore fidelity: `{summary.get('ailoom_restore_fidelity', '')}`",
             f"- External tools checked: `{', '.join(summary.get('external_tools', []))}`",
             f"- Public claim draft: {public_template.get('safe_claim', '')}",
+            f"- Next benchmark command: `{public_template.get('next_benchmark_command', '')}`",
             "",
             "This benchmark is local-only and reproducible. It should be treated as observed data, not a universal claim.",
         ]
@@ -317,8 +374,16 @@ def build_benchmark_payload(args: argparse.Namespace) -> dict[str, Any]:
     raw = _raw_concat_benchmark(fixture_dir, output_dir)
     ailoom = _ailoom_benchmark(fixture_dir, output_dir)
     external = [
-        _external_tool_status("repomix", run_external_tools=args.run_external_tools),
-        _external_tool_status("repopack", run_external_tools=args.run_external_tools),
+        _external_tool_status(
+            "repomix",
+            run_external_tools=args.run_external_tools,
+            check_npm_registry=args.check_npm_registry,
+        ),
+        _external_tool_status(
+            "repopack",
+            run_external_tools=args.run_external_tools,
+            check_npm_registry=args.check_npm_registry,
+        ),
     ]
     raw_tokens = int(raw.get("output_tokens") or 0)
     ailoom_tokens = int(ailoom.get("output_tokens") or 0)
@@ -339,6 +404,7 @@ def build_benchmark_payload(args: argparse.Namespace) -> dict[str, Any]:
             "ailoom_restore_fidelity": ailoom.get("restore_fidelity"),
             "raw_restore_fidelity": raw.get("restore_fidelity"),
             "external_tools": [item["tool"] for item in external],
+            "npm_registry_checked": bool(args.check_npm_registry),
             "claim_guidance": "use observed/local/reproducible wording; avoid universal competitor claims",
         },
         "public_report_template": {
@@ -347,6 +413,7 @@ def build_benchmark_payload(args: argparse.Namespace) -> dict[str, Any]:
                 f"while preserving restore fidelity: {ailoom.get('restore_fidelity')}."
             ),
             "avoid_claim": "Ailoom is always smaller/faster than every competitor.",
+            "next_benchmark_command": "python3 testing/competitive_benchmark.py --force --check-npm-registry --json",
             "next_benchmark_step": "install repomix/repopack locally, record exact versions, then rerun with --run-external-tools",
         },
     }
@@ -369,6 +436,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--output-json", help="JSON report path.")
     parser.add_argument("--output-md", help="Markdown report path.")
     parser.add_argument("--run-external-tools", action="store_true", help="Run detected external tool version checks.")
+    parser.add_argument("--check-npm-registry", action="store_true", help="Record npm registry versions for repomix/repopack.")
     parser.add_argument("--force", action="store_true", help="Replace --output-dir if it exists.")
     parser.add_argument("--json", action="store_true", help="Emit JSON to stdout.")
     args = parser.parse_args(argv)

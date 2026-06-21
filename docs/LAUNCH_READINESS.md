@@ -39,6 +39,7 @@ Make the first public user experience feel obvious:
 | Competitive benchmark plan | `docs/COMPETITIVE_BENCHMARK_PLAN.md` |
 | Two-minute demo script | `docs/DEMO_SCRIPT_2_MIN.md` |
 | Social launch copy | `docs/LAUNCH_POSTS.md` |
+| Public beta launch operator checklist | `docs/PUBLIC_BETA_LAUNCH.md` |
 | Public showcase | `docs/SHOWCASE.md` |
 | Feedback template | `FEEDBACK_TEMPLATE.md` |
 | GitHub issue form | `.github/ISSUE_TEMPLATE/beta-feedback.yml` |

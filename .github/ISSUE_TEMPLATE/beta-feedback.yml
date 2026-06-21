@@ -13,7 +13,7 @@ body:
     attributes:
       label: Ailoom version or commit
       description: Run `ailoom version --json` if possible.
-      placeholder: v1.0.0-beta.1 / commit hash
+      placeholder: v1.0.0-beta.2 / commit hash
     validations:
       required: true
   - type: dropdown

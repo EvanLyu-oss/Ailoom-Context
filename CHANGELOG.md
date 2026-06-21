@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- No unreleased changes yet.
+
+## 1.0.0-beta.2 - 2026-06-21
+
 - hardened the VS Code MVP with install/version checks, command fallbacks, packaging guidance, demo social captions, benchmark public-claim output, and a local GitHub Action MVP template
 - added launch-readiness materials for Marketplace publishing, public-trial feedback, npm registry benchmark checks, recording runbooks, a public benchmark report, and VS Code extension metadata
 - added a local VS Code extension MVP skeleton, a competitive benchmark runner, and a demo artifact generator for the next proof-and-integration phase

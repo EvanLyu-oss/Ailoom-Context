@@ -1,8 +1,10 @@
 # GitHub Release Template
 
-# Ailoom Context v1.0.0-beta.1
+# Ailoom Context v1.0.0-beta.2
 
-This beta is ready for local macOS trial use. It focuses on local, lossless AI/IDE handoff for large repositories and long documents, with exact restore packages, visible token savings, storage cleanup guidance, and structured beta feedback.
+This beta is ready for public local trial use. It focuses on local, lossless AI/IDE handoff for large repositories and long documents, with exact restore packages, visible token savings, storage cleanup guidance, structured beta feedback, VS Code Marketplace preparation, GitHub Action handoff, and public benchmark/demo materials.
+
+This is still a beta, not the final v1.0 stable release. Please report install friction, speed issues, confusing output, Windows/macOS differences, and AI/IDE workflow feedback.
 
 ## Install
 
@@ -33,6 +35,13 @@ ailoom doctor --storage
 ailoom clean --dry-run --all --older-than 7d
 ```
 
+For launch/benchmark/demo validation:
+
+```bash
+python3 testing/competitive_benchmark.py --force --check-npm-registry --json
+python3 testing/demo_artifact_pack.py --force --json
+```
+
 ## What to look for
 
 - `Restore safety: OK`
@@ -42,6 +51,8 @@ ailoom clean --dry-run --all --older-than 7d
 - second handoff reuse is faster when the project has not changed
 - `doctor --storage` shows generated artifact size, risk level, and cleanup safety
 - `trial-report` includes value summary, storage risk, readiness, and feedback questions
+- VS Code users can run `Ailoom: Version / Install Check`
+- demo artifacts include screenshot notes, a recording runbook, and a social caption
 
 ## User experience gate
 
@@ -73,6 +84,14 @@ This release should show:
 - `executive_summary.v1_user_experience_readiness.status`: `ready`
 - benchmark: `ready / ready / ok`
 - restore verified: complete
+
+## Public beta assets
+
+- Launch checklist: `docs/LAUNCH_READINESS.md`
+- VS Code Marketplace checklist: `docs/VSCODE_MARKETPLACE_RELEASE.md`
+- Benchmark report: `docs/COMPETITIVE_BENCHMARK_REPORT.md`
+- Demo script: `docs/DEMO_SCRIPT_2_MIN.md`
+- Feedback issue template: `.github/ISSUE_TEMPLATE/beta-feedback.yml`
 
 ## Feedback
 

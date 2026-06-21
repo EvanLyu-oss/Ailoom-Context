@@ -62,6 +62,7 @@ Check:
 - [docs/BETA_TESTING.md](BETA_TESTING.md)
 - [docs/V1_STABLE_READINESS.md](V1_STABLE_READINESS.md)
 - [docs/LAUNCH_READINESS.md](LAUNCH_READINESS.md)
+- [docs/PUBLIC_BETA_LAUNCH.md](PUBLIC_BETA_LAUNCH.md)
 - [docs/VSCODE_MARKETPLACE_RELEASE.md](VSCODE_MARKETPLACE_RELEASE.md)
 - [docs/COMPETITIVE_BENCHMARK_REPORT.md](COMPETITIVE_BENCHMARK_REPORT.md)
 - [FEEDBACK_TEMPLATE.md](../FEEDBACK_TEMPLATE.md)
@@ -79,4 +80,4 @@ Required documentation result:
 
 Use [docs/GITHUB_RELEASE_TEMPLATE.md](GITHUB_RELEASE_TEMPLATE.md).
 
-For v1 beta trial distribution, also publish [docs/V1_BETA_RELEASE_NOTES.md](V1_BETA_RELEASE_NOTES.md) and tag the release as `v1.0.0-beta.1`.
+For v1 beta trial distribution, also publish [docs/V1_BETA_RELEASE_NOTES.md](V1_BETA_RELEASE_NOTES.md) and tag the release as `v1.0.0-beta.2`.

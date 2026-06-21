@@ -106,7 +106,7 @@ Confirm the current beta before reporting install or compatibility issues:
 ailoom version --json
 ```
 
-Look for `version_check: ok`, `release_channel: v1-beta`, and `expected_beta_tag: v1.0.0-beta.1`.
+Look for `version_check: ok`, `release_channel: v1-beta`, and `expected_beta_tag: v1.0.0-beta.2`.
 
 New-user guide: [docs/USER_GUIDE.md](docs/USER_GUIDE.md)
 
@@ -114,7 +114,7 @@ Beta users: start here with [docs/BETA_TESTING.md](docs/BETA_TESTING.md), then s
 
 Trying it for the first time? Use [GOOD_FIRST_TRIAL.md](GOOD_FIRST_TRIAL.md).
 
-Public proof points and launch material: [docs/SHOWCASE.md](docs/SHOWCASE.md), [docs/LAUNCH_POSTS.md](docs/LAUNCH_POSTS.md), [docs/PROMOTION_PLAN.md](docs/PROMOTION_PLAN.md), [docs/LAUNCH_READINESS.md](docs/LAUNCH_READINESS.md), [docs/COMPETITIVE_BENCHMARK_REPORT.md](docs/COMPETITIVE_BENCHMARK_REPORT.md).
+Public proof points and launch material: [docs/SHOWCASE.md](docs/SHOWCASE.md), [docs/LAUNCH_POSTS.md](docs/LAUNCH_POSTS.md), [docs/PROMOTION_PLAN.md](docs/PROMOTION_PLAN.md), [docs/LAUNCH_READINESS.md](docs/LAUNCH_READINESS.md), [docs/PUBLIC_BETA_LAUNCH.md](docs/PUBLIC_BETA_LAUNCH.md), [docs/COMPETITIVE_BENCHMARK_REPORT.md](docs/COMPETITIVE_BENCHMARK_REPORT.md).
 
 Integration foundation: [docs/INTEGRATION_CONTRACT.md](docs/INTEGRATION_CONTRACT.md), [docs/AILOOM_SKL_V1_SPEC.md](docs/AILOOM_SKL_V1_SPEC.md), [docs/VSCODE_EXTENSION_MVP.md](docs/VSCODE_EXTENSION_MVP.md), [docs/VSCODE_MARKETPLACE_RELEASE.md](docs/VSCODE_MARKETPLACE_RELEASE.md), [docs/GITHUB_ACTION_MVP.md](docs/GITHUB_ACTION_MVP.md), [docs/COMPETITIVE_BENCHMARK_PLAN.md](docs/COMPETITIVE_BENCHMARK_PLAN.md), [docs/DEMO_SCRIPT_2_MIN.md](docs/DEMO_SCRIPT_2_MIN.md).
 

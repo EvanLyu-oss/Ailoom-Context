@@ -728,8 +728,8 @@ def _check_context_doctor_install_json(workspace: Path) -> None:
     assert payload["install"]["entrypoint"] == "mcp-skeleton-version"
     assert payload["install"]["install_command_text"] == "sh install.sh"
     assert payload["install"]["release_channel"] == "v1-beta"
-    assert payload["install"]["expected_beta_version"] == "1.0.0b1"
-    assert payload["install"]["expected_beta_tag"] == "v1.0.0-beta.1"
+    assert payload["install"]["expected_beta_version"] == "1.0.0b2"
+    assert payload["install"]["expected_beta_tag"] == "v1.0.0-beta.2"
     assert payload["install"]["repo_url"] == "https://github.com/EvanLyu-oss/Ailoom-Context"
     assert payload["install"]["version_check"] == "ok"
     assert payload["checks"]
@@ -1348,6 +1348,7 @@ def _check_user_guides_docs_ok(workspace: Path) -> None:
     benchmark_report = ROOT / "docs" / "COMPETITIVE_BENCHMARK_REPORT.md"
     demo_script = ROOT / "docs" / "DEMO_SCRIPT_2_MIN.md"
     launch_readiness = ROOT / "docs" / "LAUNCH_READINESS.md"
+    public_beta_launch = ROOT / "docs" / "PUBLIC_BETA_LAUNCH.md"
     beta_feedback_issue = ROOT / ".github" / "ISSUE_TEMPLATE" / "beta-feedback.yml"
     assert install_doc.exists()
     assert user_guide.exists()
@@ -1370,6 +1371,7 @@ def _check_user_guides_docs_ok(workspace: Path) -> None:
     assert benchmark_report.exists()
     assert demo_script.exists()
     assert launch_readiness.exists()
+    assert public_beta_launch.exists()
     assert beta_feedback_issue.exists()
     install_text = install_doc.read_text(encoding="utf-8")
     user_text = user_guide.read_text(encoding="utf-8")
@@ -1393,11 +1395,12 @@ def _check_user_guides_docs_ok(workspace: Path) -> None:
     benchmark_report_text = benchmark_report.read_text(encoding="utf-8")
     demo_script_text = demo_script.read_text(encoding="utf-8")
     launch_readiness_text = launch_readiness.read_text(encoding="utf-8")
+    public_beta_launch_text = public_beta_launch.read_text(encoding="utf-8")
     beta_feedback_issue_text = beta_feedback_issue.read_text(encoding="utf-8")
     assert "Install in 30 seconds" in install_text
     assert "The No-Learning Path" in install_text
     assert "Confirm You Have The Current Beta" in install_text
-    assert "v1.0.0-beta.1" in install_text
+    assert "v1.0.0-beta.2" in install_text
     assert "ailoom version --json" in install_text
     assert "macOS" in install_text
     assert "Windows PowerShell" in install_text
@@ -1417,11 +1420,14 @@ def _check_user_guides_docs_ok(workspace: Path) -> None:
     assert "python3 testing/release_readiness_check.py" in release_checklist_text
     assert "V1_BETA_RELEASE_NOTES.md" in release_checklist_text
     assert "GitHub Release Template" in release_template_text
-    assert "v1.0.0-beta.1" in release_template_text
+    assert "v1.0.0-beta.2" in release_template_text
+    assert "public local trial use" in release_template_text
     assert "ailoom savings --write-report" in release_template_text
+    assert "v1.0.0-beta.2" in v1_beta_text
     assert "v1_beta_readiness" in v1_beta_text
     assert "v1_user_experience_readiness" in v1_beta_text
     assert "ailoom trial-report --write-report" in v1_beta_text
+    assert "What changed since beta.1" in v1_beta_text
     assert "Ailoom Context v1.0 Stable Readiness" in v1_stable_text
     assert "Zero-Learning Command Loop" in v1_stable_text
     assert "Install Experience Gate" in v1_stable_text
@@ -1431,6 +1437,7 @@ def _check_user_guides_docs_ok(workspace: Path) -> None:
     assert "Performance Gate" in v1_stable_text
     assert "docs/V1_STABLE_READINESS.md" in readme_text
     assert "docs/LAUNCH_READINESS.md" in readme_text
+    assert "docs/PUBLIC_BETA_LAUNCH.md" in readme_text
     assert "docs/VSCODE_MARKETPLACE_RELEASE.md" in readme_text
     assert "docs/COMPETITIVE_BENCHMARK_REPORT.md" in readme_text
     assert "docs/INTEGRATION_CONTRACT.md" in readme_text
@@ -1486,6 +1493,11 @@ def _check_user_guides_docs_ok(workspace: Path) -> None:
     assert "Launch Readiness" in launch_readiness_text
     assert "Public Trial Success Criteria" in launch_readiness_text
     assert "VS Code Marketplace checklist" in launch_readiness_text
+    assert "PUBLIC_BETA_LAUNCH.md" in launch_readiness_text
+    assert "Public Beta Launch" in public_beta_launch_text
+    assert "v1.0.0-beta.2" in public_beta_launch_text
+    assert "Mark as pre-release" in public_beta_launch_text
+    assert "npm run prepublish-check" in public_beta_launch_text
     assert "Ailoom Context beta feedback" in beta_feedback_issue_text
     assert "private source code" in beta_feedback_issue_text
     assert "trial-report" in beta_feedback_issue_text
@@ -2035,10 +2047,10 @@ def _check_top_level_version_json(workspace: Path) -> None:
     assert payload["package_name"] == "ailoom-context"
     assert payload["version"]
     assert payload["release_channel"] == "v1-beta"
-    assert payload["expected_beta_version"] == "1.0.0b1"
-    assert payload["expected_beta_tag"] == "v1.0.0-beta.1"
+    assert payload["expected_beta_version"] == "1.0.0b2"
+    assert payload["expected_beta_tag"] == "v1.0.0-beta.2"
     assert payload["repo_url"] == "https://github.com/EvanLyu-oss/Ailoom-Context"
-    assert payload["release_url"].endswith("/releases/tag/v1.0.0-beta.1")
+    assert payload["release_url"].endswith("/releases/tag/v1.0.0-beta.2")
     assert payload["latest_beta_zip_url"].endswith("/archive/refs/heads/main.zip")
     assert payload["version_check"] == "ok"
     assert payload["release_status"] == "current-beta"

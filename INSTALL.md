@@ -44,9 +44,9 @@ ailoom version --json
 
 Expected beta identity:
 
-- `version`: `1.0.0b1`
+- `version`: `1.0.0b2`
 - `release_channel`: `v1-beta`
-- `expected_beta_tag`: `v1.0.0-beta.1`
+- `expected_beta_tag`: `v1.0.0-beta.2`
 - `repo_url`: `https://github.com/EvanLyu-oss/Ailoom-Context`
 - `version_check`: `ok`
 

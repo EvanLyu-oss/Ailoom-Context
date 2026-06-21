@@ -108,5 +108,6 @@ Less ideal early audiences:
 - User guide: `docs/USER_GUIDE.md`
 - Feedback template: `FEEDBACK_TEMPLATE.md`
 - Launch readiness: `docs/LAUNCH_READINESS.md`
+- Public beta launch checklist: `docs/PUBLIC_BETA_LAUNCH.md`
 - VS Code Marketplace checklist: `docs/VSCODE_MARKETPLACE_RELEASE.md`
 - Competitive benchmark report: `docs/COMPETITIVE_BENCHMARK_REPORT.md`
